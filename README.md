@@ -21,15 +21,54 @@
 | [技术实现方案](docs/02-technical-design.md) | 设计八路采集、Mac mini 三维重建、数据分发及复核链路。 |
 | [落地开发计划](docs/03-development-plan.md) | 安排场勘、开发、实拍验收与发布，明确各阶段负责人和放行条件。 |
 
+## 仓库结构
+
+```
+pitchtrace-3d/
+├── docs/                      需求、技术方案与开发计划
+├── edge/                      PitchTrace Edge · 场边边缘计算（Swift / SwiftPM）
+│   ├── Package.swift
+│   └── Sources/PitchTraceEdge/
+└── live/                      PitchTrace Live · 直播与观赛
+    ├── web/                   浏览器观赛前端（Vite + Three.js）
+    │   ├── src/               app / match / receiver / live-frame / pitch / rig / media / protocol
+    │   ├── test/              内置比赛与协议用例（node:test）
+    │   └── dist/index.html    构建产物，可离线打开
+    └── server/                本地试播网关（v1，Node.js）
+        ├── server.mjs         源码
+        └── server.cjs         打包产物
+```
+
+各子项目的说明见 [edge/README.md](edge/README.md)、[live/web/README.md](live/web/README.md) 和 [live/server/README.md](live/server/README.md)；给 AI 代理的工作指引见 [AGENTS.md](AGENTS.md)。
+
+## 构建与测试
+
+需要 Swift 6.0+ 和 Node.js 20.19+（或 22.12+）。下列命令从仓库根目录运行。
+
+```sh
+# Edge · 构建（当前为空入口骨架，运行后立即退出）
+swift build --package-path edge
+swift run  --package-path edge pitchtrace-edge
+
+# Live Web · 开发、测试与构建单文件前端
+cd live/web && npm ci && npm run dev      # 开发服务器
+cd live/web && npm test                   # 检查内置比赛与数据协议
+cd live/web && npm run build              # 生成 dist/index.html
+
+# Live Server · 构建并启动试播网关
+cd live/server && npm ci && npm run build # 把 server.mjs 打包成 server.cjs
+node live/server/server.cjs               # 监听 127.0.0.1:8766
+```
+
 ## 本地试播
 
-要试播 WebSocket 数据流，从仓库根目录运行以下命令，再打开 <http://127.0.0.1:8766/>。运行服务需要 Node.js 20 或更高版本。
+要试播 WebSocket 数据流，先在 `live/web` 执行 `npm run build`，再从仓库根目录运行以下命令，然后打开 <http://127.0.0.1:8766/>。运行服务需要 Node.js 20 或更高版本。
 
 ```sh
 node live/server/server.cjs
 ```
 
-机位操作、构建命令和数据帧格式见[观赛前端说明](live/web/README.md)和[网关接口说明](live/server/README.md)。
+默认监听 `127.0.0.1:8766`。可信局域网内可用 `PITCHTRACE_HOST`、`PITCHTRACE_PORT` 指定 Mac 的局域网 IP 与端口，观众用对应地址打开页面。机位操作、数据帧格式和重新构建网关的说明见[观赛前端说明](live/web/README.md)和[网关接口说明](live/server/README.md)。
 
 ## 许可证
 
