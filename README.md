@@ -1,75 +1,77 @@
-# 场迹 · PitchTrace 3D
+English | **[中文](README.zh-CN.md)**
 
-场迹是一个面向足球比赛的三维跟踪与回放项目。项目目标是用球场四周的四组双目摄像头采集比赛，在 Mac mini 边缘节点重建球员、足球和骨骼动作，让观众自由切换视角回看传球、射门和拼抢。
+# PitchTrace 3D
 
-[直播观赛前端](live/web/) 已可以运行。它内置一场 60 秒比赛，也可以切换到 WebSocket 直播数据和外部 HLS 实拍视频。克隆仓库后可直接用浏览器打开[离线观赛页](live/web/dist/index.html)。
+PitchTrace 3D is a 3D tracking and replay project for football (soccer) matches. Four stereo camera rigs around the pitch capture the action; Mac mini edge nodes reconstruct players, the ball, and skeletal motion, letting viewers freely switch angles to review passes, shots, and challenges.
 
-## 正式子项目
+The [live viewing frontend](live/web/) is runnable. It ships with a built-in 60-second match and can also switch to a WebSocket live data feed and external HLS footage. After cloning, you can open the [offline viewing page](live/web/dist/index.html) directly in a browser.
 
-| 子项目 | 交付物与职责 | 首版技术方案 |
+## Subprojects
+
+| Subproject | Deliverables & responsibilities | First-version tech stack |
 | --- | --- | --- |
-| [PitchTrace Edge · 边缘计算](edge/) | 已创建可构建的 SwiftPM 空项目；规划在 Mac mini 上采集、重建并输出场景快照、视频片段与曝光时间索引。 | Swift、Core ML、Vision、C++/OpenCV、FFmpeg、VideoToolbox。[边缘端实现](docs/02-technical-design.md#pitchtrace-edge) |
-| PitchTrace Live · 直播（`live/`） | 接收、归档、分发上述数据，提供三维观赛、实拍回看与人工复核。内含服务端和网页端。 | Node.js/TypeScript、Fastify、WebSocket、HLS、Vite、Three.js。[直播端实现](docs/02-technical-design.md#pitchtrace-live) |
+| [PitchTrace Edge · edge compute](edge/) | A buildable SwiftPM skeleton exists; the plan is to capture, reconstruct, and emit scene snapshots, video clips, and exposure-time indexes on Mac mini. | Swift, Core ML, Vision, C++/OpenCV, FFmpeg, VideoToolbox. [Edge implementation](docs/02-technical-design.md#pitchtrace-edge) |
+| PitchTrace Live · live (`live/`) | Receives, archives, and distributes the above data; provides 3D viewing, live replay, and manual review. Includes server and web. | Node.js/TypeScript, Fastify, WebSocket, HLS, Vite, Three.js. [Live implementation](docs/02-technical-design.md#pitchtrace-live) |
 
-浏览器端已支持 v1 和 v2 场景快照，[示例网关](live/server/)提供 v1 试播。边缘识别、正式 v2 网关和基于原片时间索引的同步复核仍在规划中。[场景与媒体接口](docs/02-technical-design.md#edge-live-contract)
+The browser frontend supports both v1 and v2 scene snapshots; a [sample gateway](live/server/) provides v1 playback. Edge recognition, the full v2 gateway, and original-footage synchronized review based on exposure-time indexes are still in planning. [Scene & media interface](docs/02-technical-design.md#edge-live-contract)
 
-## 项目文档
+## Project documentation
 
-| 文档 | 用途 |
+| Document | Purpose |
 | --- | --- |
-| [详细需求说明](docs/01-requirements.md) | 确定比赛流程、功能范围及现场验收标准。 |
-| [技术实现方案](docs/02-technical-design.md) | 设计八路采集、Mac mini 三维重建、数据分发及复核链路。 |
-| [落地开发计划](docs/03-development-plan.md) | 安排场勘、开发、实拍验收与发布，明确各阶段负责人和放行条件。 |
+| [Detailed requirements](docs/01-requirements.md) | Defines the match flow, feature scope, and on-site acceptance criteria. |
+| [Technical design](docs/02-technical-design.md) | Designs the eight-channel capture, Mac mini 3D reconstruction, data distribution, and review pipeline. |
+| [Development plan](docs/03-development-plan.md) | Schedules site surveys, development, live-shoot acceptance, and release; names owners and release conditions per stage. |
 
-## 仓库结构
+## Repository structure
 
 ```
 pitchtrace-3d/
-├── docs/                      需求、技术方案与开发计划
-├── edge/                      PitchTrace Edge · 场边边缘计算（Swift / SwiftPM）
+├── docs/                      Requirements, technical design, and development plan
+├── edge/                      PitchTrace Edge · pitch-side edge compute (Swift / SwiftPM)
 │   ├── Package.swift
 │   └── Sources/PitchTraceEdge/
-└── live/                      PitchTrace Live · 直播与观赛
-    ├── web/                   浏览器观赛前端（Vite + Three.js）
+└── live/                      PitchTrace Live · live and viewing
+    ├── web/                   Browser viewing frontend (Vite + Three.js)
     │   ├── src/               app / match / receiver / live-frame / pitch / rig / media / protocol
-    │   ├── test/              内置比赛与协议用例（node:test）
-    │   └── dist/index.html    构建产物，可离线打开
-    └── server/                本地试播网关（v1，Node.js）
-        ├── server.mjs         源码
-        └── server.cjs         打包产物
+    │   ├── test/              Built-in match and protocol cases (node:test)
+    │   └── dist/index.html    Build output, openable offline
+    └── server/                Local playback gateway (v1, Node.js)
+        ├── server.mjs         Source
+        └── server.cjs         Bundled output
 ```
 
-各子项目的说明见 [edge/README.md](edge/README.md)、[live/web/README.md](live/web/README.md) 和 [live/server/README.md](live/server/README.md)；给 AI 代理的工作指引见 [AGENTS.md](AGENTS.md)。
+For each subproject, see [edge/README.md](edge/README.md), [live/web/README.md](live/web/README.md), and [live/server/README.md](live/server/README.md); for AI-agent guidance, see [AGENTS.md](AGENTS.md).
 
-## 构建与测试
+## Build & test
 
-需要 Swift 6.0+ 和 Node.js 20.19+（或 22.12+）。下列命令从仓库根目录运行。
+Requires Swift 6.0+ and Node.js 20.19+ (or 22.12+). The commands below run from the repository root.
 
 ```sh
-# Edge · 构建（当前为空入口骨架，运行后立即退出）
+# Edge · build (currently an empty entry skeleton, exits immediately when run)
 swift build --package-path edge
 swift run  --package-path edge pitchtrace-edge
 
-# Live Web · 开发、测试与构建单文件前端
-cd live/web && npm ci && npm run dev      # 开发服务器
-cd live/web && npm test                   # 检查内置比赛与数据协议
-cd live/web && npm run build              # 生成 dist/index.html
+# Live Web · develop, test, and build the single-file frontend
+cd live/web && npm ci && npm run dev      # dev server
+cd live/web && npm test                   # checks the built-in match and data protocol
+cd live/web && npm run build              # generates dist/index.html
 
-# Live Server · 构建并启动试播网关
-cd live/server && npm ci && npm run build # 把 server.mjs 打包成 server.cjs
-node live/server/server.cjs               # 监听 127.0.0.1:8766
+# Live Server · build and start the playback gateway
+cd live/server && npm ci && npm run build # bundles server.mjs into server.cjs
+node live/server/server.cjs               # listens on 127.0.0.1:8766
 ```
 
-## 本地试播
+## Local playback
 
-要试播 WebSocket 数据流，先在 `live/web` 执行 `npm run build`，再从仓库根目录运行以下命令，然后打开 <http://127.0.0.1:8766/>。运行服务需要 Node.js 20 或更高版本。
+To play back a WebSocket data stream, first run `npm run build` in `live/web`, then from the repository root run the following command and open <http://127.0.0.1:8766/>. Running the service requires Node.js 20 or higher.
 
 ```sh
 node live/server/server.cjs
 ```
 
-默认监听 `127.0.0.1:8766`。可信局域网内可用 `PITCHTRACE_HOST`、`PITCHTRACE_PORT` 指定 Mac 的局域网 IP 与端口，观众用对应地址打开页面。机位操作、数据帧格式和重新构建网关的说明见[观赛前端说明](live/web/README.md)和[网关接口说明](live/server/README.md)。
+It listens on `127.0.0.1:8766` by default. On a trusted LAN you can set `PITCHTRACE_HOST` and `PITCHTRACE_PORT` to the Mac's LAN IP and port; viewers open the page at the corresponding address. For camera controls, data-frame format, and how to rebuild the gateway, see the [viewing frontend guide](live/web/README.md) and the [gateway interface guide](live/server/README.md).
 
-## 许可证
+## License
 
-原创代码采用 [MIT 许可证](LICENSE)。演示使用的第三方模型、动画和依赖保留各自许可，详见[素材署名与许可](live/web/licenses/)。
+Original code is released under the [MIT License](LICENSE). Third-party models, animations, and dependencies used by the demo retain their own licenses; see [asset attribution & licenses](live/web/licenses/).
