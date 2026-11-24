@@ -8,7 +8,7 @@
 
 | 子项目 | 交付物与职责 | 首版技术方案 |
 | --- | --- | --- |
-| PitchTrace Edge · 边缘计算（`edge/`） | Mac mini 上的采集与重建程序，输出场景快照、实拍视频片段及曝光时间索引。 | Swift、Core ML、Vision、C++/OpenCV、FFmpeg、VideoToolbox。[边缘端实现](docs/02-technical-design.md#pitchtrace-edge) |
+| [PitchTrace Edge · 边缘计算](edge/) | 已创建可构建的 SwiftPM 空项目；规划在 Mac mini 上采集、重建并输出场景快照、视频片段与曝光时间索引。 | Swift、Core ML、Vision、C++/OpenCV、FFmpeg、VideoToolbox。[边缘端实现](docs/02-technical-design.md#pitchtrace-edge) |
 | PitchTrace Live · 直播（`live/`） | 接收、归档、分发上述数据，提供三维观赛、实拍回看与人工复核。内含服务端和网页端。 | Node.js/TypeScript、Fastify、WebSocket、HLS、Vite、Three.js。[直播端实现](docs/02-technical-design.md#pitchtrace-live) |
 
 浏览器端已支持 v1 和 v2 场景快照，[示例网关](live/server/)提供 v1 试播。边缘识别、正式 v2 网关和基于原片时间索引的同步复核仍在规划中。[场景与媒体接口](docs/02-technical-design.md#edge-live-contract)

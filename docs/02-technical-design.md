@@ -4,7 +4,7 @@
 
 ## 1. 系统与模块边界
 
-同一仓库规划两个独立构建、测试和发布的产品。**PitchTrace Edge** 从实拍画面生产比赛数据和视频片段；**PitchTrace Live** 接收两类数据，为观众及复核员提供直播与回看。首场试点两个进程可同驻一台 Mac mini，接口也支持把直播服务部署到另一台主机。[直播前端](../live/web/) 已实现内置演示、v1/v2 场景订阅和独立 HLS 观看；[试播网关](../live/server/)提供 v1 数据。下文的边缘程序、v2 服务端及原片定位接口为开发设计。
+同一仓库规划两个独立构建、测试和发布的产品。**PitchTrace Edge** 从实拍画面生产比赛数据和视频片段；**PitchTrace Live** 接收两类数据，为观众及复核员提供直播与回看。首场试点两个进程可同驻一台 Mac mini，接口也支持把直播服务部署到另一台主机。[直播前端](../live/web/) 已实现内置演示、v1/v2 场景订阅和独立 HLS 观看；[试播网关](../live/server/)提供 v1 数据。边缘端已建立可执行项目骨架，采集与重建、v2 服务端及原片定位接口仍为开发设计。
 
 ```mermaid
 flowchart LR
@@ -35,7 +35,7 @@ flowchart LR
 
 ### 1.1 边缘计算子项目 · PitchTrace Edge
 
-**目录与交付物。** 规划放在 `edge/`，使用 Swift Package Manager 构建 macOS 命令行程序 `pitchtrace-edge`，连同模型版本清单、设备配置和标定文件部署到场边。设备接入、推理和外发都可通过同一段带时间戳的八路录像回放测试。[Swift Package Manager](https://www.swift.org/documentation/package-manager/)
+**目录与交付物。** [edge/](../edge/) 已包含 Swift Package Manager 可执行项目和空入口，产物名为 `pitchtrace-edge`。计划将其连同模型版本清单、设备配置和标定文件部署到场边。设备接入、推理和外发都可通过同一段带时间戳的八路录像回放测试。[Swift Package Manager](https://www.swift.org/documentation/package-manager/)
 
 | 实现单元 | 首版技术选择 | 输入、处理和输出 |
 | --- | --- | --- |
