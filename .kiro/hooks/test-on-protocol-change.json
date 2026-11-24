@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "remind-test-on-protocol-change",
+      "description": "修改协议、比赛生成、接收或场景转换相关源文件后提醒运行 npm test",
+      "trigger": "PostFileSave",
+      "matcher": "live/web/src/(protocol|live-frame|match|receiver)\\.js$",
+      "action": {
+        "type": "agent",
+        "prompt": "刚刚保存了协议、比赛生成、接收或场景转换相关的源文件（live/web/src/protocol.js、live-frame.js、match.js 或 receiver.js）。完成本次改动后，请运行 `cd live/web && npm test`，确认内置比赛全程、空场丢球、未知号码与非法帧拒绝用例通过，再继续后续工作。"
+      }
+    }
+  ]
+}

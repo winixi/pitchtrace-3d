@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "remind-rebuild-on-server-source-change",
+      "description": "修改网关源码 server.mjs 后提醒重新打包 server.cjs",
+      "trigger": "PostFileSave",
+      "matcher": "live/server/server\\.mjs$",
+      "action": {
+        "type": "agent",
+        "prompt": "刚刚保存了 live/server/server.mjs。live/server/server.cjs 是入库的打包产物，由 `npm run build` 生成，不要直接编辑它。改完源码后请在 live/server 运行 `npm run build` 重新生成 server.cjs，再提交，避免源码与入库产物不一致。"
+      }
+    }
+  ]
+}
