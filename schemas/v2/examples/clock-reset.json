@@ -1,0 +1,38 @@
+[
+  {
+    "v": 2,
+    "matchId": "trial-01",
+    "streamEpoch": "first-half",
+    "seq": 251,
+    "captureUtcUs": "1795494600000000",
+    "matchTimeMs": 25000,
+    "calibrationId": "field-a-v3",
+    "players": [],
+    "ball": { "state": "measured", "positionM": [2, 0.11, -3], "views": ["A-L", "C-R"] },
+    "events": []
+  },
+  {
+    "v": 2,
+    "matchId": "trial-01",
+    "streamEpoch": "first-half-after-reset",
+    "seq": 0,
+    "captureUtcUs": "1795494600100000",
+    "matchTimeMs": 25100,
+    "calibrationId": "field-a-v3",
+    "players": [],
+    "ball": { "state": "measured", "positionM": [3, 0.11, -3], "views": ["A-L", "C-R"] },
+    "events": []
+  },
+  {
+    "v": 2,
+    "matchId": "trial-01",
+    "streamEpoch": "first-half",
+    "seq": 252,
+    "captureUtcUs": "1795494600050000",
+    "matchTimeMs": 25050,
+    "calibrationId": "field-a-v3",
+    "players": [],
+    "ball": { "state": "measured", "positionM": [2.5, 0.11, -3], "views": ["A-L", "C-R"] },
+    "events": []
+  }
+]

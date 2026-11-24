@@ -1,0 +1,32 @@
+{
+  "v": 2,
+  "matchId": "trial-01",
+  "streamEpoch": "first-half",
+  "seq": 7,
+  "captureUtcUs": "1795494576300000",
+  "matchTimeMs": 1300,
+  "calibrationId": "field-a-v3",
+  "players": [
+    {
+      "trackId": "p7",
+      "teamId": "home",
+      "rosterId": null,
+      "number": null,
+      "state": "measured",
+      "positionM": [2, 0, -4],
+      "yawRad": 0,
+      "views": ["A-L", "C-R"]
+    },
+    {
+      "trackId": "p9",
+      "teamId": "home",
+      "rosterId": null,
+      "number": null,
+      "state": "lost",
+      "positionM": null,
+      "views": []
+    }
+  ],
+  "ball": { "state": "predicted", "positionM": [2, 0.11, -3], "views": [] },
+  "events": []
+}

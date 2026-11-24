@@ -1,0 +1,12 @@
+{
+  "v": 2,
+  "matchId": "trial-01",
+  "streamEpoch": "first-half",
+  "seq": 5,
+  "captureUtcUs": "1795494576200000",
+  "matchTimeMs": 1200,
+  "calibrationId": "field-a-v3",
+  "players": [],
+  "ball": null,
+  "events": []
+}

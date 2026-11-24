@@ -276,6 +276,19 @@
         padding: 7px;
         margin: 6px 0 8px;
       }
+      .appearance {
+        margin-top: 12px;
+      }
+      #appearanceInfo {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 12px;
+      }
+      #showcaseDescription {
+        margin: 10px 0 0;
+        color: #bdccbf;
+        font-size: 13px;
+      }
       .checks {
         display: flex;
         gap: 14px;
@@ -540,6 +553,7 @@
       <div class="sources">
         <div class="sourceButtons" role="group" aria-label="画面来源">
           <button id="demo" aria-pressed="true">内置演示</button
+          ><button id="showcase" aria-pressed="false">人物展示</button
           ><button id="sourceLive" aria-expanded="false" aria-controls="feed">
             连接直播
           </button>
@@ -596,12 +610,22 @@
               <option value="2">2×</option>
             </select>
           </div>
+          <p id="showcaseDescription" hidden></p>
         </section>
         <aside>
           <div>
             <h2>观看机位</h2>
             <div class="cameras" id="cameras"></div>
             <small id="hint"></small>
+            <div class="appearance" id="profileControls" hidden>
+              <label for="profileDetail">近景范围</label>
+              <select class="target" id="profileDetail">
+                <option value="upper">上半身</option>
+                <option value="neck">头颈与衣领</option>
+                <option value="leftHand">左手与手腕</option>
+                <option value="rightHand">右手与手腕</option>
+              </select>
+            </div>
           </div>
           <div class="rule">
             <label for="target">跟随球员</label
@@ -614,11 +638,25 @@
                 ><input type="checkbox" id="loop" /> 循环播放</label
               >
             </div>
+            <div class="appearance">
+              <label for="bodyType">人物体型</label>
+              <select
+                class="target"
+                id="bodyType"
+                aria-describedby="appearanceInfo"
+              >
+                <option value="auto">按球员配置</option>
+                <option value="lean">全部精瘦</option>
+                <option value="standard">全部标准</option>
+                <option value="strong">全部壮硕</option>
+              </select>
+              <small id="appearanceInfo" aria-live="polite"></small>
+            </div>
           </div>
         </aside>
       </div>
       <section class="chapters" id="demoTimeline">
-        <h2>动作时间轴</h2>
+        <h2 id="timelineTitle">动作时间轴</h2>
         <div class="cuegrid" id="chapters"></div>
       </section>
       <details class="feeds" id="media" hidden>

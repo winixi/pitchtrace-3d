@@ -1,5 +1,11 @@
 import { makePitch } from "./pitch.js";
 import { demoFrame, chapters } from "./match.js";
+import {
+  showcaseFrame,
+  showcaseDuration,
+  showcaseChapters,
+} from "./showcase.js";
+import { appearanceFor, bodyTypes } from "./appearance.js";
 import { setupMedia } from "./media.js";
 import { connectFrames } from "./receiver.js";
 
@@ -46,7 +52,12 @@ async function start() {
     pausedDirty = true,
     dirty = true,
     listed = "",
-    chapter = -1;
+    chapter = -1,
+    demoMode = "match";
+  const demoClocks = { match: 0, showcase: 0 };
+  const duration = () => (demoMode === "showcase" ? showcaseDuration : 60);
+  const timeline = () =>
+    demoMode === "showcase" ? showcaseChapters : chapters;
   let connection = null,
     liveFrame = null,
     frozenFrame = null,
@@ -81,11 +92,15 @@ async function start() {
       return;
     }
     $("play").disabled = false;
-    $("play").textContent = playing ? "暂停" : clock >= 60 ? "重播" : "播放";
+    $("play").textContent = playing
+      ? "暂停"
+      : clock >= duration()
+        ? "重播"
+        : "播放";
   }
   function jump(t) {
-    clock = Math.max(0, Math.min(60, t));
-    if (clock === 60) playing = false;
+    clock = Math.max(0, Math.min(duration(), t));
+    if (clock === duration()) playing = false;
     dirty = pausedDirty = true;
     last = null;
     updatePlay();
@@ -96,7 +111,12 @@ async function start() {
     for (const [i, button] of cameraButtons.entries())
       button.setAttribute("aria-pressed", String(cameras[i][0] === v));
     const item = cameras.find((c) => c[0] === v);
-    $("cameraTitle").textContent = item[1];
+    $("profileControls").hidden = v !== "profile";
+    $("cameraTitle").textContent =
+      item[1] +
+      (v === "profile"
+        ? " · " + $("profileDetail").selectedOptions[0].textContent
+        : "");
     $("hint").textContent = item[2];
     dirty = pausedDirty = true;
   }
@@ -109,16 +129,24 @@ async function start() {
     cameraButtons.push(b);
   }
   choose("director");
-  for (const [t, name] of chapters) {
-    const b = document.createElement("button"),
-      s = document.createElement("span");
-    s.textContent = stamp(t);
-    b.append(s, document.createTextNode(name));
-    b.dataset.time = t;
-    b.onclick = () => jump(t);
-    $("chapters").append(b);
-    cueButtons.push(b);
+  function buildTimeline() {
+    $("chapters").replaceChildren();
+    cueButtons.length = 0;
+    chapter = -1;
+    $("timelineTitle").textContent =
+      demoMode === "showcase" ? "人物与动作展示" : "动作时间轴";
+    for (const [t, name] of timeline()) {
+      const b = document.createElement("button"),
+        s = document.createElement("span");
+      s.textContent = stamp(t);
+      b.append(s, document.createTextNode(name));
+      b.dataset.time = t;
+      b.onclick = () => jump(t);
+      $("chapters").append(b);
+      cueButtons.push(b);
+    }
   }
+  buildTimeline();
   function updateRoster(players) {
     const key = JSON.stringify(players.map((p) => [p.id, p.number, p.team]));
     if (key === listed) return;
@@ -137,7 +165,7 @@ async function start() {
       updatePlay();
       return;
     }
-    if (clock >= 60) jump(0);
+    if (clock >= duration()) jump(0);
     playing = !playing;
     last = null;
     dirty = true;
@@ -145,10 +173,14 @@ async function start() {
   }
   $("play").onclick = toggle;
   $("seek").oninput = (e) => jump(+e.target.value);
-  $("bones").onchange = $("target").onchange = () => {
-    dirty = pausedDirty = true;
-    pitch.resetOrbit();
-  };
+  $("profileDetail").onchange = () => choose("profile");
+  $("bodyType").onchange =
+    $("bones").onchange =
+    $("target").onchange =
+      () => {
+        dirty = pausedDirty = true;
+        pitch.resetOrbit();
+      };
   document.addEventListener("keydown", (e) => {
     if (
       e.code === "Space" &&
@@ -191,11 +223,24 @@ async function start() {
         live;
     $("play").disabled = live;
     $("play").textContent = live ? "定格" : "播放";
-    $("duration").textContent = live ? "直播" : "01:00";
+    $("duration").textContent = live ? "直播" : stamp(duration());
+    $("seek").max = duration();
+    $("showcaseDescription").hidden = live || demoMode !== "showcase";
     $("quality").textContent = "";
-    $("demo").setAttribute("aria-pressed", String(!live));
+    $("demo").setAttribute(
+      "aria-pressed",
+      String(!live && demoMode === "match"),
+    );
+    $("showcase").setAttribute(
+      "aria-pressed",
+      String(!live && demoMode === "showcase"),
+    );
     $("sourceLive").setAttribute("aria-pressed", String(live));
-    document.body.dataset.source = live ? "live" : "demo";
+    document.body.dataset.source = live
+      ? "live"
+      : demoMode === "showcase"
+        ? "showcase"
+        : "demo";
     chapter = -2;
     cueButtons.forEach((b) => b.removeAttribute("aria-current"));
     dirty = pausedDirty = true;
@@ -214,6 +259,7 @@ async function start() {
       $("netstatus").textContent = "请输入以 ws:// 或 wss:// 开头的地址。";
       return;
     }
+    if (!connection) demoClocks[demoMode] = clock;
     connection?.stop();
     connection = null;
     liveFrame = null;
@@ -234,18 +280,32 @@ async function start() {
   $("sample").onclick = () => {
     openFeed(localGateway + "/demo", true);
   };
-  $("demo").onclick = () => {
+  function openDemo(nextMode) {
+    if (!connection) demoClocks[demoMode] = clock;
+    demoMode = nextMode;
+    clock = demoClocks[demoMode];
+    demoState = null;
+    listed = "";
+    $("target").value = "";
     $("feed").hidden = true;
     $("sourceLive").setAttribute("aria-expanded", "false");
     connection?.stop();
     connection = null;
     liveFrame = null;
     setLive(false);
+    buildTimeline();
+    if (demoMode === "showcase") choose("director");
     $("loading").hidden = true;
-    $("signal").textContent = "内置演示";
-    $("netstatus").textContent = "当前播放内置 60 秒比赛。";
+    $("signal").textContent =
+      demoMode === "showcase" ? "人物展示 · 模拟动作" : "内置演示";
+    $("netstatus").textContent =
+      demoMode === "showcase"
+        ? "当前播放人物与动作展示。"
+        : "当前播放内置 60 秒比赛。";
     updatePlay();
-  };
+  }
+  $("demo").onclick = () => openDemo("match");
+  $("showcase").onclick = () => openDemo("showcase");
   let prevSecond = -1,
     oldEvent = "",
     oldSubject = "";
@@ -273,17 +333,19 @@ async function start() {
     } else {
       if (playing) {
         clock += dt * Number($("speed").value);
-        if (clock >= 60) {
-          if ($("loop").checked) clock %= 60;
+        if (clock >= duration()) {
+          if ($("loop").checked) clock %= duration();
           else {
-            clock = 60;
+            clock = duration();
             playing = false;
             updatePlay();
             dirty = true;
           }
         }
       }
-      if (!demoState || demoState.t !== clock) demoState = demoFrame(clock);
+      if (!demoState || demoState.t !== clock)
+        demoState =
+          demoMode === "showcase" ? showcaseFrame(clock) : demoFrame(clock);
       frame = demoState;
     }
     if (frame) {
@@ -292,11 +354,23 @@ async function start() {
         subject =
           frame.players.find((p) => p.id === (selected || frame.focus)) ||
           frame.players[0];
-      if (dirty || playing || connection || camera === "orbit")
+      if (
+        dirty ||
+        playing ||
+        connection ||
+        camera === "orbit" ||
+        pitch.needsRedraw()
+      )
         pitch.draw(
           frame,
-          { camera, selected, boneOverlay: $("bones").checked },
-          pausedDirty ? 0 : Math.min(dt, 0.15),
+          {
+            camera,
+            selected,
+            boneOverlay: $("bones").checked,
+            bodyType: $("bodyType").value,
+            profileDetail: $("profileDetail").value,
+          },
+          pausedDirty || pitch.needsRedraw() ? 0 : Math.min(dt, 0.15),
         );
       if (frame.event !== oldEvent) {
         oldEvent = frame.event;
@@ -313,6 +387,29 @@ async function start() {
         if ($("quality").textContent !== status)
           $("quality").textContent = status;
       }
+      if (!connection) {
+        const quality = "三种体型 · 四种肤色 · 三种发型";
+        if ($("quality").textContent !== quality)
+          $("quality").textContent = quality;
+        if (
+          frame.showcase &&
+          $("showcaseDescription").textContent !== frame.showcase.description
+        )
+          $("showcaseDescription").textContent = frame.showcase.description;
+      }
+      const appearance = subject && appearanceFor(subject.id);
+      const shape =
+        $("bodyType").value === "auto"
+          ? appearance?.bodyType
+          : $("bodyType").value;
+      const hair = { short: "短发", crop: "寸头", bald: "光头" }[
+        appearance?.hair
+      ];
+      const info = subject
+        ? `${bodyTypes[shape].label} · ${hair}${["gold", "green"].includes(subject.team) ? " · 门将手套" : ""}`
+        : "场上暂无球员";
+      if ($("appearanceInfo").textContent !== info)
+        $("appearanceInfo").textContent = info;
       const caption = label(subject);
       if (oldSubject !== caption) {
         oldSubject = caption;
@@ -324,7 +421,7 @@ async function start() {
       }
       if (!connection) {
         $("seek").value = clock;
-        const n = chapters.findLastIndex((c) => c[0] <= clock);
+        const n = timeline().findLastIndex((c) => c[0] <= clock);
         if (chapter !== n) {
           if (chapter >= 0) cueButtons[chapter].removeAttribute("aria-current");
           cueButtons[n].setAttribute("aria-current", "true");

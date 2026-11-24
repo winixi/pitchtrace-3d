@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { refineBody, shapeNeck, smoothNormals } from "./anatomy.js";
 export function cropMesh(g, keep) {
   const p = g.attributes.position,
     ix = g.index?.array || Array.from({ length: p.count }, (_, i) => i),
@@ -37,7 +38,8 @@ export function setupBody(clipsGlb, sculptGlb) {
     if (!o.isSkinnedMesh || !o.material) return;
     const dst = bodies[o.material.name];
     const geo = o.geometry;
-    if (o.material.name === "skin") cropMesh(geo, (x, y, z) => y < 1.575);
+    if (o.material.name === "skin")
+      cropMesh(geo, (x, y) => y < 1.49 || Math.abs(x) > 0.13);
     // both binds describe the same T-pose, so inverse(clipsIBM) * sculptIBM
     // is one global rigid map from sculpt bind space to clips bind space
     // (identical across bones)
@@ -90,6 +92,134 @@ export function setupBody(clipsGlb, sculptGlb) {
       hairMeshes.push(o);
   });
   hairMeshes.forEach((o) => o.parent.remove(o));
+}
+
+// 头部与颈根保留同一张表面；下颈由胸骨承托，上颈随头转动。
+// 使用逆绑定矩阵转换，避免把载入时的站姿误当成骨架绑定姿态。
+export function setupHead(clipsGlb, headGlb) {
+  let body;
+  clipsGlb.scene.traverse((o) => {
+    if (o.isSkinnedMesh && o.material.name === "kit") body = o;
+  });
+  const { skeleton } = body;
+  const neck = skeleton.bones.findIndex((b) => b.name === "neck");
+  const middle = skeleton.bones.findIndex((b) => b.name === "middle");
+  const { toBind, profile } = refineBody(clipsGlb.scene, body);
+  headGlb.scene.updateMatrixWorld(true);
+  const meshes = [];
+  headGlb.scene.traverse((o) => {
+    if (o.isMesh) meshes.push(o);
+  });
+  for (const source of meshes) {
+    const geometry = source.geometry.clone();
+    geometry.applyMatrix4(source.matrixWorld);
+    const skin = source.material.name.endsWith(".body");
+    const hair =
+      source.name === "short01" || source.name.startsWith("Hairline");
+    const pos = geometry.attributes.position;
+    let cap;
+    if (skin) {
+      cap = cropMesh(
+        geometry.clone(),
+        (x, y, z) => y > 0.15 + Math.max(0, z) * 0.48,
+      );
+      const p = cap.attributes.position,
+        normal = cap.attributes.normal;
+      for (let i = 0; i < p.count; i++)
+        p.setXYZ(
+          i,
+          p.getX(i) + normal.getX(i) * 0.0015,
+          p.getY(i) + normal.getY(i) * 0.0015,
+          p.getZ(i) + normal.getZ(i) * 0.0015,
+        );
+    }
+    const indices = [],
+      weights = [];
+    const point = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      let follow = 1;
+      if (skin) {
+        point.fromBufferAttribute(pos, i);
+        follow = shapeNeck(point, profile);
+        pos.setXYZ(i, point.x, point.y, point.z);
+      }
+      indices.push(neck, middle, 0, 0);
+      weights.push(follow, 1 - follow, 0, 0);
+    }
+    smoothNormals([geometry]);
+    geometry.applyMatrix4(toBind);
+    geometry.setAttribute(
+      "skinIndex",
+      new THREE.Uint16BufferAttribute(indices, 4),
+    );
+    geometry.setAttribute(
+      "skinWeight",
+      new THREE.Float32BufferAttribute(weights, 4),
+    );
+    geometry.computeBoundingSphere();
+    const mesh = new THREE.SkinnedMesh(geometry, source.material);
+    mesh.name = "head-" + source.name;
+    mesh.userData.part = skin ? "face" : hair ? "hair" : "feature";
+    mesh.position.copy(body.position);
+    mesh.quaternion.copy(body.quaternion);
+    mesh.scale.copy(body.scale);
+    mesh.frustumCulled = false;
+    body.parent.add(mesh);
+    mesh.bind(skeleton, body.bindMatrix);
+    if (cap) {
+      cap.applyMatrix4(toBind);
+      cap.setAttribute(
+        "skinIndex",
+        new THREE.Uint16BufferAttribute(indices, 4),
+      );
+      cap.setAttribute(
+        "skinWeight",
+        new THREE.Float32BufferAttribute(weights, 4),
+      );
+      const cropped = new THREE.SkinnedMesh(
+        cap,
+        new THREE.MeshStandardMaterial({
+          name: "cropped-hair",
+          roughness: 0.96,
+        }),
+      );
+      cropped.name = "head-cropped-hair";
+      cropped.userData.part = "hair";
+      cropped.position.copy(body.position);
+      cropped.quaternion.copy(body.quaternion);
+      cropped.scale.copy(body.scale);
+      cropped.frustumCulled = false;
+      body.parent.add(cropped);
+      cropped.bind(skeleton, body.bindMatrix);
+    }
+  }
+}
+
+// 从左右手的真实网格各取一个掌心附近的顶点，供本地扑救展示跟随手部。
+export function palmVertices(geometry) {
+  const p = geometry.attributes.position;
+  return [-1, 1].map((side) => {
+    const center = new THREE.Vector3();
+    let count = 0;
+    for (let i = 0; i < p.count; i++) {
+      if (p.getX(i) * side <= 0) continue;
+      center.add(new THREE.Vector3().fromBufferAttribute(p, i));
+      count++;
+    }
+    center.multiplyScalar(1 / count);
+    let best = 0,
+      distance = Infinity;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < p.count; i++) {
+      if (p.getX(i) * side <= 0) continue;
+      const d = v.fromBufferAttribute(p, i).distanceToSquared(center);
+      if (d < distance) {
+        distance = d;
+        best = i;
+      }
+    }
+    return best;
+  });
 }
 const mirrorBone = (n) =>
   n.startsWith("left_")

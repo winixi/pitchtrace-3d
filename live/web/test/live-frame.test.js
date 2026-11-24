@@ -1,56 +1,48 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import demo from "../../../schemas/v1/examples/demo-frame.json" with { type: "json" };
+import emptyPitch from "../../../schemas/v2/examples/empty-pitch.json" with { type: "json" };
+import lostBall from "../../../schemas/v2/examples/lost-ball.json" with { type: "json" };
+import unknownNumber from "../../../schemas/v2/examples/unknown-number.json" with { type: "json" };
 import { readScene } from "../src/live-frame.js";
 import { demoFrame } from "../src/match.js";
-
-const frame = {
-  v: 2,
-  matchId: "trial-01",
-  streamEpoch: "first-half",
-  seq: 5,
-  matchTimeMs: 1200,
-  players: [],
-  ball: { state: "lost", positionM: null },
-};
-const player = {
-  trackId: "p7",
-  teamId: "home",
-  number: null,
-  state: "measured",
-  positionM: [2, 0, -4],
-  yawRad: 0,
-};
 
 test("v1 remains playable throughout the embedded match", () => {
   for (let t = 0; t <= 60; t += 0.1) assert.ok(readScene(demoFrame(t)));
 });
-test("an empty field and a lost ball remain empty", () => {
-  const scene = readScene(frame);
+test("固定 v1 演示帧可转换为渲染输入", () => {
+  assert.deepEqual(readScene(demo), demo);
+});
+test("空场样例保留零名球员和缺失的球", () => {
+  const scene = readScene(emptyPitch);
   assert.deepEqual(scene.players, []);
   assert.equal(scene.ball, null);
+  assert.equal(scene.focus, undefined);
   assert.equal(scene.t, 1.2);
 });
+test("丢球样例保留场上球员和丢球状态", () => {
+  const scene = readScene(lostBall);
+  assert.equal(scene.players.length, 1);
+  assert.equal(scene.players[0].number, 8);
+  assert.equal(scene.ball, null);
+  assert.equal(scene.ballState, "lost");
+});
 test("unknown numbers and predicted measurements retain their meaning", () => {
-  const scene = readScene({
-    ...frame,
-    players: [
-      player,
-      { ...player, trackId: "p9", state: "lost", positionM: null },
-    ],
-    ball: { state: "predicted", positionM: [2, 0.11, -3] },
-  });
+  const scene = readScene(unknownNumber);
   assert.equal(scene.players.length, 1);
   assert.equal(scene.players[0].number, null);
   assert.equal(scene.focus, "p7");
+  assert.deepEqual(scene.ball, { x: 2, y: 0.11, z: -3 });
   assert.equal(scene.ballState, "predicted");
 });
 test("invalid observations, duplicate IDs and unsupported versions are rejected", () => {
+  const [player] = unknownNumber.players;
   for (const f of [
-    { ...frame, players: [player, player] },
-    { ...frame, players: [{ ...player, bones: { neck: [0, 0, 0, 0] } }] },
-    { ...frame, ball: { state: "measured", positionM: null } },
-    { ...frame, seq: -1 },
-    { ...frame, v: 3 },
+    { ...emptyPitch, players: [player, player] },
+    { ...emptyPitch, players: [{ ...player, bones: { neck: [0, 0, 0, 0] } }] },
+    { ...emptyPitch, ball: { state: "measured", positionM: null } },
+    { ...emptyPitch, seq: -1 },
+    { ...emptyPitch, v: 3 },
   ])
     assert.equal(readScene(f), null);
 });

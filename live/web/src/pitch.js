@@ -2,7 +2,15 @@ import * as T from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { setupBody, stride } from "./rig.js";
+import { setupBody, setupHead, palmVertices, stride } from "./rig.js";
+import {
+  appearanceFor,
+  bodyTypes,
+  kitColors,
+  bodyGeometries,
+  faceReference,
+  stylePlayer,
+} from "./appearance.js";
 const V = (x = 0, y = 0, z = 0) => new T.Vector3(x, y, z);
 export async function makePitch(canvas) {
   const sc = new T.Scene(),
@@ -33,44 +41,14 @@ export async function makePitch(canvas) {
     ),
   );
   setupBody(clips, sculpt);
-  const neck = clips.scene.getObjectByName("neck");
-  const headGroup = new T.Group();
-  headGroup.name = "HeadAndCervicalSurface";
-  headGroup.rotation.x = Math.PI / 2 - 0.27;
-  headGroup.position.set(0, 0.015, 0.034);
-  face.scene.traverse((o) => {
-    if (o.isMesh && o.material.name.endsWith(".body")) {
-      o.material.color.setRGB(2.25, 2.1, 2.02);
-      o.material.roughness = 0.72;
-    }
+  setupHead(clips, face);
+  const variants = bodyGeometries(clips.scene);
+  const skinReference = faceReference(clips.scene.getObjectByName("head-base"));
+  let palms;
+  clips.scene.traverse((o) => {
+    if (o.isMesh && o.material.name === "hands")
+      palms = palmVertices(o.geometry);
   });
-  headGroup.add(face.scene);
-  neck.add(headGroup);
-  // A tapered continuous surface under the skin patch joins the lower nape to the collar.
-  // The flared base sits inside the shirt even when the animated shoulders roll forwards.
-  const cervicalGroup = new T.Group();
-  cervicalGroup.rotation.x = Math.PI / 2;
-  const cervicalGeometry = new T.LatheGeometry(
-    [
-      [-0.062, 0.095],
-      [-0.037, 0.083],
-      [-0.009, 0.07],
-      [0.025, 0.061],
-      [0.06, 0.058],
-      [0.083, 0.061],
-      [0.113, 0.065],
-    ].map(([h, rad]) => new T.Vector2(rad, h)),
-    40,
-  );
-  const cervical = new T.Mesh(
-    cervicalGeometry,
-    new T.MeshStandardMaterial({ color: 0x80503b, roughness: 0.76 }),
-  );
-  cervical.name = "CervicalBridge";
-  cervical.scale.z = 0.87;
-  cervical.position.z = 0.006;
-  cervicalGroup.add(cervical);
-  neck.add(cervicalGroup);
   const cm = new Map(clips.animations.map((c) => [c.name, c]));
   const names = {
     idle: "movement/idle/000_idlelevel1",
@@ -105,22 +83,9 @@ export async function makePitch(canvas) {
     seed = (1664525 * seed + 1013904223) >>> 0;
     return seed / 4294967296;
   }
-  function kit(team, no) {
-    const home = team === "blue",
-      keeper = team === "gold" || team === "green";
-    const shirt =
-        team === "neutral"
-          ? "#6a747a"
-          : home
-            ? "#0c5782"
-            : keeper
-              ? team === "green"
-                ? "#4a9370"
-                : "#e6ac36"
-              : "#b53933",
-      shorts = home ? "#10283f" : keeper ? "#332f28" : "#ebe1d0",
-      sock = home ? "#1676a4" : keeper ? "#daa239" : "#b83935",
-      accent = home ? "#81d8db" : "#f6e7c9";
+  function kit(team, no, skin) {
+    const home = team === "blue";
+    const { shirt, shorts, sock, accent } = kitColors(team);
     const tx = canvasTex(1024, 1024, (g, w, h) => {
       g.fillStyle = shirt;
       g.fillRect(0, 0, w, 408);
@@ -128,7 +93,7 @@ export async function makePitch(canvas) {
       g.fillRect(0, 407, w, 175);
       g.fillStyle = sock;
       g.fillRect(0, 581, w, 199);
-      g.fillStyle = "#906248";
+      g.fillStyle = skin;
       g.fillRect(0, 779, w, 230);
       g.fillStyle = "#292525";
       g.fillRect(0, 1005, w, 19);
@@ -170,32 +135,31 @@ export async function makePitch(canvas) {
   }
 
   const players = Object.create(null);
-  function player(id, team, num, sz = 1) {
+  function player(id, team, num) {
     const root = new T.Group(),
       model = clone(clips.scene);
     root.add(model);
     sc.add(root);
-    root.scale.setScalar(sz);
-    const tex = kit(team, num);
+    const appearance = appearanceFor(id);
+    const tex = kit(team, num, appearance.skin);
+    let hands;
     model.traverse((o) => {
       if (!o.isMesh) return;
       o.frustumCulled = false;
       o.castShadow = true;
       o.receiveShadow = false;
       o.material = o.material.clone();
+      if (o.material.name === "hands") hands = o;
       if (o.material.name === "kit") {
         o.material.map = tex;
         o.material.color.set(0xffffff);
         o.material.roughness = 0.95;
       }
-      if (["skin", "hands"].includes(o.material.name)) {
-        o.material.map = null;
-        o.material.color.set("#80503b");
-      }
       if (o.material.name === "shoe") {
         o.material.color.set(id === "wing" ? "#c4f287" : "#f3deba");
       }
     });
+    stylePlayer(model, appearance, skinReference, team);
     const mixer = new T.AnimationMixer(model);
     const acts = {};
     for (const [k, c] of Object.entries(animation)) {
@@ -203,7 +167,22 @@ export async function makePitch(canvas) {
       acts[k].play();
       acts[k].enabled = false;
     }
-    players[id] = { root, model, mixer, acts, phase: rnd() * 2, num, team };
+    const badge = new T.Sprite(new T.SpriteMaterial({ depthTest: false }));
+    badge.position.y = 2.07;
+    badge.scale.set(1.15, 0.24, 1);
+    badge.renderOrder = 15;
+    root.add(badge);
+    players[id] = {
+      root,
+      model,
+      mixer,
+      acts,
+      appearance,
+      badge,
+      hands,
+      num,
+      team,
+    };
     return players[id];
   }
   terrain.scene.traverse((o) => {
@@ -481,11 +460,13 @@ export async function makePitch(canvas) {
     prevFocus = null,
     prevView = "",
     orbitNeedsInit = true;
+  let redrawNeeded = true;
   function resize() {
     const { width, height } = canvas.getBoundingClientRect();
     r.setSize(Math.max(1, width), Math.max(1, height), false);
     cam.aspect = width / Math.max(1, height);
     cam.updateProjectionMatrix();
+    redrawNeeded = true;
   }
   new ResizeObserver(resize).observe(canvas);
   resize();
@@ -501,8 +482,15 @@ export async function makePitch(canvas) {
       o.material.dispose();
     });
     for (const map of owned) map.dispose();
+    p.badge.material.map?.dispose();
+    p.badge.material.dispose();
+    const skeletons = new Set();
+    p.model.traverse((o) => {
+      if (o.isSkinnedMesh) skeletons.add(o.skeleton);
+    });
+    for (const skeleton of skeletons) skeleton.dispose();
   }
-  function applyFrame(frame) {
+  function applyFrame(frame, typeOverride) {
     const visible = new Set(frame.players.map((p) => p.id));
     for (const id of Object.keys(players))
       if (!visible.has(id)) {
@@ -517,11 +505,36 @@ export async function makePitch(canvas) {
         p = null;
       }
       if (!p) {
-        p = player(s.id, s.team, s.number, 1);
+        p = player(s.id, s.team, s.number);
         p.bones = Object.fromEntries(
           bones.map((n) => [n, p.model.getObjectByName(n)]),
         );
       }
+      const bodyType = Object.hasOwn(variants, typeOverride)
+        ? typeOverride
+        : p.appearance.bodyType;
+      if (p.bodyType !== bodyType) {
+        p.model.traverse((o) => {
+          if (o.isSkinnedMesh) o.geometry = variants[bodyType].get(o.name);
+        });
+        p.bodyType = bodyType;
+        p.badge.material.map?.dispose();
+        p.badge.material.map = canvasTex(512, 108, (g, w, h) => {
+          g.fillStyle = "#13231ee6";
+          g.fillRect(0, 0, w, h);
+          g.fillStyle = "#ecf2e9";
+          g.textAlign = "center";
+          g.textBaseline = "middle";
+          g.font = '44px "PingFang SC", "Microsoft YaHei", sans-serif';
+          g.fillText(
+            `${["gold", "green"].includes(p.team) ? "门将 · " : ""}${bodyTypes[bodyType].label}`,
+            w / 2,
+            h / 2,
+          );
+        });
+      }
+      p.root.visible = true;
+      p.badge.visible = false;
       p.root.position.set(s.x, s.y || 0, s.z);
       p.root.rotation.y = s.yaw;
       p.sourceBones = s.bones;
@@ -565,13 +578,34 @@ export async function makePitch(canvas) {
     }
     return view;
   }
-  function draw(frame, { camera, selected, boneOverlay }, dt) {
-    applyFrame(frame);
+  function draw(
+    frame,
+    { camera, selected, boneOverlay, bodyType, profileDetail = "upper" },
+    dt,
+  ) {
+    applyFrame(frame, bodyType);
     mode(camera);
     const subject =
         players[selected] || players[frame.focus] || Object.values(players)[0],
       body = subject?.root.position || (ball.visible ? ball.position : V());
     const playPosition = ball.visible ? ball.position : body;
+    if (frame.showcase && (!frame.showcase.group || view === "profile"))
+      for (const p of Object.values(players)) p.root.visible = p === subject;
+    if (frame.showcase && !frame.showcase.group && subject && ball.visible) {
+      const source = players[frame.focus]?.root.position;
+      if (source) ball.position.add(body.clone().sub(source));
+    }
+    if (frame.showcase?.ballAttachment === "hands" && subject?.hands) {
+      subject.root.updateWorldMatrix(true, true);
+      const [a, b] = palms.map((i) =>
+        subject.hands
+          .getVertexPosition(i, V())
+          .applyMatrix4(subject.hands.matrixWorld),
+      );
+      ball.position.copy(a).lerp(b, 0.5);
+    }
+    if (frame.showcase?.group && view === "director")
+      for (const p of Object.values(players)) p.badge.visible = true;
     focus.copy(body).y += 0.85;
     const cameraTarget = V(),
       position = V();
@@ -596,7 +630,31 @@ export async function makePitch(canvas) {
       controls.update();
     } else {
       controls.enabled = false;
-      if (view === "profile") {
+      if (view === "director" && frame.showcase) {
+        const { angle, group } = frame.showcase;
+        const low =
+          frame.event.includes("滑铲") || frame.event.includes("扑救");
+        const distance = group
+          ? Math.max(6.1, 2.85 / (Math.tan((16 * Math.PI) / 180) * cam.aspect))
+          : low
+            ? 5.6
+            : 4.5;
+        cameraTarget.copy(group ? V(0, 0, 0) : body).y += group
+          ? 0.92
+          : low
+            ? 0.65
+            : 1.1;
+        position
+          .copy(cameraTarget)
+          .add(
+            V(
+              Math.sin(angle) * distance,
+              group ? 0.3 : 0.15,
+              Math.cos(angle) * distance,
+            ),
+          );
+        fov = 32;
+      } else if (view === "profile") {
         const yaw = subject?.root.rotation.y || 0,
           front = V(Math.sin(yaw), 0, Math.cos(yaw)),
           side = V(front.z, 0, -front.x);
@@ -606,6 +664,30 @@ export async function makePitch(canvas) {
           .addScaledVector(front, 2.8)
           .addScaledVector(side, 2.15).y += 0.25;
         fov = 28;
+        if (subject && profileDetail === "neck") {
+          subject.root.updateWorldMatrix(true, true);
+          subject.bones.neck.getWorldPosition(cameraTarget);
+          cameraTarget.y += 0.07;
+          position
+            .copy(cameraTarget)
+            .addScaledVector(front, 1.1)
+            .addScaledVector(side, 0.85).y += 0.08;
+          fov = 30;
+        } else if (
+          subject?.hands &&
+          ["leftHand", "rightHand"].includes(profileDetail)
+        ) {
+          subject.root.updateWorldMatrix(true, true);
+          const i = palms[profileDetail === "leftHand" ? 1 : 0];
+          subject.hands
+            .getVertexPosition(i, cameraTarget)
+            .applyMatrix4(subject.hands.matrixWorld);
+          position
+            .copy(cameraTarget)
+            .addScaledVector(front, 0.74)
+            .addScaledVector(side, 0.52).y += 0.12;
+          fov = 32;
+        }
       } else if (view === "touchline") {
         cameraTarget.copy(playPosition);
         cameraTarget.y = 0.85;
@@ -679,9 +761,11 @@ export async function makePitch(canvas) {
       linePoints.needsUpdate = jointBuffer.needsUpdate = true;
     }
     r.render(sc, cam);
+    redrawNeeded = false;
   }
   return {
     draw,
+    needsRedraw: () => redrawNeeded,
     resetOrbit: () => {
       orbitNeedsInit = true;
       prevFocus = null;
