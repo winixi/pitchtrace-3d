@@ -4,19 +4,22 @@
 
 ## 1. 系统与模块边界
 
+同一仓库规划两个独立构建、测试和发布的产品。**PitchTrace Edge** 从实拍画面生产比赛数据和视频片段；**PitchTrace Live** 接收两类数据，为观众及复核员提供直播与回看。首场试点两个进程可同驻一台 Mac mini，接口也支持把直播服务部署到另一台主机。下列目录、可执行程序和 v2 端点均为开发设计。当前可运行的代码在 [Three.js 演示](../demos/threejs-live/)。
+
 ```mermaid
 flowchart LR
-    C["四组双目 A–D，各含 L/R"] --> I["采集、曝光对时、分段录制"]
-    I --> V["原片与时间索引"]
-    I --> D["单视角人球检测、姿态、读号"]
-    K["相机与场地标定"] --> F["跨镜头关联与三维重建"]
-    D --> F
-    R["比赛名单"] --> F
-    F --> E["轨迹、骨骼、动作与质量"]
-    E --> S["场景帧归档与 WebSocket 网关"]
-    S --> W["Three.js 观看与复核"]
-    V --> H["实拍视频分发"]
-    H --> W
+    C["四组双目，共八个视角"] --> I
+    subgraph edge["PitchTrace Edge · 场边 Mac mini"]
+        I["采集、对时、分段录制"] --> V["fMP4 片段与逐帧时间索引"]
+        I --> D["检测、姿态与读号"]
+        D --> F["跨机位关联、三维融合与动作候选"]
+    end
+    subgraph live["PitchTrace Live · 服务端与浏览器"]
+        G["场景接入与归档"] -->|WebSocket| W["Three.js 观赛与动作复核"]
+        H["媒体接入与 HLS 播放列表"] -->|HTTP| W
+    end
+    F -->|HTTPS 场景快照| G
+    V -->|HTTPS 媒体与索引| H
 ```
 
 | 模块 | 部署与实现建议 | 输入 → 输出／责任 |
@@ -28,7 +31,51 @@ flowchart LR
 | 分发与观看（R07、R08、R09、R10） | 场景快照经 WebSocket 发布；原片按比赛时间索引为 HLS 或本地分段文件；浏览器用 Three.js 绘制 | 结构化状态和原片是两种输出。六个虚拟机位在浏览器生成，八个实拍视角用于核验。 |
 | 运行与复盘（R10、R11、R12） | 本机监督进程、磁盘配额、比赛归档和角色权限 | 设备健康、时延、版本、人工更正 → 告警、重放、审计与导出。 |
 
-当前实现位于 [demos/threejs-live](../demos/threejs-live/)。正式模块建议在实际开发时分别创建 `edge/`、`services/`、`viewer/` 和 `schemas/`，依次承载采集与计算、分发与归档接口、正式观赛端、版本化数据契约。复用演示中的渲染器和兼容接口，演示保持独立可运行。
+<a name="pitchtrace-edge"></a>
+
+### 1.1 边缘计算子项目 · PitchTrace Edge
+
+**目录与交付物。** 规划放在 `edge/`，使用 Swift Package Manager 构建 macOS 命令行程序 `pitchtrace-edge`，连同模型版本清单、设备配置和标定文件部署到场边。设备接入、推理和外发都可通过同一段带时间戳的八路录像回放测试。[Swift Package Manager](https://www.swift.org/documentation/package-manager/)
+
+| 实现单元 | 首版技术选择 | 输入、处理和输出 |
+| --- | --- | --- |
+| 采集与视频 | Swift、厂商 SDK 或 AVFoundation、FFmpeg 的 libavformat、Apple VideoToolbox | 工业相机通过厂商 SDK 读取帧和硬件时钟；macOS 可识别的摄像头可用 AVFoundation；网络机型用 libavformat 接入 RTSP。能取得曝光时间且满足同步门槛的通道才参与精确三维融合。对 H.264 兼容输入直接重新封装，其他输入按需解码并编码为 H.264。输出可独立寻址的 fMP4 初始化文件、关键帧对齐的媒体段及曝光时间索引。[Apple 视频采集](https://developer.apple.com/documentation/avfoundation/avcapturevideodataoutput) · [FFmpeg 封装格式](https://ffmpeg.org/ffmpeg-formats.html) |
+| 检测与推理 | Swift 调用 Core ML 和 Vision；Python/OpenCV 用于离线标注检查、模型对照与误差评估 | 人、球检测先跑轻量 Core ML 模型；在球员裁切上用 Vision 建立姿态和背号 OCR 基线。按时刻、相机、局部轨迹记录观测。Python 产出的基准样例与线上重复输入比较。 |
+| 标定与融合 | C++/OpenCV `calib3d`，通过窄 C 接口供 Swift 调用 | 保存内外参及版本，先按同一曝光窗口组帧，再做跨视角分配、三角化、重投影检查和时序滤波。输出场地坐标、来源机位和质量；局部骨骼重定向后再进入场景快照。 |
+| 调度与持久化 | Swift Concurrency、有界队列、SQLite、文件系统、URLSession | 每路采集独立排队。录像与推理分开消费；记录队列中最老帧的年龄。视频先落盘，场景帧与待上传条目持久化后发送。直播端宕机时保留采集，重连先发当前快照，再按带宽补历史。 |
+
+边缘侧拥有设备配置、时钟映射、标定和测量结果。模型、校正参数或推理频率改变时记录对应版本。动作候选随轨迹生成；操作者在直播端的人工修订另存，归档重算时保留修订历史。现场设备型号及检测器权重在 G1 实测后锁定。
+
+<a name="pitchtrace-live"></a>
+
+### 1.2 直播子项目 · PitchTrace Live
+
+**目录与交付物。** 规划放在 `live/`。其中 `live/server/` 构建 Node.js 网关，`live/web/` 构建浏览器静态文件。两者随同一直播版本交付。输入可以来自 Mac mini，也可以来自协议样例或一场归档比赛，便于在没有相机时独立开发。
+
+| 实现单元 | 首版技术选择 | 路径与行为 |
+| --- | --- | --- |
+| 写入、鉴权、归档 | Node.js LTS、TypeScript、Fastify、JSON Schema、SQLite 与文件存储 | HTTP 接口校验比赛权限、字段和帧键。场景记录先写入归档，再发 WebSocket 并应答。SQLite 索引比赛、场景序号、媒体区间和复核修订；二进制媒体以文件形式流式写入。[Fastify 请求校验](https://fastify.dev/docs/latest/Reference/Validation-and-Serialization/) |
+| 三维直播 | Fastify 的 `@fastify/websocket` 插件，底层使用 `ws` | 订阅者按比赛隔离。连接后先发最新快照，再发后续帧；慢客户端跳过旧快照。暂停观看时记录比赛时刻，回看从归档接口补帧，返回直播时重新定位。[Fastify WebSocket 插件](https://github.com/fastify/fastify-websocket) |
+| 实拍直播与回看 | HLS、H.264/fMP4、浏览器原生 HLS 或 hls.js | 接收边缘侧已封装的片段，完成校验和提交后发布播放列表。网页为选中的实拍机位打开对应 HLS，原生支持时直接播放，其余支持 MSE 的浏览器使用 hls.js。换机位按曝光时刻重新定位，保留同一比赛时刻。[hls.js 项目文档](https://github.com/video-dev/hls.js) |
+| 观赛与复核页面 | TypeScript、Vite、Three.js、OrbitControls | 用场景帧驱动播放器与时间轴，共用比赛时钟同步球员蒙皮、选定球员、六个三维机位和实拍对照。复用演示中已验证的机位及骨骼逻辑，为正式页面补齐缺测、历史查询和人工复核。 |
+
+<a name="edge-live-contract"></a>
+
+### 1.3 两端交付协议
+
+计划在 `schemas/v2/` 保存 JSON Schema、字段单位和两端共用的正反例。契约由两个子项目共同版本化。边缘与直播各自拥有 SQLite 文件，同机试点也通过以下协议交付。所有路径以 `/v2/matches/{matchId}` 为前缀，摄像头媒体路径中的 `{mediaEpoch}` 在该通道重连且媒体时钟重置时更新。
+
+| 发送方 → 接收方 | 方法与相对路径（拟议） | 数据与完成条件 |
+| --- | --- | --- |
+| Edge → Live | `POST /frames` | 写入完整场景快照，见第 6 节。以 `(matchId,streamEpoch,seq)` 去重。同键同内容重试成功，同键异内容返回 409。 |
+| Edge → Live | `PUT /cameras/{cameraId}/epochs/{mediaEpoch}/init.mp4` 和 `PUT /cameras/{cameraId}/epochs/{mediaEpoch}/segments/{n}.m4s` | 上传初始化文件和第 n 个媒体段；服务端核对大小、摘要并原子提交。网络中断可按同一路径重传。 |
+| Edge → Live | `PUT /cameras/{cameraId}/epochs/{mediaEpoch}/segments/{n}/index` | 发送媒体段摘要、时基、逐帧 PTS 与曝光 UTC 映射。初始化文件、媒体段和索引全部匹配后，Live 才将该段加入播放列表；缺件可补传。 |
+| Live → 浏览器 | `WS /live`、`GET /frames?fromMs=…&toMs=…` | 直播推完整快照，回看按比赛时段拉取归档。限制单次回看范围并分页；观众只有所选比赛的读取权限。 |
+| Live → 浏览器 | `GET /cameras/{cameraId}/index.m3u8` 及受控片段读取 | 发送实拍视频。网页通过 `GET /cameras/{cameraId}/locate?captureUtcUs=…` 查询片段号、媒体 epoch、目标 PTS 和时基，定位到触球附近。机位缺片时标明缺口，其他机位和三维画面继续。 |
+
+比赛创建时由 Live 分配比赛 ID，场务把相同 ID、场地和名单版本配置给 Edge。Edge 通过配置取得网关地址与设备凭据，网关校验设备是否可写入该比赛。场景使用 `streamEpoch`、媒体使用各通道的 `mediaEpoch`；两类数据通过比赛 ID 和曝光 UTC 对齐。
+
+**联调样例。** 录制一次 7 号球员传球，同时保留两个机位的实拍。Edge 输出带比赛 ID、曝光时刻和序号的快照以及两个机位的片段。Live 在同一时刻展示三维脚部与球，并能切到两个原片视角核对。测试中重复上传同一段、打断一次上传、重启一次网关，核对快照和媒体均只归档一次。先用固定样例验协议，再用现场录像验证时钟、精度与 30 秒目标。
 
 ## 2. 现场输入、视频传输和对时
 
@@ -114,6 +161,6 @@ macOS 第一轮可用 Vision 的人体姿态与文字识别请求做基线，分
 
 ## 7. 存储、可观测性与复现
 
-按比赛保存 `manifest`、通道分段视频与校验值、曝光时间索引、标定与模型版本、观测、场景帧、事件及审核记录。试点可用 SQLite 管理索引、文件系统保存媒体与分块轨迹；分段先写临时文件、校验后改名，再事务更新索引。重启扫描孤立段和缺失索引，保留已发布序号、时间缺口及人工修改。删除比赛按配置清理原片、缓存、索引和对应副本并记录结果。
+Edge 保存采集原件、标定和待补传记录；Live 保存接收副本、查询索引及人工审核版本。按比赛保存 `manifest`、通道分段视频与校验值、曝光时间索引、标定与模型版本、观测、场景帧、事件及审核记录。试点可用 SQLite 管理索引、文件系统保存媒体与分块轨迹；分段先写临时文件、校验后改名，再事务更新索引。重启扫描孤立段和缺失索引，保留已发布序号、时间缺口及人工修改。删除比赛按配置清理原片、缓存、索引和对应副本并记录结果。
 
 现场面板按通道展示帧率、曝光偏差、接收丢帧、解码队列；按比赛展示推理速度、有效相机数、可见球覆盖、身份切换、低可信对象、延迟分位数、失败时隙和磁盘可用时长。故障注入至少覆盖断开一组双目、机位移动、时钟跳变、磁盘写满、网关重启及观众断线。对同一归档按固定配置重放，比较时间、轨迹与事件，并记录允许的浮点误差。每项试点门槛的负责人和输出物见[落地开发计划](03-development-plan.md)。

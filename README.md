@@ -4,6 +4,15 @@
 
 目前可运行的子项目是 **60 秒多机位转播演示**。它用模拟比赛展示三维回放，也能接收外部程序通过 WebSocket 发送的球员、骨骼和足球数据。现场采集与多机位重建仍在规划中。
 
+## 正式子项目
+
+| 子项目（规划目录） | 交付物与职责 | 首版技术方案 |
+| --- | --- | --- |
+| PitchTrace Edge · 边缘计算（`edge/`） | Mac mini 上的采集与重建程序，输出场景快照、实拍视频片段及曝光时间索引。 | Swift、Core ML、Vision、C++/OpenCV、FFmpeg、VideoToolbox。[边缘端实现](docs/02-technical-design.md#pitchtrace-edge) |
+| PitchTrace Live · 直播（`live/`） | 接收、归档、分发上述数据，提供三维观赛、实拍回看与人工复核。内含服务端和网页端。 | Node.js/TypeScript、Fastify、WebSocket、HLS、Vite、Three.js。[直播端实现](docs/02-technical-design.md#pitchtrace-live) |
+
+两个产品共用[场景与媒体接口](docs/02-technical-design.md#edge-live-contract)。当前演示代码和 v1 数据入口位于 `demos/threejs-live/`，正式产品及 v2 接口尚待开发。
+
 ## 项目文档
 
 | 文档 | 用途 |
