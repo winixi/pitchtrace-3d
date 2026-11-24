@@ -14,7 +14,7 @@
 从仓库根目录启动示例网关，再打开 <http://127.0.0.1:8766/>。这个入口可在同一页体验内置比赛、WebSocket 试播以及外部推送到示例网关的 v1 数据。
 
 ```sh
-node demos/threejs-live/server.cjs
+node live/server/server.cjs
 ```
 
 ## 开发与部署
@@ -27,11 +27,11 @@ npm ci
 npm run dev
 ```
 
-`npm test` 检查内置比赛及数据协议；`npm run build` 生成 `dist/index.html`。可将此单文件部署在静态站点，也可直接用支持 WebGL 2 的浏览器打开。旧演示项目的构建命令会把这一成品复制到原有文件名。
+`npm test` 检查内置比赛及数据协议；`npm run build` 生成 `dist/index.html`。可将此单文件部署在静态站点，也可直接用支持 WebGL 2 的浏览器打开。本机试播网关直接提供同一份构建产物。
 
 ## 连接比赛
 
-- **v1** 使用示例网关的 `/live`。上游向 `POST /frame` 提交快照。详细字段和可运行的 curl 示例见[网关说明](../../demos/threejs-live/README.md)。
+- **v1** 使用示例网关的 `/live`。上游向 `POST /frame` 提交快照。详细字段和可运行的 curl 示例见[网关说明](../server/README.md)。
 - **v2 场景快照** 使用 `matchId`、`streamEpoch`、`seq` 和 `matchTimeMs`。网页接受 [v2 示例](../../docs/02-technical-design.md#edge-live-contract)中的球员、球、骨骼和缺测状态。可以手动输入流地址；在同源部署中，链接 `/?match=trial-01` 会自动订阅 `/v2/matches/trial-01/live`。示例网关提供 v1；v2 订阅需要搭配对应的数据源。
 - **切换与异常**　等待、无数据、断线和重新连接均显示状态。直播中可定格当前帧绕场观察，点击「返回直播」跳到最近帧。v2 空场、丢球和未知球衣号保留对应状态；同一场比赛、同一数据流周期内忽略重复和乱序的序号。
 - **实拍对照**　HLS 支持浏览器原生播放或 hls.js。按曝光时刻定位原片的网关接口和逐帧同步回看仍在开发计划中。HTTPS 页面连接数据源时使用 WSS，并使用 HTTPS 视频源。

@@ -11,7 +11,7 @@
 | PitchTrace Edge · 边缘计算（`edge/`） | Mac mini 上的采集与重建程序，输出场景快照、实拍视频片段及曝光时间索引。 | Swift、Core ML、Vision、C++/OpenCV、FFmpeg、VideoToolbox。[边缘端实现](docs/02-technical-design.md#pitchtrace-edge) |
 | PitchTrace Live · 直播（`live/`） | 接收、归档、分发上述数据，提供三维观赛、实拍回看与人工复核。内含服务端和网页端。 | Node.js/TypeScript、Fastify、WebSocket、HLS、Vite、Three.js。[直播端实现](docs/02-technical-design.md#pitchtrace-live) |
 
-浏览器端已支持 v1 和 v2 场景快照，[示例网关](demos/threejs-live/)提供 v1 试播。边缘识别、正式 v2 网关和基于原片时间索引的同步复核仍在规划中。[场景与媒体接口](docs/02-technical-design.md#edge-live-contract)
+浏览器端已支持 v1 和 v2 场景快照，[示例网关](live/server/)提供 v1 试播。边缘识别、正式 v2 网关和基于原片时间索引的同步复核仍在规划中。[场景与媒体接口](docs/02-technical-design.md#edge-live-contract)
 
 ## 项目文档
 
@@ -23,16 +23,13 @@
 
 ## 本地试播
 
-内置比赛和正式观赛页面共用一套模型和渲染代码。原有[演示页面](demos/threejs-live/dist/PitchTrace-Live-60s.html)和本地网关命令继续可用。
-
 要试播 WebSocket 数据流，从仓库根目录运行以下命令，再打开 <http://127.0.0.1:8766/>。运行服务需要 Node.js 20 或更高版本。
 
 ```sh
-cd demos/threejs-live
-node server.cjs
+node live/server/server.cjs
 ```
 
-机位操作、构建命令和数据帧格式见[演示使用说明](demos/threejs-live/README.md)。
+机位操作、构建命令和数据帧格式见[观赛前端说明](live/web/README.md)和[网关接口说明](live/server/README.md)。
 
 ## 许可证
 

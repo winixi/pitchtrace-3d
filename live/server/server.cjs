@@ -3770,7 +3770,7 @@ var import_subprotocol = __toESM(require_subprotocol(), 1);
 var import_websocket = __toESM(require_websocket(), 1);
 var import_websocket_server = __toESM(require_websocket_server(), 1);
 
-// ../../live/web/node_modules/three/build/three.core.js
+// ../web/node_modules/three/build/three.core.js
 var REVISION = "187";
 var PCFShadowMap = 1;
 var VSMShadowMap = 3;
@@ -13132,7 +13132,7 @@ if (typeof window !== "undefined") {
   }
 }
 
-// ../../live/web/node_modules/three/build/three.module.js
+// ../web/node_modules/three/build/three.module.js
 var alphahash_fragment = "#ifdef USE_ALPHAHASH\n	if ( diffuseColor.a < getAlphaHashThreshold( vPosition ) ) discard;\n#endif";
 var alphahash_pars_fragment = "#ifdef USE_ALPHAHASH\n	const float ALPHA_HASH_SCALE = 0.05;\n	float hash2D( vec2 value ) {\n		return fract( 1.0e4 * sin( 17.0 * value.x + 0.1 * value.y ) * ( 0.1 + abs( sin( 13.0 * value.y + value.x ) ) ) );\n	}\n	float hash3D( vec3 value ) {\n		return hash2D( vec2( hash2D( value.xy ), value.z ) );\n	}\n	float getAlphaHashThreshold( vec3 position ) {\n		float maxDeriv = max(\n			length( dFdx( position.xyz ) ),\n			length( dFdy( position.xyz ) )\n		);\n		float pixScale = 1.0 / ( ALPHA_HASH_SCALE * maxDeriv );\n		vec2 pixScales = vec2(\n			exp2( floor( log2( pixScale ) ) ),\n			exp2( ceil( log2( pixScale ) ) )\n		);\n		vec2 alpha = vec2(\n			hash3D( floor( pixScales.x * position.xyz ) ),\n			hash3D( floor( pixScales.y * position.xyz ) )\n		);\n		float lerpFactor = fract( log2( pixScale ) );\n		float x = ( 1.0 - lerpFactor ) * alpha.x + lerpFactor * alpha.y;\n		float a = min( lerpFactor, 1.0 - lerpFactor );\n		vec3 cases = vec3(\n			x * x / ( 2.0 * a * ( 1.0 - a ) ),\n			( x - 0.5 * a ) / ( 1.0 - a ),\n			1.0 - ( ( 1.0 - x ) * ( 1.0 - x ) / ( 2.0 * a * ( 1.0 - a ) ) )\n		);\n		float threshold = ( x < ( 1.0 - a ) )\n			? ( ( x < a ) ? cases.x : cases.y )\n			: cases.z;\n		return clamp( threshold , 1.0e-6, 1.0 );\n	}\n#endif";
 var alphamap_fragment = "#ifdef USE_ALPHAMAP\n	diffuseColor.a *= texture2D( alphaMap, vAlphaMapUv ).g;\n#endif";
@@ -14428,7 +14428,7 @@ var DATA = new Uint16Array([
   1183
 ]);
 
-// ../../live/web/src/match.js
+// ../web/src/match.js
 var V = (x = 0, y = 0, z = 0) => new Vector3(x, y, z);
 var mix = MathUtils.lerp;
 var cap = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
@@ -14883,7 +14883,7 @@ function demoFrame(seconds) {
   };
 }
 
-// ../../live/web/src/protocol.js
+// ../web/src/protocol.js
 var actionSet = /* @__PURE__ */ new Set([
   "idle",
   "run",
@@ -14937,16 +14937,7 @@ function validBones(bones) {
 // server.mjs
 var host = process.env.PITCHTRACE_HOST || "127.0.0.1";
 var port = Number(process.env.PITCHTRACE_PORT || 8766);
-var legacyPage = import_node_path.default.join(
-  import_node_path.default.dirname(import_node_path.default.resolve(process.argv[1])),
-  "dist",
-  "PitchTrace-Live-60s.html"
-);
-var viewerPage = import_node_path.default.resolve(
-  import_node_path.default.dirname(legacyPage),
-  "../../../live/web/dist/index.html"
-);
-var page = import_node_fs.default.existsSync(viewerPage) ? viewerPage : legacyPage;
+var page = import_node_path.default.resolve(import_node_path.default.dirname(process.argv[1]), "../web/dist/index.html");
 var wss = new import_websocket_server.default({ noServer: true, maxPayload: 256e3 });
 var latest = null;
 var receivedAt = 0;
@@ -14961,7 +14952,7 @@ var server = import_node_http.default.createServer(async (request, response) => 
   }
   if (request.method === "GET" && request.url === "/") {
     if (!import_node_fs.default.existsSync(page))
-      return reply(404, "Run npm run build to create the viewer.");
+      return reply(404, "Build the viewer with npm run build in live/web.");
     response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     import_node_fs.default.createReadStream(page).on("error", () => response.destroy()).pipe(response);
     return;

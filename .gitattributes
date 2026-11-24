@@ -1,3 +1,2 @@
-# These single-file offline builds embed GLBs and vendor shaders.
+# The single-file offline build embeds GLBs and vendor shaders.
 live/web/dist/index.html -diff -whitespace linguist-generated=true
-demos/threejs-live/dist/PitchTrace-Live-60s.html -diff -whitespace linguist-generated=true

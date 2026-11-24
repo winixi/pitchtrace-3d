@@ -2,20 +2,11 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
-import { demoFrame } from "../../live/web/src/match.js";
-import { validFrame } from "../../live/web/src/protocol.js";
+import { demoFrame } from "../web/src/match.js";
+import { validFrame } from "../web/src/protocol.js";
 const host = process.env.PITCHTRACE_HOST || "127.0.0.1",
   port = Number(process.env.PITCHTRACE_PORT || 8766);
-const legacyPage = path.join(
-  path.dirname(path.resolve(process.argv[1])),
-  "dist",
-  "PitchTrace-Live-60s.html",
-);
-const viewerPage = path.resolve(
-  path.dirname(legacyPage),
-  "../../../live/web/dist/index.html",
-);
-const page = fs.existsSync(viewerPage) ? viewerPage : legacyPage;
+const page = path.resolve(path.dirname(process.argv[1]), "../web/dist/index.html");
 const wss = new WebSocketServer({ noServer: true, maxPayload: 256000 });
 let latest = null;
 let receivedAt = 0;
@@ -30,7 +21,7 @@ const server = http.createServer(async (request, response) => {
   }
   if (request.method === "GET" && request.url === "/") {
     if (!fs.existsSync(page))
-      return reply(404, "Run npm run build to create the viewer.");
+      return reply(404, "Build the viewer with npm run build in live/web.");
     response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     fs.createReadStream(page)
       .on("error", () => response.destroy())
