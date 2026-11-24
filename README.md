@@ -2,7 +2,7 @@ English | **[中文](README.zh-CN.md)**
 
 # PitchTrace 3D
 
-PitchTrace 3D is a 3D tracking and replay project for football (soccer) matches. It aims to capture the action with four stereo camera rigs around the pitch and reconstruct players, the ball, and skeletal motion on Mac mini edge nodes, letting viewers freely switch angles to review passes, shots, and challenges.
+PitchTrace 3D is a 3D tracking and replay project for football (soccer) matches. The first-phase MVP uses one camera at each of four positions around the pitch. It aims to reconstruct players, the ball, and skeletal motion from synchronized views on an M6 Mac mini, letting viewers freely switch angles to review passes, shots, and challenges.
 
 The [live viewing frontend](live/web/) is runnable. It ships with a built-in 60-second match and can also switch to a WebSocket live data feed and external HLS footage. After cloning, you can open the [offline viewing page](live/web/dist/index.html) directly in a browser.
 
@@ -12,11 +12,11 @@ The [live viewing frontend](live/web/) is runnable. It ships with a built-in 60-
 
 | Component | Runtime & technology | Responsibility in the complete system |
 | --- | --- | --- |
-| [PitchTrace Edge](edge/) | Pitch-side Mac mini; Swift/SwiftPM. Planned: Core ML, Vision, C++/OpenCV, FFmpeg, VideoToolbox. | Capture and synchronize eight camera views, calibrate cameras, detect and track players and the ball, recognize shirt numbers, reconstruct 3D positions and skeletons, generate action candidates, and save/upload video clips and exposure-time indexes. |
+| [PitchTrace Edge](edge/) | Pitch-side Mac mini; Swift/SwiftPM. Planned: Core ML, Vision, C++/OpenCV, FFmpeg, VideoToolbox. | Capture and synchronize four camera views, calibrate cameras, detect and track players and the ball, recognize shirt numbers, reconstruct 3D positions and skeletons, generate action candidates, and save/upload video clips and exposure-time indexes. |
 | [Live Server](live/server/) | Mac mini or a separate server; currently Node.js and `ws`. Planned: TypeScript, Fastify, SQLite. | Receive and validate Edge uploads, authorize access per match, archive scene data and media, distribute live snapshots, provide historical queries, and publish HLS footage. |
 | [Live Web](live/web/) | Viewer's browser; Vite build, Three.js rendering, HLS playback. | Render players and the ball from scene positions and skeletons; provide virtual camera controls, player following, pause/replay, footage comparison, and the manual review interface. |
 
-Camera calibration, recognition, and 3D measurement belong to Edge. Rendering and the six virtual viewpoints belong to Web; the eight physical camera views provide the original footage. Server handles data delivery, storage, and access. See the [Edge design](docs/02-technical-design.md#pitchtrace-edge) and [Live design](docs/02-technical-design.md#pitchtrace-live).
+Camera calibration, recognition, and 3D measurement belong to Edge. Rendering and the six virtual viewpoints belong to Web; the four physical camera views provide the original footage. Server handles data delivery, storage, and access. See the [Edge design](docs/02-technical-design.md#pitchtrace-edge) and [Live design](docs/02-technical-design.md#pitchtrace-live).
 
 ### Implementation status
 
@@ -45,7 +45,7 @@ The complete pipeline has two outputs from Edge: structured scene snapshots (pla
 
 ```mermaid
 flowchart LR
-    C["Four stereo rigs / eight camera views"] --> E["Edge: capture and reconstruct"]
+    C["Four single cameras / four synchronized views"] --> E["Edge: capture and reconstruct"]
     subgraph live["PitchTrace Live"]
         S["Server: receive, archive, distribute"]
         W["Web: browser viewing and review"]
@@ -96,8 +96,9 @@ flowchart LR
 | Document | Purpose |
 | --- | --- |
 | [Detailed requirements](docs/01-requirements.md) | Defines the match flow, feature scope, and on-site acceptance criteria. |
-| [Technical design](docs/02-technical-design.md) | Designs the eight-channel capture, Mac mini 3D reconstruction, data distribution, and review pipeline. |
+| [Technical design](docs/02-technical-design.md) | Designs the four-channel capture, Mac mini 3D reconstruction, data distribution, and review pipeline. |
 | [Development plan](docs/03-development-plan.md) | Schedules site surveys, development, live-shoot acceptance, and release; names owners and release conditions per stage. |
+| [MVP hardware selection](docs/05-hardware-selection.md) | Compares Mac mini configurations and sizes the network and removable storage for four cameras. |
 
 ## Repository structure
 

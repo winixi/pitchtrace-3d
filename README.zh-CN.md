@@ -2,7 +2,7 @@
 
 # 场迹 · PitchTrace 3D
 
-场迹是一个面向足球比赛的三维跟踪与回放项目。项目目标是用球场四周的四组双目摄像头采集比赛，在 Mac mini 边缘节点重建球员、足球和骨骼动作，让观众自由切换视角回看传球、射门和拼抢。
+场迹是一个面向足球比赛的三维跟踪与回放项目。第一阶段 MVP 在球场四周各设一台单摄像头，共四个机位，计划在 M6 Mac mini 上利用同步画面重建球员、足球和骨骼动作，让观众自由切换视角回看传球、射门和拼抢。
 
 [直播观赛前端](live/web/) 已可以运行。它内置一场 60 秒比赛，也可以切换到 WebSocket 直播数据和外部 HLS 实拍视频。克隆仓库后可直接用浏览器打开[离线观赛页](live/web/dist/index.html)。
 
@@ -12,11 +12,11 @@
 
 | 组成部分 | 运行位置与技术 | 完整系统中的职责 |
 | --- | --- | --- |
-| [PitchTrace Edge](edge/) | 场边 Mac mini；Swift/SwiftPM。规划采用 Core ML、Vision、C++/OpenCV、FFmpeg、VideoToolbox。 | 接入并同步八路相机、完成标定，检测和追踪球员与足球、识别球衣号、重建三维位置和骨骼、生成动作候选，保存并上传视频片段与曝光时间索引。 |
+| [PitchTrace Edge](edge/) | 场边 Mac mini；Swift/SwiftPM。规划采用 Core ML、Vision、C++/OpenCV、FFmpeg、VideoToolbox。 | 接入并同步四路相机、完成标定，检测和追踪球员与足球、识别球衣号、重建三维位置和骨骼、生成动作候选，保存并上传视频片段与曝光时间索引。 |
 | [Live Server](live/server/) | Mac mini 或独立服务器；当前为 Node.js 和 `ws`。规划采用 TypeScript、Fastify、SQLite。 | 接收并校验 Edge 上传，按比赛管理访问权限，归档场景与媒体，分发直播快照，提供历史查询，发布 HLS 实拍视频。 |
 | [Live Web](live/web/) | 观众的浏览器；Vite 构建、Three.js 渲染、HLS 播放。 | 根据场景位置和骨骼绘制球员与足球，提供虚拟机位切换、跟随球员、暂停回看、实拍对照和人工复核界面。 |
 
-相机标定、识别与三维测量归 Edge；画面渲染与六个虚拟机位归 Web，八个实体相机视角提供原始实拍。Server 负责数据交付、存储与访问管理。详见[边缘端设计](docs/02-technical-design.md#pitchtrace-edge)与[直播端设计](docs/02-technical-design.md#pitchtrace-live)。
+相机标定、识别与三维测量归 Edge；画面渲染与六个虚拟机位归 Web，四个实体相机视角提供原始实拍。Server 负责数据交付、存储与访问管理。详见[边缘端设计](docs/02-technical-design.md#pitchtrace-edge)与[直播端设计](docs/02-technical-design.md#pitchtrace-live)。
 
 ### 实现状态
 
@@ -45,7 +45,7 @@ Server 模拟数据生成器 → WS /demo → Web
 
 ```mermaid
 flowchart LR
-    C["四组双目／八路相机"] --> E["Edge：采集与重建"]
+    C["四个机位／四路单摄"] --> E["Edge：采集与重建"]
     subgraph live["PitchTrace Live"]
         S["Server：接收、归档、分发"]
         W["Web：浏览器观赛与复核"]
@@ -96,8 +96,9 @@ flowchart LR
 | 文档 | 用途 |
 | --- | --- |
 | [详细需求说明](docs/01-requirements.md) | 确定比赛流程、功能范围及现场验收标准。 |
-| [技术实现方案](docs/02-technical-design.md) | 设计八路采集、Mac mini 三维重建、数据分发及复核链路。 |
+| [技术实现方案](docs/02-technical-design.md) | 设计四路采集、Mac mini 三维重建、数据分发及复核链路。 |
 | [落地开发计划](docs/03-development-plan.md) | 安排场勘、开发、实拍验收与发布，明确各阶段负责人和放行条件。 |
+| [MVP 硬件选型](docs/05-hardware-selection.md) | 选择 Mac mini、统一内存和可换录像盘，估算四路相机的带宽与存储。 |
 
 ## 仓库结构
 

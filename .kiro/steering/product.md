@@ -3,7 +3,7 @@ inclusion: always
 ---
 # 产品与范围
 
-场迹（PitchTrace 3D）用球场四周四组双目摄像头采集比赛，在 Mac mini 边缘节点重建球员、足球与骨骼动作，经直播服务分发，供浏览器自由切换视角回看传球、射门与拼抢。完整需求见 [docs/01-requirements.md](../../docs/01-requirements.md)。
+场迹（PitchTrace 3D）第一阶段 MVP 通过球场四周的四台单摄像头同步采集比赛，计划在 M6 Mac mini 上重建球员、足球与骨骼动作，经直播服务分发，供浏览器自由切换视角回看传球、射门与拼抢。完整需求见 [docs/01-requirements.md](../../docs/01-requirements.md)。
 
 ## 主要使用者
 
