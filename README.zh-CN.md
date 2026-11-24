@@ -6,14 +6,59 @@
 
 [直播观赛前端](live/web/) 已可以运行。它内置一场 60 秒比赛，也可以切换到 WebSocket 直播数据和外部 HLS 实拍视频。克隆仓库后可直接用浏览器打开[离线观赛页](live/web/dist/index.html)。
 
-## 正式子项目
+## 子项目与职责分工
 
-| 子项目 | 交付物与职责 | 首版技术方案 |
+**Edge 生产比赛数据，Live Server 接收、归档和分发，Live Web 向观众呈现。** 项目包含两个独立构建和发布的产品：PitchTrace Edge（`edge/`）和 PitchTrace Live（`live/`）。Live 内含服务端和浏览器前端。下表说明完整系统中的职责，包含规划功能；实际实现状态在后文单独列出。
+
+| 组成部分 | 运行位置与技术 | 完整系统中的职责 |
 | --- | --- | --- |
-| [PitchTrace Edge · 边缘计算](edge/) | 已创建可构建的 SwiftPM 空项目；规划在 Mac mini 上采集、重建并输出场景快照、视频片段与曝光时间索引。 | Swift、Core ML、Vision、C++/OpenCV、FFmpeg、VideoToolbox。[边缘端实现](docs/02-technical-design.md#pitchtrace-edge) |
-| PitchTrace Live · 直播（`live/`） | 接收、归档、分发上述数据，提供三维观赛、实拍回看与人工复核。内含服务端和网页端。 | Node.js/TypeScript、Fastify、WebSocket、HLS、Vite、Three.js。[直播端实现](docs/02-technical-design.md#pitchtrace-live) |
+| [PitchTrace Edge](edge/) | 场边 Mac mini；Swift/SwiftPM。规划采用 Core ML、Vision、C++/OpenCV、FFmpeg、VideoToolbox。 | 接入并同步八路相机、完成标定，检测和追踪球员与足球、识别球衣号、重建三维位置和骨骼、生成动作候选，保存并上传视频片段与曝光时间索引。 |
+| [Live Server](live/server/) | Mac mini 或独立服务器；当前为 Node.js 和 `ws`。规划采用 TypeScript、Fastify、SQLite。 | 接收并校验 Edge 上传，按比赛管理访问权限，归档场景与媒体，分发直播快照，提供历史查询，发布 HLS 实拍视频。 |
+| [Live Web](live/web/) | 观众的浏览器；Vite 构建、Three.js 渲染、HLS 播放。 | 根据场景位置和骨骼绘制球员与足球，提供虚拟机位切换、跟随球员、暂停回看、实拍对照和人工复核界面。 |
 
-浏览器端已支持 v1 和 v2 场景快照，[示例网关](live/server/)提供 v1 试播。边缘识别、正式 v2 网关和基于原片时间索引的同步复核仍在规划中。[场景与媒体接口](docs/02-technical-design.md#edge-live-contract)
+相机标定、识别与三维测量归 Edge；画面渲染与六个虚拟机位归 Web，八个实体相机视角提供原始实拍。Server 负责数据交付、存储与访问管理。详见[边缘端设计](docs/02-technical-design.md#pitchtrace-edge)与[直播端设计](docs/02-technical-design.md#pitchtrace-live)。
+
+### 实现状态
+
+| 组成部分 | 当前已实现 | 规划中／尚未实现 |
+| --- | --- | --- |
+| Edge | 可构建的 SwiftPM 可执行项目骨架；入口为空，运行后立即退出。 | 相机采集与对时、标定、推理、追踪与三维融合、动作生成、视频生产和上传。 |
+| Live Server | 提供构建后的网页；通过 `POST /frame` 校验 v1 快照并经 `WS /live` 转发；通过 `WS /demo` 生成约 20 Hz 的模拟流。仅在内存保留最新接收帧。 | 正式 v2 网关、按比赛隔离与鉴权、持久化归档与历史查询、视频及索引接入、HLS 发布、按曝光时刻定位原片。 |
+| Live Web | 内置 60 秒比赛、六个虚拟机位、跟随球员、骨骼显示、直播定格与返回直播、断线重连、v1/v2 场景输入，以及独立播放外部 HLS 视频。v2 支持空场、丢球和未知球衣号。 | 依托服务端归档的真实比赛历史回看、按曝光时刻同步实拍复核、人工审核与修订。 |
+
+**Web 支持 v2 输入，不代表示例 Server 已支持 v2 网关。** 当前 HLS 播放使用外部视频源和独立控件；三维与实拍同步回看仍在规划中。
+
+### 当前可运行的数据流
+
+```text
+内置 60 秒比赛 → Web（可离线运行，无需 Edge 或 Server）
+外部 v1 发送程序 → POST /frame → Server → WS /live → Web
+Server 模拟数据生成器 → WS /demo → Web
+外部 HLS 视频源 → HTTP(S) → Web（独立播放视频）
+```
+
+外部 v1 发送程序可以是脚本或其他数据生产端。仓库中的 Edge 可执行程序尚不能生产或发送比赛数据，因此真实相机经 Edge 到网页的链路尚未打通。
+
+### 规划中的完整数据流
+
+完整链路包含 Edge 的两类输出：结构化场景快照（球员、足球、骨骼和动作候选），以及带曝光时间索引的原始视频片段。下图是目标架构，尚未形成端到端实现。
+
+```mermaid
+flowchart LR
+    C["四组双目／八路相机"] --> E["Edge：采集与重建"]
+    subgraph live["PitchTrace Live"]
+        S["Server：接收、归档、分发"]
+        W["Web：浏览器观赛与复核"]
+    end
+    E -->|"HTTPS：场景快照"| S
+    E -->|"HTTPS：视频片段与时间索引"| S
+    S -->|"WebSocket：场景数据"| W
+    S -->|"HTTP / HLS：实拍视频"| W
+```
+
+规划中，Server 先归档快照再广播，收到匹配的视频片段和索引后才发布 HLS 播放列表。Web 通过比赛 ID 与曝光时间戳对齐三维场景和实拍，历史回看从服务端归档查询。
+
+Edge 和 Server 可以作为独立进程同驻一台 Mac mini，也可以分别部署。规划中两端各自存储，通过版本化网络接口交换数据。Server 当前提供 Web 的 `dist/index.html`；Web 也可独立部署到静态站点，内置演示可以离线运行。详见[场景与媒体契约](docs/02-technical-design.md#edge-live-contract)。
 
 ## 项目文档
 

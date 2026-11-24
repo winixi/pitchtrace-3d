@@ -2,18 +2,63 @@ English | **[中文](README.zh-CN.md)**
 
 # PitchTrace 3D
 
-PitchTrace 3D is a 3D tracking and replay project for football (soccer) matches. Four stereo camera rigs around the pitch capture the action; Mac mini edge nodes reconstruct players, the ball, and skeletal motion, letting viewers freely switch angles to review passes, shots, and challenges.
+PitchTrace 3D is a 3D tracking and replay project for football (soccer) matches. It aims to capture the action with four stereo camera rigs around the pitch and reconstruct players, the ball, and skeletal motion on Mac mini edge nodes, letting viewers freely switch angles to review passes, shots, and challenges.
 
 The [live viewing frontend](live/web/) is runnable. It ships with a built-in 60-second match and can also switch to a WebSocket live data feed and external HLS footage. After cloning, you can open the [offline viewing page](live/web/dist/index.html) directly in a browser.
 
-## Subprojects
+## Subprojects and responsibilities
 
-| Subproject | Deliverables & responsibilities | First-version tech stack |
+**Edge produces match data; Live Server receives, archives, and distributes it; Live Web presents it to viewers.** There are two independently built and released products: PitchTrace Edge (`edge/`) and PitchTrace Live (`live/`). Live includes a server and a browser frontend. The table below describes responsibilities in the complete system, including planned features; implementation status follows separately.
+
+| Component | Runtime & technology | Responsibility in the complete system |
 | --- | --- | --- |
-| [PitchTrace Edge · edge compute](edge/) | A buildable SwiftPM skeleton exists; the plan is to capture, reconstruct, and emit scene snapshots, video clips, and exposure-time indexes on Mac mini. | Swift, Core ML, Vision, C++/OpenCV, FFmpeg, VideoToolbox. [Edge implementation](docs/02-technical-design.md#pitchtrace-edge) |
-| PitchTrace Live · live (`live/`) | Receives, archives, and distributes the above data; provides 3D viewing, live replay, and manual review. Includes server and web. | Node.js/TypeScript, Fastify, WebSocket, HLS, Vite, Three.js. [Live implementation](docs/02-technical-design.md#pitchtrace-live) |
+| [PitchTrace Edge](edge/) | Pitch-side Mac mini; Swift/SwiftPM. Planned: Core ML, Vision, C++/OpenCV, FFmpeg, VideoToolbox. | Capture and synchronize eight camera views, calibrate cameras, detect and track players and the ball, recognize shirt numbers, reconstruct 3D positions and skeletons, generate action candidates, and save/upload video clips and exposure-time indexes. |
+| [Live Server](live/server/) | Mac mini or a separate server; currently Node.js and `ws`. Planned: TypeScript, Fastify, SQLite. | Receive and validate Edge uploads, authorize access per match, archive scene data and media, distribute live snapshots, provide historical queries, and publish HLS footage. |
+| [Live Web](live/web/) | Viewer's browser; Vite build, Three.js rendering, HLS playback. | Render players and the ball from scene positions and skeletons; provide virtual camera controls, player following, pause/replay, footage comparison, and the manual review interface. |
 
-The browser frontend supports both v1 and v2 scene snapshots; a [sample gateway](live/server/) provides v1 playback. Edge recognition, the full v2 gateway, and original-footage synchronized review based on exposure-time indexes are still in planning. [Scene & media interface](docs/02-technical-design.md#edge-live-contract)
+Camera calibration, recognition, and 3D measurement belong to Edge. Rendering and the six virtual viewpoints belong to Web; the eight physical camera views provide the original footage. Server handles data delivery, storage, and access. See the [Edge design](docs/02-technical-design.md#pitchtrace-edge) and [Live design](docs/02-technical-design.md#pitchtrace-live).
+
+### Implementation status
+
+| Component | Implemented now | Planned / not yet implemented |
+| --- | --- | --- |
+| Edge | Buildable SwiftPM executable skeleton with an empty entry point; it exits immediately when run. | Camera capture and synchronization, calibration, inference, tracking and 3D fusion, action generation, video production, and uploads. |
+| Live Server | Serves the built Web page; validates v1 snapshots at `POST /frame` and forwards them through `WS /live`; generates a simulated stream at about 20 Hz through `WS /demo`. Keeps only the latest received frame in memory. | Full v2 gateway, per-match isolation and authentication, persistent archives and historical queries, video/index ingestion, HLS publishing, and exposure-time footage lookup. |
+| Live Web | Built-in 60-second match, six virtual viewpoints, player following, skeleton display, live-frame freezing and return to live, reconnection, v1/v2 scene input, and independent playback of an external HLS source. v2 supports an empty pitch, a lost ball, and unknown shirt numbers. | Real-match historical replay backed by server archives, exposure-time synchronized footage review, and manual review/editing. |
+
+**Web's v2 input support does not make the sample server a v2 gateway.** HLS playback currently uses an external source with independent controls; synchronized 3D/footage replay is planned.
+
+### Current runnable data flows
+
+```text
+Built-in 60-second match → Web (offline; no Edge or Server required)
+External v1 sender → POST /frame → Server → WS /live → Web
+Server demo generator → WS /demo → Web
+External HLS source → HTTP(S) → Web (independent video playback)
+```
+
+The external v1 sender can be a script or another data producer. The repository's Edge executable does not yet produce or send match data, so the real-camera-to-Edge-to-Web pipeline is not operational yet.
+
+### Planned full data flow
+
+The complete pipeline has two outputs from Edge: structured scene snapshots (players, ball, skeletons, and action candidates), and original video clips with exposure-time indexes. The following diagram is the target architecture, not an implemented end-to-end pipeline.
+
+```mermaid
+flowchart LR
+    C["Four stereo rigs / eight camera views"] --> E["Edge: capture and reconstruct"]
+    subgraph live["PitchTrace Live"]
+        S["Server: receive, archive, distribute"]
+        W["Web: browser viewing and review"]
+    end
+    E -->|"HTTPS: scene snapshots"| S
+    E -->|"HTTPS: video clips and time indexes"| S
+    S -->|"WebSocket: scene data"| W
+    S -->|"HTTP / HLS: footage"| W
+```
+
+In the planned pipeline, Server archives snapshots before broadcasting them and publishes HLS playlists after receiving the matching clips and indexes. Web uses match IDs and exposure timestamps to align 3D scenes with footage; historical replay queries the server archive.
+
+Edge and Server can run as separate processes on the same Mac mini or on different hosts. Their planned storage is separate, and they exchange data through versioned network interfaces. Server currently serves Web's `dist/index.html`; Web can also be deployed as a static site, and its built-in demo runs offline. See the [scene and media contract](docs/02-technical-design.md#edge-live-contract).
 
 ## Project documentation
 
