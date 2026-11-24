@@ -60,6 +60,37 @@ In the planned pipeline, Server archives snapshots before broadcasting them and 
 
 Edge and Server can run as separate processes on the same Mac mini or on different hosts. Their planned storage is separate, and they exchange data through versioned network interfaces. Server currently serves Web's `dist/index.html`; Web can also be deployed as a static site, and its built-in demo runs offline. See the [scene and media contract](docs/02-technical-design.md#edge-live-contract).
 
+### Public Server + LAN Mac mini Edge (planned)
+
+In this deployment, cameras and Mac mini Edge stay on the venue's private LAN; Live Server runs on a public host. Edge captures and reconstructs locally, and viewers access Server for live scenes, footage, and historical replay. **This is a planned deployment, not a capability of the current sample gateway.**
+
+The arrows below show **which side initiates each connection**, rather than the direction of every data message. Server responses and live pushes travel back over the established connections.
+
+```mermaid
+flowchart LR
+    subgraph lan["Venue LAN"]
+        E["Mac mini / Edge"]
+    end
+    subgraph internet["Public host"]
+        S["Live Server"]
+    end
+    W["Viewer's browser"]
+    E -->|"Outbound HTTPS: scene, video, and index uploads"| S
+    W -->|"HTTPS requests / WSS subscription"| S
+```
+
+- **Edge → Server:** Edge initiates outbound HTTPS requests using the configured public server address and device credentials. It uploads scene snapshots, video clips, and exposure-time indexes. The Mac mini needs outbound access to Server; it needs no public IP address or inbound port forwarding. Camera access stays within the venue LAN.
+- **Browser → Server:** The browser initiates HTTPS requests for the page, footage, and history, and a WSS connection for scene subscriptions. Server pushes scene snapshots over that browser-initiated connection. Viewers access the public service without connecting to Edge.
+- **Access control (planned):** Server checks a device's permission to write to a match separately from a viewer's permission to read it.
+
+**Network outage and recovery (planned):**
+
+1. If the venue uplink fails or Server becomes unavailable, Edge continues local capture, recording, and reconstruction. It persists scene snapshots, video clips, indexes, and pending-upload records; upload failures do not block capture. Public viewers cannot receive new venue data during the outage, and the viewing page indicates the interruption.
+2. After reconnecting, Edge sends the current snapshot first and resumes live uploads, then uses available bandwidth to backfill historical snapshots, video clips, and indexes. Live data takes priority over the backlog.
+3. Server handles retries idempotently using scene frame keys and stable media paths. Backfilled old frames enter the archive without moving live viewers backward in time; media segments join HLS playlists only after the matching files and indexes are complete.
+
+**Implementation boundary:** Browser WebSocket reconnection is already implemented. Edge uploads, durable pending-upload storage, automatic retry/backfill, public HTTPS/WSS access with device/viewer authorization, and server-side v2 archival/idempotency are still planned. The current v1 gateway defaults to `127.0.0.1` and provides local or trusted-LAN trial playback without authentication or persistent archives; changing its listen address alone does not implement this public deployment.
+
 ## Project documentation
 
 | Document | Purpose |
