@@ -4,7 +4,7 @@
 
 ## 1. 系统与模块边界
 
-同一仓库规划两个独立构建、测试和发布的产品。**PitchTrace Edge** 从实拍画面生产比赛数据和视频片段；**PitchTrace Live** 接收两类数据，为观众及复核员提供直播与回看。首场试点两个进程可同驻一台 Mac mini，接口也支持把直播服务部署到另一台主机。下列目录、可执行程序和 v2 端点均为开发设计。当前可运行的代码在 [Three.js 演示](../demos/threejs-live/)。
+同一仓库规划两个独立构建、测试和发布的产品。**PitchTrace Edge** 从实拍画面生产比赛数据和视频片段；**PitchTrace Live** 接收两类数据，为观众及复核员提供直播与回看。首场试点两个进程可同驻一台 Mac mini，接口也支持把直播服务部署到另一台主机。[直播前端](../live/web/) 已实现内置演示、v1/v2 场景订阅和独立 HLS 观看；[试播网关](../demos/threejs-live/)提供 v1 数据。下文的边缘程序、v2 服务端及原片定位接口为开发设计。
 
 ```mermaid
 flowchart LR
@@ -50,7 +50,7 @@ flowchart LR
 
 ### 1.2 直播子项目 · PitchTrace Live
 
-**目录与交付物。** 规划放在 `live/`。其中 `live/server/` 构建 Node.js 网关，`live/web/` 构建浏览器静态文件。两者随同一直播版本交付。输入可以来自 Mac mini，也可以来自协议样例或一场归档比赛，便于在没有相机时独立开发。
+**目录与交付物。** `live/web/` 已构建浏览器静态文件，复用原演示的 JavaScript 渲染器并使用 Vite 打包。规划中的 `live/server/` 承载正式 Node.js 网关。两者随同一直播版本交付。输入可以来自 Mac mini，也可以来自协议样例或一场归档比赛，便于在没有相机时独立开发。
 
 | 实现单元 | 首版技术选择 | 路径与行为 |
 | --- | --- | --- |
@@ -130,9 +130,9 @@ macOS 第一轮可用 Vision 的人体姿态与文字识别请求做基线，分
 
 ## 6. 数据契约、分发和故障恢复
 
-**现有 v1 兼容。** `POST /frame` 接收完整 JSON 快照，`/live` WebSocket 向浏览器转发，`/demo` 生产约 20 Hz 的模拟数据；浏览器做约 100 ms 的插值。v1 要求 1–32 个球员、每人有整数号码，且每帧都有球坐标，骨骼可选。这些约束无法完整表示真实场地的未知号码、空场或丢球。保留 v1 回归样例和独立演示入口。[现有校验器](../demos/threejs-live/src/protocol.js) · [接收端](../demos/threejs-live/src/receiver.js)
+**现有 v1 兼容。** `POST /frame` 接收完整 JSON 快照，`/live` WebSocket 向浏览器转发，`/demo` 生产约 20 Hz 的模拟数据；浏览器做约 100 ms 的插值。v1 要求 1–32 个球员、每人有整数号码，且每帧都有球坐标，骨骼可选。这些约束无法完整表示真实场地的未知号码、空场或丢球。保留 v1 回归样例和独立演示入口。[现有校验器](../live/web/src/protocol.js) · [接收端](../live/web/src/receiver.js)
 
-**拟议 v2。** 边缘发布器向 `POST /v2/matches/{matchId}/frames` 提交场景快照，浏览器连接 `/v2/matches/{matchId}/live`。一帧可含零个球员，球、号码和关节观测可缺失；场景承载测量时间与状态。以下为接口草案，数值仅用于说明。
+**拟议 v2。** 边缘发布器向 `POST /v2/matches/{matchId}/frames` 提交场景快照，浏览器连接 `/v2/matches/{matchId}/live`。一帧可含零个球员，球、号码和关节观测可缺失；场景承载测量时间与状态。前端已支持以下快照输入，示例数值仅用于说明；v2 网关仍为设计阶段。
 
 ```json
 {

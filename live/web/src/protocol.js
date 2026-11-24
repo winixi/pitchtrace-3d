@@ -62,18 +62,20 @@ export function validFrame(f) {
       (!Number.isFinite(p.phase) || p.phase < 0 || p.phase > 1)
     )
       return false;
-    if (p.bones != null) {
-      if (typeof p.bones !== "object" || Array.isArray(p.bones)) return false;
-      for (const [n, q] of Object.entries(p.bones))
-        if (
-          !boneSet.has(n) ||
-          !Array.isArray(q) ||
-          q.length !== 4 ||
-          !q.every((v) => number(v, 1.001)) ||
-          Math.abs(Math.hypot(...q) - 1) > 0.04
-        )
-          return false;
-    }
+    if (!validBones(p.bones)) return false;
   }
   return f.focus == null || ids.has(f.focus);
+}
+
+export function validBones(bones) {
+  if (bones == null) return true;
+  if (typeof bones !== "object" || Array.isArray(bones)) return false;
+  return Object.entries(bones).every(
+    ([name, q]) =>
+      boneSet.has(name) &&
+      Array.isArray(q) &&
+      q.length === 4 &&
+      q.every((value) => number(value, 1.001)) &&
+      Math.abs(Math.hypot(...q) - 1) <= 0.04,
+  );
 }

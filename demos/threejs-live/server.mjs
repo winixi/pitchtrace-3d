@@ -2,15 +2,20 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
-import { demoFrame } from "./src/match.js";
-import { validFrame } from "./src/protocol.js";
+import { demoFrame } from "../../live/web/src/match.js";
+import { validFrame } from "../../live/web/src/protocol.js";
 const host = process.env.PITCHTRACE_HOST || "127.0.0.1",
   port = Number(process.env.PITCHTRACE_PORT || 8766);
-const page = path.join(
+const legacyPage = path.join(
   path.dirname(path.resolve(process.argv[1])),
   "dist",
   "PitchTrace-Live-60s.html",
 );
+const viewerPage = path.resolve(
+  path.dirname(legacyPage),
+  "../../../live/web/dist/index.html",
+);
+const page = fs.existsSync(viewerPage) ? viewerPage : legacyPage;
 const wss = new WebSocketServer({ noServer: true, maxPayload: 256000 });
 let latest = null;
 let receivedAt = 0;

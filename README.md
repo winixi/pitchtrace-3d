@@ -2,16 +2,16 @@
 
 场迹是一个面向足球比赛的三维跟踪与回放项目。项目目标是用球场四周的四组双目摄像头采集比赛，在 Mac mini 边缘节点重建球员、足球和骨骼动作，让观众自由切换视角回看传球、射门和拼抢。
 
-目前可运行的子项目是 **60 秒多机位转播演示**。它用模拟比赛展示三维回放，也能接收外部程序通过 WebSocket 发送的球员、骨骼和足球数据。现场采集与多机位重建仍在规划中。
+[直播观赛前端](live/web/) 已可以运行。它内置一场 60 秒比赛，也可以切换到 WebSocket 直播数据和外部 HLS 实拍视频。克隆仓库后可直接用浏览器打开[离线观赛页](live/web/dist/index.html)。
 
 ## 正式子项目
 
-| 子项目（规划目录） | 交付物与职责 | 首版技术方案 |
+| 子项目 | 交付物与职责 | 首版技术方案 |
 | --- | --- | --- |
 | PitchTrace Edge · 边缘计算（`edge/`） | Mac mini 上的采集与重建程序，输出场景快照、实拍视频片段及曝光时间索引。 | Swift、Core ML、Vision、C++/OpenCV、FFmpeg、VideoToolbox。[边缘端实现](docs/02-technical-design.md#pitchtrace-edge) |
 | PitchTrace Live · 直播（`live/`） | 接收、归档、分发上述数据，提供三维观赛、实拍回看与人工复核。内含服务端和网页端。 | Node.js/TypeScript、Fastify、WebSocket、HLS、Vite、Three.js。[直播端实现](docs/02-technical-design.md#pitchtrace-live) |
 
-两个产品共用[场景与媒体接口](docs/02-technical-design.md#edge-live-contract)。当前演示代码和 v1 数据入口位于 `demos/threejs-live/`，正式产品及 v2 接口尚待开发。
+浏览器端已支持 v1 和 v2 场景快照，[示例网关](demos/threejs-live/)提供 v1 试播。边缘识别、正式 v2 网关和基于原片时间索引的同步复核仍在规划中。[场景与媒体接口](docs/02-technical-design.md#edge-live-contract)
 
 ## 项目文档
 
@@ -21,9 +21,9 @@
 | [技术实现方案](docs/02-technical-design.md) | 设计八路采集、Mac mini 三维重建、数据分发及复核链路。 |
 | [落地开发计划](docs/03-development-plan.md) | 安排场勘、开发、实拍验收与发布，明确各阶段负责人和放行条件。 |
 
-## 演示子项目
+## 本地试播
 
-[Three.js 足球转播演示](demos/threejs-live/) 包含独立的源码、模型、构建配置和直播接收服务。克隆仓库后，直接用浏览器打开[离线演示页面](demos/threejs-live/dist/PitchTrace-Live-60s.html)即可观看。
+内置比赛和正式观赛页面共用一套模型和渲染代码。原有[演示页面](demos/threejs-live/dist/PitchTrace-Live-60s.html)和本地网关命令继续可用。
 
 要试播 WebSocket 数据流，从仓库根目录运行以下命令，再打开 <http://127.0.0.1:8766/>。运行服务需要 Node.js 20 或更高版本。
 
@@ -36,4 +36,4 @@ node server.cjs
 
 ## 许可证
 
-原创代码采用 [MIT 许可证](LICENSE)。演示使用的第三方模型、动画和依赖保留各自许可，详见[素材署名与许可](demos/threejs-live/licenses/)。
+原创代码采用 [MIT 许可证](LICENSE)。演示使用的第三方模型、动画和依赖保留各自许可，详见[素材署名与许可](live/web/licenses/)。

@@ -108,13 +108,16 @@ export async function makePitch(canvas) {
   function kit(team, no) {
     const home = team === "blue",
       keeper = team === "gold" || team === "green";
-    const shirt = home
-        ? "#0c5782"
-        : keeper
-          ? team === "green"
-            ? "#4a9370"
-            : "#e6ac36"
-          : "#b53933",
+    const shirt =
+        team === "neutral"
+          ? "#6a747a"
+          : home
+            ? "#0c5782"
+            : keeper
+              ? team === "green"
+                ? "#4a9370"
+                : "#e6ac36"
+              : "#b53933",
       shorts = home ? "#10283f" : keeper ? "#332f28" : "#ebe1d0",
       sock = home ? "#1676a4" : keeper ? "#daa239" : "#b83935",
       accent = home ? "#81d8db" : "#f6e7c9";
@@ -154,9 +157,9 @@ export async function makePitch(canvas) {
       g.fillStyle = "#faf4e5";
       g.textAlign = "center";
       g.font = "bold 132px Arial";
-      g.fillText(no, 768, 267, 153);
+      g.fillText(no ?? "", 768, 267, 153);
       g.font = "bold 45px Arial";
-      g.fillText(no, 259, 210);
+      g.fillText(no ?? "", 259, 210);
       g.font = "bold 23px Arial";
       g.fillText("FIELD", 768, 117);
       g.fillStyle = accent;
@@ -521,6 +524,7 @@ export async function makePitch(canvas) {
       }
       p.root.position.set(s.x, s.y || 0, s.z);
       p.root.rotation.y = s.yaw;
+      p.sourceBones = s.bones;
       const action = s.action in p.acts ? s.action : "idle";
       if (p.current !== action) {
         Object.values(p.acts).forEach((a) => (a.enabled = false));
@@ -549,7 +553,8 @@ export async function makePitch(canvas) {
         }
       }
     }
-    ball.position.set(frame.ball.x, frame.ball.y, frame.ball.z);
+    ball.visible = !!frame.ball;
+    if (frame.ball) ball.position.set(frame.ball.x, frame.ball.y, frame.ball.z);
     ball.rotation.set(frame.t, frame.t * 2, -frame.t * 8);
   }
   function mode(value) {
@@ -565,11 +570,12 @@ export async function makePitch(canvas) {
     mode(camera);
     const subject =
         players[selected] || players[frame.focus] || Object.values(players)[0],
-      body = subject?.root.position || ball.position;
+      body = subject?.root.position || (ball.visible ? ball.position : V());
+    const playPosition = ball.visible ? ball.position : body;
     focus.copy(body).y += 0.85;
     const cameraTarget = V(),
       position = V();
-    const attack = frame.ball.x >= 0 ? 1 : -1;
+    const attack = playPosition.x >= 0 ? 1 : -1;
     let fov = 34;
     if (view === "orbit") {
       controls.enabled = true;
@@ -601,23 +607,23 @@ export async function makePitch(canvas) {
           .addScaledVector(side, 2.15).y += 0.25;
         fov = 28;
       } else if (view === "touchline") {
-        cameraTarget.copy(ball.position);
+        cameraTarget.copy(playPosition);
         cameraTarget.y = 0.85;
-        position.set(frame.ball.x * 0.72, 7.3, 22);
+        position.set(playPosition.x * 0.72, 7.3, 22);
         fov = 34;
       } else if (view === "goal") {
-        cameraTarget.copy(ball.position);
+        cameraTarget.copy(playPosition);
         cameraTarget.y = 0.87;
         position.set(attack * 54.6, 3.75, 7.3);
         fov = 37;
       } else if (view === "tactics") {
-        cameraTarget.set(frame.ball.x * 0.66, 0, frame.ball.z * 0.5);
+        cameraTarget.set(playPosition.x * 0.66, 0, playPosition.z * 0.5);
         position.copy(cameraTarget).add(V(0, 45, 7));
         fov = 61;
       } else {
         const wide =
           frame.event.includes("射门") || frame.event.includes("扑救");
-        cameraTarget.copy(focus).lerp(ball.position, wide ? 0.5 : 0.22);
+        cameraTarget.copy(focus).lerp(playPosition, wide ? 0.5 : 0.22);
         cameraTarget.y = 0.91;
         position
           .copy(cameraTarget)
@@ -654,14 +660,22 @@ export async function makePitch(canvas) {
     skeleton.visible = joints.visible = !!boneOverlay && !!subject;
     if (skeleton.visible) {
       subject.root.updateWorldMatrix(true, true);
+      const visibleJoint = (n) =>
+        frame.v !== 2 || Object.hasOwn(subject.sourceBones || {}, n);
+      let count = 0,
+        vertices = 0;
       bones.forEach((n, i) => {
+        if (!visibleJoint(n)) return;
         subject.bones[n].getWorldPosition(points[i]);
-        jointBuffer.setXYZ(i, ...points[i].toArray());
+        jointBuffer.setXYZ(count++, ...points[i].toArray());
       });
-      edges.forEach(([a, b], i) => {
-        linePoints.setXYZ(2 * i, ...points[a].toArray());
-        linePoints.setXYZ(2 * i + 1, ...points[b].toArray());
-      });
+      for (const [a, b] of edges) {
+        if (!visibleJoint(bones[a]) || !visibleJoint(bones[b])) continue;
+        linePoints.setXYZ(vertices++, ...points[a].toArray());
+        linePoints.setXYZ(vertices++, ...points[b].toArray());
+      }
+      skeleton.geometry.setDrawRange(0, vertices);
+      joints.geometry.setDrawRange(0, count);
       linePoints.needsUpdate = jointBuffer.needsUpdate = true;
     }
     r.render(sc, cam);

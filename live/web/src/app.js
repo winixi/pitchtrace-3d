@@ -1,5 +1,6 @@
 import { makePitch } from "./pitch.js";
 import { demoFrame, chapters } from "./match.js";
+import { setupMedia } from "./media.js";
 import { connectFrames } from "./receiver.js";
 
 const $ = (id) => document.getElementById(id);
@@ -12,6 +13,7 @@ const cameras = [
   ["profile", "球员近景", "镜头跟随所选球员，适合查看头颈和触球姿态。"],
 ];
 const teams = {
+  neutral: "队伍待定",
   blue: "蓝队",
   red: "红队",
   gold: "红队门将",
@@ -26,7 +28,14 @@ function stamp(t) {
   );
 }
 const label = (p) =>
-  teams[p.team] + " · " + String(p.number).padStart(2, "0") + " 号";
+  p
+    ? teams[p.team] +
+      " · " +
+      (p.number == null
+        ? "号码未知"
+        : String(p.number).padStart(2, "0") + " 号") +
+      (p.state === "predicted" ? " · 位置预测" : "")
+    : "场上暂无球员";
 
 async function start() {
   const pitch = await makePitch($("pitch"));
@@ -40,14 +49,38 @@ async function start() {
     chapter = -1;
   let connection = null,
     liveFrame = null,
+    frozenFrame = null,
     demoState = null;
   const cueButtons = [],
     cameraButtons = [];
   const wsBase =
     (location.protocol === "https:" ? "wss://" : "ws://") +
     (location.protocol === "file:" ? "127.0.0.1:8766" : location.host);
-  $("address").value = wsBase + "/live";
+  const localGateway =
+    location.protocol === "file:" || import.meta.env.DEV
+      ? "ws://127.0.0.1:8766"
+      : wsBase;
+  const stopMedia = setupMedia(
+    $("mediaForm"),
+    $("video"),
+    $("mediaAddress"),
+    $("mediaStatus"),
+    $("mediaStop"),
+  );
+  $("sourceLive").onclick = () => {
+    $("feed").hidden = !$("feed").hidden;
+    $("sourceLive").setAttribute("aria-expanded", String(!$("feed").hidden));
+    if (!$("feed").hidden) $("address").focus();
+  };
+  $("address").value = localGateway + "/live";
   function updatePlay() {
+    if (connection) {
+      const title = frozenFrame ? "返回直播" : "定格";
+      if ($("play").textContent !== title) $("play").textContent = title;
+      $("play").disabled = !liveFrame;
+      return;
+    }
+    $("play").disabled = false;
     $("play").textContent = playing ? "暂停" : clock >= 60 ? "重播" : "播放";
   }
   function jump(t) {
@@ -98,7 +131,12 @@ async function start() {
     if (players.some((p) => p.id === previous)) $("target").value = previous;
   }
   function toggle() {
-    if (connection) return;
+    if (connection) {
+      if (liveFrame) frozenFrame = frozenFrame ? null : liveFrame;
+      dirty = pausedDirty = true;
+      updatePlay();
+      return;
+    }
     if (clock >= 60) jump(0);
     playing = !playing;
     last = null;
@@ -142,15 +180,22 @@ async function start() {
   });
   observer.observe($("stage"));
   function setLive(live) {
-    for (const el of [
-      $("play"),
-      $("seek"),
-      $("speed"),
-      $("loop"),
-      ...cueButtons,
-    ])
-      el.disabled = live;
-    $("duration").textContent = live ? "数据流" : "01:00";
+    frozenFrame = null;
+    stopMedia();
+    $("media").hidden = !live;
+    $("media").open = false;
+    $("demoTimeline").hidden =
+      $("seek").hidden =
+      $("speed").hidden =
+      $("loopControl").hidden =
+        live;
+    $("play").disabled = live;
+    $("play").textContent = live ? "定格" : "播放";
+    $("duration").textContent = live ? "直播" : "01:00";
+    $("quality").textContent = "";
+    $("demo").setAttribute("aria-pressed", String(!live));
+    $("sourceLive").setAttribute("aria-pressed", String(live));
+    document.body.dataset.source = live ? "live" : "demo";
     chapter = -2;
     cueButtons.forEach((b) => b.removeAttribute("aria-current"));
     dirty = pausedDirty = true;
@@ -161,6 +206,10 @@ async function start() {
     try {
       parsed = new URL(address);
       if (!["ws:", "wss:"].includes(parsed.protocol)) throw new Error();
+      if (location.protocol === "https:" && parsed.protocol === "ws:") {
+        $("netstatus").textContent = "HTTPS 页面请使用 wss:// 安全连接。";
+        return;
+      }
     } catch {
       $("netstatus").textContent = "请输入以 ws:// 或 wss:// 开头的地址。";
       return;
@@ -175,7 +224,7 @@ async function start() {
       $("signal").textContent =
         (isSample ? "模拟数据流" : "直播数据") + " · " + s;
       $("netstatus").textContent = s + "　" + parsed.href;
-      if (!liveFrame) $("loading").textContent = s + " · 可在下方返回演示";
+      if (!liveFrame) $("loading").textContent = s + " · 可切换到内置演示";
     });
   }
   $("feedform").onsubmit = (e) => {
@@ -183,15 +232,17 @@ async function start() {
     openFeed($("address").value.trim(), false);
   };
   $("sample").onclick = () => {
-    openFeed(wsBase + "/demo", true);
+    openFeed(localGateway + "/demo", true);
   };
   $("demo").onclick = () => {
+    $("feed").hidden = true;
+    $("sourceLive").setAttribute("aria-expanded", "false");
     connection?.stop();
     connection = null;
     liveFrame = null;
     setLive(false);
     $("loading").hidden = true;
-    $("signal").textContent = "模拟转播";
+    $("signal").textContent = "内置演示";
     $("netstatus").textContent = "当前播放内置 60 秒比赛。";
     updatePlay();
   };
@@ -209,9 +260,16 @@ async function start() {
           $("loading").hidden = true;
           dirty = true;
         }
+        if (
+          frozenFrame &&
+          (frozenFrame.epoch !== incoming.epoch ||
+            incoming.t < (liveFrame?.t ?? 0))
+        )
+          frozenFrame = null;
         liveFrame = incoming;
+        updatePlay();
       }
-      frame = liveFrame;
+      frame = frozenFrame || liveFrame;
     } else {
       if (playing) {
         clock += dt * Number($("speed").value);
@@ -244,6 +302,17 @@ async function start() {
         oldEvent = frame.event;
         $("event").textContent = oldEvent;
       }
+      if (connection) {
+        const status = [
+          frozenFrame ? "已定格" : "",
+          frame.v === 2 && !frame.ball ? "足球缺测" : "",
+          frame.ballState === "predicted" ? "球位预测" : "",
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        if ($("quality").textContent !== status)
+          $("quality").textContent = status;
+      }
       const caption = label(subject);
       if (oldSubject !== caption) {
         oldSubject = caption;
@@ -275,6 +344,15 @@ async function start() {
   $("loading").hidden = true;
   $("play").disabled = false;
   document.body.dataset.ready = "true";
+  document.body.dataset.source = "demo";
+  const matchId = new URLSearchParams(location.search).get("match");
+  if (matchId && /^[\w-]{1,64}$/.test(matchId)) {
+    $("address").value =
+      wsBase + "/v2/matches/" + encodeURIComponent(matchId) + "/live";
+    $("feed").hidden = false;
+    $("sourceLive").setAttribute("aria-expanded", "true");
+    openFeed($("address").value, false);
+  }
 }
 start().catch((e) => {
   console.error(e);

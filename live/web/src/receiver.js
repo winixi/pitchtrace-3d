@@ -1,4 +1,4 @@
-import { validFrame } from "./protocol.js";
+import { readScene } from "./live-frame.js";
 import { Quaternion } from "three";
 const lerp = (a, b, w) => a + (b - a) * w;
 const qa = new Quaternion(),
@@ -10,6 +10,14 @@ export function connectFrames(url, onState) {
     frames = [],
     last = 0,
     status = "";
+  const matchPath = new URL(url).pathname.match(
+    /\/v2\/matches\/([^/]+)\/live\/?$/,
+  );
+  const expectedMatch = matchPath ? matchPath[1] : null;
+  let match = expectedMatch,
+    epoch = null,
+    sequence = -1;
+  const retiredEpochs = new Set();
   function set(s) {
     if (s !== status) {
       onState(s);
@@ -19,6 +27,7 @@ export function connectFrames(url, onState) {
   function connect() {
     if (done) return;
     set("连接中");
+    let firstOnSocket = true;
     try {
       socket = new WebSocket(url);
     } catch {
@@ -26,6 +35,7 @@ export function connectFrames(url, onState) {
       return;
     }
     socket.onopen = () => {
+      if (done) return;
       frames = [];
       last = 0;
       set("等待第一帧");
@@ -33,11 +43,30 @@ export function connectFrames(url, onState) {
     socket.onmessage = (e) => {
       try {
         if (typeof e.data !== "string" || e.data.length > 256000) return;
-        const f = JSON.parse(e.data);
-        if (!validFrame(f)) return;
-        f.event = f.event || "比赛中";
+        const f = readScene(JSON.parse(e.data));
+        if (!f || (expectedMatch && f.v !== 2)) return;
+        if (f.v === 2) {
+          if (match && f.matchId !== match) return;
+          match = f.matchId;
+          if (retiredEpochs.has(f.epoch)) return;
+          if (f.epoch !== epoch) {
+            if (epoch !== null) retiredEpochs.add(epoch);
+            epoch = f.epoch;
+            sequence = -1;
+            frames = [];
+          }
+          // A reconnecting gateway may replay its most recent snapshot once.
+          if (f.seq < sequence || (f.seq === sequence && !firstOnSocket))
+            return;
+          sequence = f.seq;
+        }
+        firstOnSocket = false;
         const t = performance.now();
-        if (frames.length && f.t < frames.at(-1).frame.t) frames = [];
+        if (
+          frames.length &&
+          (f.v !== frames.at(-1).frame.v || f.t < frames.at(-1).frame.t)
+        )
+          frames = [];
         frames.push({ t, frame: f });
         if (frames.length > 90) frames.shift();
         last = t;
@@ -58,6 +87,7 @@ export function connectFrames(url, onState) {
       done = true;
       clearTimeout(retry);
       if (socket) {
+        socket.onopen = null;
         socket.onclose = null;
         socket.onmessage = null;
         socket.close();
@@ -80,9 +110,15 @@ export function connectFrames(url, onState) {
       return {
         ...end,
         t: lerp(begin.t, end.t, w),
-        ball: Object.fromEntries(
-          ["x", "y", "z"].map((k) => [k, lerp(begin.ball[k], end.ball[k], w)]),
-        ),
+        ball:
+          begin.ball && end.ball
+            ? Object.fromEntries(
+                ["x", "y", "z"].map((k) => [
+                  k,
+                  lerp(begin.ball[k], end.ball[k], w),
+                ]),
+              )
+            : end.ball,
         players: end.players.map((p) => {
           const prev = old.get(p.id);
           if (!prev) return p;
