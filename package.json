@@ -1,0 +1,16 @@
+{
+  "dependencies": {
+    "esbuild": "^0.28.2",
+    "prettier": "^3.10.1",
+    "three": "^0.187.0",
+    "ws": "^8.23.0"
+  },
+  "name": "pitchtrace-live",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node server.cjs"
+  },
+  "license": "MIT"
+}
