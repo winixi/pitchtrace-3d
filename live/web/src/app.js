@@ -75,7 +75,7 @@ async function start() {
   const recording = setupRecording($("pitch"), {
     button: $("record"),
     status: $("recordStatus"),
-    countdown: $("recordCountdown"),
+    elapsed: $("recordElapsed"),
     download: $("recordDownload"),
   });
   const wsBase =

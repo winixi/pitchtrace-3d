@@ -1,10 +1,9 @@
 import { onChange, t } from "./i18n.js";
 
-const durationMs = 30_000;
 const frameIntervalMs = 1000 / 30;
 const formats = ["video/mp4;codecs=avc1", "video/webm", "video/mp4"];
 
-export function setupRecording(canvas, { button, status, countdown, download }) {
+export function setupRecording(canvas, { button, status, elapsed, download }) {
   const mimeType =
     typeof canvas.captureStream === "function" &&
     typeof MediaRecorder !== "undefined" &&
@@ -14,16 +13,18 @@ export function setupRecording(canvas, { button, status, countdown, download }) 
   let statusKey = mimeType ? "" : "record.unsupported";
 
   function updateControls() {
-    button.disabled = !mimeType || !available || !!session;
+    button.disabled = !mimeType || (session ? session.stopping : !available);
+    button.dataset.i18n = session ? "record.stop" : "record.start";
+    const title = t(button.dataset.i18n);
+    if (button.textContent !== title) button.textContent = title;
     const message = statusKey ? t(statusKey) : "";
     if (status.textContent !== message) status.textContent = message;
-    countdown.hidden = statusKey !== "record.active";
+    elapsed.hidden = statusKey !== "record.active";
   }
 
   function finish(current, key) {
     session = null;
-    clearInterval(current.countdownTimer);
-    clearTimeout(current.stopTimer);
+    clearInterval(current.elapsedTimer);
     if (current.recorder.state !== "inactive") current.recorder.stop();
     current.stream.getTracks().forEach((track) => track.stop());
     statusKey = key;
@@ -31,7 +32,6 @@ export function setupRecording(canvas, { button, status, countdown, download }) 
   }
 
   function start() {
-    if (button.disabled) return;
     let stream;
     try {
       // 固定片段尺寸，调整窗口或进入全屏时仍能继续编码。
@@ -43,7 +43,7 @@ export function setupRecording(canvas, { button, status, countdown, download }) 
       stream = output.captureStream();
       const recorder = new MediaRecorder(stream, { mimeType });
       const chunks = [];
-      const current = { stream, recorder, context, nextFrame: 0, completed: false };
+      const current = { stream, recorder, context, nextFrame: 0, stopping: false };
       recorder.ondataavailable = ({ data }) => {
         if (session === current && data.size) chunks.push(data);
       };
@@ -52,7 +52,7 @@ export function setupRecording(canvas, { button, status, countdown, download }) 
       };
       recorder.onstop = () => {
         if (session !== current) return;
-        if (!current.completed || !chunks.length) {
+        if (!current.stopping || !chunks.length) {
           finish(current, "record.error");
           return;
         }
@@ -69,21 +69,16 @@ export function setupRecording(canvas, { button, status, countdown, download }) 
       recorder.start();
       session = current;
       current.timestamp = new Date().toISOString().replaceAll(":", "-");
-      const endTime = performance.now() + durationMs;
-      countdown.textContent = "00:30";
+      const startedAt = performance.now();
+      elapsed.textContent = "00:00";
       statusKey = "record.active";
       updateControls();
-      current.countdownTimer = setInterval(() => {
-        const seconds = Math.max(0, Math.ceil((endTime - performance.now()) / 1000));
-        countdown.textContent = `00:${String(seconds).padStart(2, "0")}`;
+      current.elapsedTimer = setInterval(() => {
+        const seconds = Math.floor((performance.now() - startedAt) / 1000);
+        const minutes = String(Math.floor(seconds / 60)).padStart(2, "0");
+        const time = `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+        if (elapsed.textContent !== time) elapsed.textContent = time;
       }, 250);
-      current.stopTimer = setTimeout(() => {
-        current.completed = true;
-        clearInterval(current.countdownTimer);
-        statusKey = "record.saving";
-        updateControls();
-        if (recorder.state !== "inactive") recorder.stop();
-      }, durationMs);
     } catch {
       stream?.getTracks().forEach((track) => track.stop());
       statusKey = "record.error";
@@ -91,15 +86,31 @@ export function setupRecording(canvas, { button, status, countdown, download }) 
     }
   }
 
-  button.onclick = start;
+  function stop(current) {
+    if (current.recorder.state === "inactive") {
+      finish(current, "record.error");
+      return;
+    }
+    current.stopping = true;
+    clearInterval(current.elapsedTimer);
+    statusKey = "record.saving";
+    updateControls();
+    current.recorder.stop();
+  }
+
+  button.onclick = () => {
+    if (button.disabled) return;
+    if (session) stop(session);
+    else start();
+  };
   onChange(updateControls);
   updateControls();
   return {
     get active() {
-      return session !== null;
+      return session !== null && !session.stopping;
     },
     captureFrame(now) {
-      if (!session || session.completed || now < session.nextFrame) return;
+      if (!session || session.stopping || now < session.nextFrame) return;
       session.nextFrame = now + frameIntervalMs - 1;
       const context = session.context;
       const { width, height } = context.canvas;
