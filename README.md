@@ -101,6 +101,7 @@ flowchart LR
 | [Technical design](docs/02-technical-design.md) | Designs the four-channel capture, Mac mini 3D reconstruction, data distribution, and review pipeline. |
 | [Development plan](docs/03-development-plan.md) | Schedules site surveys, development, live-shoot acceptance, and release; names owners and release conditions per stage. |
 | [MVP hardware selection](docs/05-hardware-selection.md) | Compares Mac mini configurations and sizes the network and removable storage for four cameras. |
+| [Real-time reconstruction assessment](docs/06-real-time-reconstruction-assessment.md) | Evaluates the five-layer proposal, the two-camera field trial, and the 100–200 ms latency target. |
 
 ## Repository structure
 
