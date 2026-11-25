@@ -1,8 +1,6 @@
 English | **[中文](README.zh-CN.md)**
 
-<img src="assets/pitchtrace-logo.png" width="112" height="112" alt="PitchTrace 3D logo">
-
-# PitchTrace 3D
+# <img src="assets/pitchtrace-logo.png" width="28" height="28" align="middle" alt=""> PitchTrace 3D
 
 PitchTrace 3D is a 3D tracking and replay project for football (soccer) matches. The first-phase MVP uses one camera at each of four positions around the pitch. It aims to reconstruct players, the ball, and skeletal motion from synchronized views on an M6 Mac mini, letting viewers freely switch angles to review passes, shots, and challenges.
 

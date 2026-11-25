@@ -1,8 +1,6 @@
 **[English](README.md)** | 中文
 
-<img src="assets/pitchtrace-logo.png" width="112" height="112" alt="场迹标志">
-
-# 场迹 · PitchTrace 3D
+# <img src="assets/pitchtrace-logo.png" width="28" height="28" align="middle" alt=""> 场迹 · PitchTrace 3D
 
 场迹是一个面向足球比赛的三维跟踪与回放项目。第一阶段 MVP 在球场四周各设一台单摄像头，共四个机位，计划在 M6 Mac mini 上利用同步画面重建球员、足球和骨骼动作，让观众自由切换视角回看传球、射门和拼抢。
 
