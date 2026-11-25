@@ -15,7 +15,7 @@
 | 组成部分 | 运行位置与技术 | 完整系统中的职责 |
 | --- | --- | --- |
 | [PitchTrace Edge](edge/) | 场边 Mac mini；Swift/SwiftPM。规划采用 Core ML、Vision、C++/OpenCV、FFmpeg、VideoToolbox。 | 接入并同步四路相机、完成标定，检测和追踪球员与足球、识别球衣号、重建三维位置和骨骼、生成动作候选，保存并上传视频片段与曝光时间索引。 |
-| [Live Server](live/server/) | Mac mini 或独立服务器；当前为 Node.js 和 `ws`。规划采用 TypeScript、Fastify、SQLite。 | 接收并校验 Edge 上传，按比赛管理访问权限，归档场景与媒体，分发直播快照，提供历史查询，发布 HLS 实拍视频。 |
+| [Live Server](live/server/) | Mac mini 或独立服务器。本地网关使用 Node.js、`ws` 和 SQLite。完整网关规划采用 TypeScript 和 Fastify。 | 接收并校验 Edge 上传，按比赛管理访问权限，归档场景与媒体，分发直播快照，提供历史查询，发布 HLS 实拍视频。 |
 | [Live Web](live/web/) | 观众的浏览器；Vite 构建、Three.js 渲染、HLS 播放。 | 根据场景位置和骨骼绘制球员与足球，提供虚拟机位切换、跟随球员、暂停回看、实拍对照和人工复核界面。 |
 
 相机标定、识别与三维测量归 Edge；画面渲染与六个虚拟机位归 Web，四个实体相机视角提供原始实拍。Server 负责数据交付、存储与访问管理。详见[边缘端设计](docs/02-technical-design.md#pitchtrace-edge)与[直播端设计](docs/02-technical-design.md#pitchtrace-live)。
@@ -25,21 +25,22 @@
 | 组成部分 | 当前已实现 | 规划中／尚未实现 |
 | --- | --- | --- |
 | Edge | 可构建的 SwiftPM 可执行项目骨架；入口为空，运行后立即退出。 | 相机采集与对时、标定、推理、追踪与三维融合、动作生成、视频生产和上传。 |
-| Live Server | 提供构建后的网页；通过 `POST /frame` 校验 v1 快照并经 `WS /live` 转发；通过 `WS /demo` 生成约 20 Hz 的模拟流。仅在内存保留最新接收帧。 | 正式 v2 网关、按比赛隔离与鉴权、持久化归档与历史查询、视频及索引接入、HLS 发布、按曝光时刻定位原片。 |
+| Live Server | 提供构建后的网页、约 20 Hz 模拟流和 v1 转发。本地 v2 网关校验快照、写入 SQLite，并按比赛通过 WebSocket 发布。 | 历史查询、设备与观众鉴权、视频及索引接入、HLS 发布、按曝光时刻定位原片。 |
 | Live Web | 内置 60 秒比赛、六个虚拟机位、跟随球员、骨骼显示、直播定格与返回直播、断线重连、v1/v2 场景输入，以及独立播放外部 HLS 视频。v2 支持空场、丢球和未知球衣号。 | 依托服务端归档的真实比赛历史回看、按曝光时刻同步实拍复核、人工审核与修订。 |
 
-**Web 支持 v2 输入，不代表示例 Server 已支持 v2 网关。** 当前 HLS 播放使用外部视频源和独立控件；三维与实拍同步回看仍在规划中。
+当前 HLS 播放使用外部视频源和独立控件。三维与实拍同步回看仍在规划中。
 
 ### 当前可运行的数据流
 
 ```text
 内置 60 秒比赛 → Web（可离线运行，无需 Edge 或 Server）
 外部 v1 发送程序 → POST /frame → Server → WS /live → Web
+v2 样例或发送程序 → POST /v2/matches/{matchId}/frames → SQLite → 按比赛订阅 WebSocket → Web
 Server 模拟数据生成器 → WS /demo → Web
 外部 HLS 视频源 → HTTP(S) → Web（独立播放视频）
 ```
 
-外部 v1 发送程序可以是脚本或其他数据生产端。仓库中的 Edge 可执行程序尚不能生产或发送比赛数据，因此真实相机经 Edge 到网页的链路尚未打通。
+v1 和 v2 均可用脚本或其他数据生产端联调。Edge 的实拍采集、重建与上发仍在规划中。
 
 ### 规划中的完整数据流
 
@@ -91,7 +92,7 @@ flowchart LR
 2. 重连后，Edge 先发送当前快照并恢复实时上传，再按可用带宽补传历史快照、视频片段与索引；实时数据优先于历史积压。
 3. Server 按场景帧键和稳定媒体路径对重试做幂等处理。补传旧帧进入归档，不回退观众的直播时钟；媒体文件与对应索引齐备后，片段才加入 HLS 播放列表。
 
-**实现边界：** 浏览器 WebSocket 断线重连已实现。Edge 上传、待上传记录持久化、自动重试与补传、带设备／观众鉴权的公网 HTTPS/WSS 接入，以及服务端 v2 归档与幂等处理仍在规划中。当前 v1 网关默认监听 `127.0.0.1`，用于本地或可信局域网试播，没有鉴权与持久化归档；仅修改监听地址尚不能实现上述公网部署。
+本地网关默认监听 `127.0.0.1`，已支持 v2 归档、幂等处理和浏览器重连。Edge 上传队列、自动补传，以及带设备和观众鉴权的公网 HTTPS/WSS 接入仍在规划中。
 
 ## 项目文档
 
@@ -116,7 +117,7 @@ pitchtrace-3d/
     │   ├── src/               app / match / receiver / live-frame / pitch / rig / media / protocol
     │   ├── test/              内置比赛与协议用例（node:test）
     │   └── dist/index.html    构建产物，可离线打开
-    └── server/                本地试播网关（v1，Node.js）
+    └── server/                本地试播网关（v1/v2，Node.js）
         ├── server.mjs         源码
         └── server.cjs         打包产物
 ```
@@ -125,7 +126,7 @@ pitchtrace-3d/
 
 ## 构建与测试
 
-需要 Swift 6.0+ 和 Node.js 20.19+（或 22.12+）。下列命令从仓库根目录运行。
+Edge 需要 Swift 6.0+，本地 v2 网关需要 Node.js 22.13+。前端也支持 Node 20 系列的 20.19+。下列命令从仓库根目录运行。
 
 ```sh
 # Edge · 构建（当前为空入口骨架，运行后立即退出）
@@ -138,19 +139,21 @@ cd live/web && npm test                   # 检查内置比赛与数据协议
 cd live/web && npm run build              # 生成 dist/index.html
 
 # Live Server · 构建并启动试播网关
-cd live/server && npm ci && npm run build # 把 server.mjs 打包成 server.cjs
+cd live/server && npm ci && npm test && npm run build
 node live/server/server.cjs               # 监听 127.0.0.1:8766
 ```
 
 ## 本地试播
 
-要试播 WebSocket 数据流，先在 `live/web` 执行 `npm run build`，再从仓库根目录运行以下命令，然后打开 <http://127.0.0.1:8766/>。运行服务需要 Node.js 20 或更高版本。
+要试播 WebSocket 数据流，先在 `live/web` 执行 `npm run build`，再从仓库根目录运行以下命令，然后打开 <http://127.0.0.1:8766/>。v1 试播也可使用 Node.js 20.19+。
 
 ```sh
 node live/server/server.cjs
 ```
 
 默认监听 `127.0.0.1:8766`。可信局域网内可用 `PITCHTRACE_HOST`、`PITCHTRACE_PORT` 指定 Mac 的局域网 IP 与端口，观众用对应地址打开页面。机位操作、数据帧格式和重新构建网关的说明见[观赛前端说明](live/web/README.md)和[网关接口说明](live/server/README.md)。
+
+打开 [trial-01](http://127.0.0.1:8766/?match=trial-01) 订阅本地 v2 流，然后按[试播命令](live/server/README.md#v2-本地场景联调)提交样例。
 
 ## 许可证
 

@@ -63,14 +63,14 @@ flowchart LR
 
 ### 1.3 两端交付协议
 
-计划在 `schemas/v2/` 保存 JSON Schema、字段单位和两端共用的正反例。契约由两个子项目共同版本化。边缘与直播各自拥有 SQLite 文件，同机试点也通过以下协议交付。所有路径以 `/v2/matches/{matchId}` 为前缀，摄像头媒体路径中的 `{mediaEpoch}` 在该通道重连且媒体时钟重置时更新。
+场景 JSON Schema 和共用正反例位于 `schemas/v2/`。契约由两个子项目共同版本化。边缘与直播各自维护 SQLite，所有路径以 `/v2/matches/{matchId}` 为前缀。当前本地网关实现场景写入和直播订阅。规划中的摄像头媒体路径在通道重连且媒体时钟重置时更新 `{mediaEpoch}`。
 
-| 发送方 → 接收方 | 方法与相对路径（拟议） | 数据与完成条件 |
+| 发送方 → 接收方 | 方法与相对路径 | 数据与完成条件 |
 | --- | --- | --- |
-| Edge → Live | `POST /frames` | 写入完整场景快照，见第 6 节。以 `(matchId,streamEpoch,seq)` 去重。同键同内容重试成功，同键异内容返回 409。 |
+| Edge → Live | `POST /frames`（本地已实现） | 写入完整场景快照，见第 6 节。以 `(matchId,streamEpoch,seq)` 去重。同键同内容重试成功，同键异内容返回 409。 |
 | Edge → Live | `PUT /cameras/{cameraId}/epochs/{mediaEpoch}/init.mp4` 和 `PUT /cameras/{cameraId}/epochs/{mediaEpoch}/segments/{n}.m4s` | 上传初始化文件和第 n 个媒体段；服务端核对大小、摘要并原子提交。网络中断可按同一路径重传。 |
 | Edge → Live | `PUT /cameras/{cameraId}/epochs/{mediaEpoch}/segments/{n}/index` | 发送媒体段摘要、时基、逐帧 PTS 与曝光 UTC 映射。初始化文件、媒体段和索引全部匹配后，Live 才将该段加入播放列表；缺件可补传。 |
-| Live → 浏览器 | `WS /live`、`GET /frames?fromMs=…&toMs=…` | 直播推完整快照，回看按比赛时段拉取归档。限制单次回看范围并分页；观众只有所选比赛的读取权限。 |
+| Live → 浏览器 | `WS /live`（本地已实现）、`GET /frames?fromMs=…&toMs=…`（规划） | 直播推完整快照。回看计划按比赛时段拉取归档，限制单次范围并分页，按比赛授权读取。 |
 | Live → 浏览器 | `GET /cameras/{cameraId}/index.m3u8` 及受控片段读取 | 发送实拍视频。网页通过 `GET /cameras/{cameraId}/locate?captureUtcUs=…` 查询片段号、媒体 epoch、目标 PTS 和时基，定位到触球附近。机位缺片时标明缺口，其他机位和三维画面继续。 |
 
 比赛创建时由 Live 分配比赛 ID，场务把相同 ID、场地和名单版本配置给 Edge。Edge 通过配置取得网关地址与设备凭据，网关校验设备是否可写入该比赛。场景使用 `streamEpoch`、媒体使用各通道的 `mediaEpoch`；两类数据通过比赛 ID 和曝光 UTC 对齐。
@@ -140,7 +140,7 @@ macOS 首轮在单人裁片上调用 Vision 的 `VNDetectHumanBodyPoseRequest` �
 
 **现有 v1 兼容。** `POST /frame` 接收完整 JSON 快照，`/live` WebSocket 向浏览器转发，`/demo` 生产约 20 Hz 的模拟数据；浏览器做约 100 ms 的插值。v1 要求 1–32 个球员、每人有整数号码，且每帧都有球坐标，骨骼可选。这些约束无法完整表示真实场地的未知号码、空场或丢球。保留 v1 回归样例及观赛前端的内置演示入口。[现有校验器](../live/web/src/protocol.js) · [接收端](../live/web/src/receiver.js)
 
-**拟议 v2。** 边缘发布器向 `POST /v2/matches/{matchId}/frames` 提交场景快照，浏览器连接 `/v2/matches/{matchId}/live`。一帧可含零个球员，球、号码和关节观测可缺失；场景承载测量时间与状态。前端已支持以下快照输入，示例数值仅用于说明；v2 网关仍为设计阶段。
+**本地 v2。** 发布器向 `POST /v2/matches/{matchId}/frames` 提交场景快照，浏览器订阅 `/v2/matches/{matchId}/live`。一帧可含零个球员，球、号码和关节观测可缺失。当前本地实现沿用 Node.js HTTP 与 `ws`，使用内置 SQLite 保存快照和直播游标。[场景 JSON Schema](../schemas/v2/scene-frame.schema.json) · [试播步骤](../live/server/README.md#v2-本地场景联调)
 
 ```json
 {
@@ -161,8 +161,9 @@ macOS 首轮在单人裁片上调用 Vision 的 `VNDetectHumanBodyPoseRequest` �
 }
 ```
 
-- 帧键为 `(matchId,streamEpoch,seq)`。网关对重复内容幂等确认，相同键的不同内容拒绝并记录。重启写新 epoch；旧帧可进归档，不回退观众直播时钟。重连先下发最近的有效快照，随后接续新帧。
-- 所有位置采用 `[X,Y,Z]` 米，关节旋转采用绑定骨架局部 `[x,y,z,w]`；区分 `measured / predicted / lost`，同时记录各对象的观测时间。复核事件有稳定 ID 和修订号，避免重复推送时出现两条事件。
+- 帧键为 `(matchId,streamEpoch,seq)`。内容比较忽略 JSON 空白和对象字段顺序，保留数组元素顺序。同键同内容返回 202，同键异内容返回 409。
+- 归档与直播游标在同一事务提交，成功后才确认或转发。同周期的直播帧要求序号增加、比赛时间持平或前进；切换至新周期要求比赛时间前进。已退出的周期和较早的帧只归档。网关重启后恢复游标，新订阅和重连先收到已提交的最新直播帧。慢客户端发送过程中只保留一个待发最新帧。
+- `captureUtcUs` 为非负的 UTC Unix 微秒十进制字符串，`calibrationId` 为标定版本标识，两者在写入时必填。位置采用 `[X,Y,Z]` 米，关节旋转采用绑定骨架局部 `[x,y,z,w]`。球字段可为 `null`；`lost` 位置可为 `null` 或省略，`measured / predicted` 需要坐标。轨迹 ID 在单帧内唯一，四元数额外校验归一化。复核事件的稳定 ID 与修订号随复核功能实现。
 - 只有号码、球等字段均已知且满足 v1 约束的帧可通过兼容适配器发布到 v1。其余情况由 v2 直接展示；避免用 0 号或球场原点填补未知观测。正式观赛端需支持真实比赛回看、失球标记、按时刻选择原片及断线恢复。
 - 实拍通路按比赛、相机输出 HLS 播放列表与分段，提议路径为 `/v2/matches/{matchId}/cameras/{cameraId}/index.m3u8`。保留短期现场观看窗口，终场生成归档列表。浏览器根据场景帧的曝光时刻查询相机分段与目标 PTS；拖动回看时同时重定位三维和原片。验证浏览器对所选编码与播放方式的支持，在带宽不足时优先提供选中机位。
 - 采集端与写入 API 使用设备凭据，观看、修改、下载原片分权；跨设备部署使用加密传输。用于本地开发的演示网关默认监听回环地址。网关以比赛隔离订阅，慢客户端可跳到最新快照，归档写入单独排队。
@@ -178,6 +179,7 @@ Edge 和 Live 共用以下 JSON 文件。单帧文件可直接读取为场景快
 | [v2 丢球](../schemas/v2/examples/lost-ball.json) | 场上球员仍可见，球状态为 `lost`，坐标为 `null`。 |
 | [v2 未知号码](../schemas/v2/examples/unknown-number.json) | 保留球员轨迹和 `null` 号码，隐藏失去观测的轨迹，保留球的预测坐标。 |
 | [v2 时钟重置](../schemas/v2/examples/clock-reset.json) | 同一比赛切换到新 `streamEpoch`，序号从 `0` 开始，比赛时间继续前进。直播清空旧周期的插值缓冲，忽略随后到达的旧周期帧。 |
+| [v2 重复轨迹负例](../schemas/v2/examples/invalid/duplicate-track.json) | 同帧存在重复轨迹 ID，网关返回 422，前端也拒绝该帧。 |
 
 ## 7. 存储、可观测性与复现
 

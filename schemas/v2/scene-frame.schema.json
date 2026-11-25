@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "场迹 v2 场景快照",
+  "type": "object",
+  "required": [
+    "v",
+    "matchId",
+    "streamEpoch",
+    "seq",
+    "captureUtcUs",
+    "matchTimeMs",
+    "calibrationId",
+    "players",
+    "ball"
+  ],
+  "properties": {
+    "v": { "const": 2 },
+    "matchId": { "$ref": "#/definitions/id" },
+    "streamEpoch": { "$ref": "#/definitions/id" },
+    "seq": { "$ref": "#/definitions/index" },
+    "captureUtcUs": { "$ref": "#/definitions/utcUs" },
+    "matchTimeMs": { "$ref": "#/definitions/index" },
+    "calibrationId": { "$ref": "#/definitions/id" },
+    "players": {
+      "type": "array",
+      "maxItems": 32,
+      "items": { "$ref": "#/definitions/player" }
+    },
+    "ball": {
+      "anyOf": [{ "type": "null" }, { "$ref": "#/definitions/observation" }]
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": { "label": { "type": "string" } }
+      }
+    }
+  },
+  "definitions": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+    "index": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "utcUs": { "type": "string", "pattern": "^(0|[1-9][0-9]{0,18})$" },
+    "positionM": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "number", "minimum": -200, "maximum": 200 }
+    },
+    "observation": {
+      "type": "object",
+      "required": ["state"],
+      "properties": {
+        "state": { "enum": ["measured", "predicted", "lost"] },
+        "positionM": {
+          "anyOf": [{ "type": "null" }, { "$ref": "#/definitions/positionM" }]
+        },
+        "captureUtcUs": { "$ref": "#/definitions/utcUs" },
+        "views": { "type": "array", "items": { "$ref": "#/definitions/id" } },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "if": { "properties": { "state": { "const": "lost" } } },
+      "then": { "properties": { "positionM": { "type": "null" } } },
+      "else": {
+        "required": ["positionM"],
+        "properties": { "positionM": { "$ref": "#/definitions/positionM" } }
+      }
+    },
+    "player": {
+      "type": "object",
+      "allOf": [{ "$ref": "#/definitions/observation" }],
+      "required": ["trackId"],
+      "properties": {
+        "trackId": { "$ref": "#/definitions/id" },
+        "teamId": {
+          "anyOf": [{ "type": "null" }, { "$ref": "#/definitions/id" }]
+        },
+        "rosterId": {
+          "anyOf": [{ "type": "null" }, { "$ref": "#/definitions/id" }]
+        },
+        "number": { "type": ["integer", "null"], "minimum": 0, "maximum": 99 },
+        "yawRad": { "type": ["number", "null"] },
+        "bones": {
+          "type": ["object", "null"],
+          "propertyNames": {
+            "pattern": "^(body|middle|neck|(left|right)_(shoulder|elbow|thigh|knee|ankle))$"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": { "type": "number", "minimum": -1.001, "maximum": 1.001 }
+          }
+        }
+      }
+    }
+  }
+}

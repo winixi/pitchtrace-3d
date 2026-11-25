@@ -1,10 +1,10 @@
 # 场迹 · 本地试播网关
 
-网关提供[观赛前端](../web/)、模拟比赛数据流及外部 v1 场景帧转发，也可以[直接离线观看内置比赛](../web/dist/index.html)。
+网关提供观赛前端、模拟比赛数据流、v1 内存转发及 v2 场景归档和订阅。内置比赛也可以直接离线观看。[观赛前端](../web/) · [离线页面](../web/dist/index.html)
 
 ## 启动本地直播接收服务
 
-在装有 Node.js 20 或更高版本的电脑上运行以下命令。服务程序已包含运行依赖。
+v2 归档使用 Node.js 22.13+ 的内置 SQLite。Node.js 20.19+ 可运行 v1 试播。服务程序已打包运行依赖。[Node.js SQLite 文档](https://nodejs.org/download/release/v22.13.0/docs/api/sqlite.html)
 
 ```sh
 git clone https://github.com/winixi/pitchtrace-3d.git
@@ -43,12 +43,41 @@ curl --request POST http://127.0.0.1:8766/frame \
 
 端点对合法帧返回 HTTP 202，对字段格式错误返回 422，对无法解析的 JSON 返回 400。第一阶段实拍 MVP 从现场曝光到浏览器首次绘制的期限为 5 分钟。上游排队、推理和发送后的传输、绘制共享这段时间。v1 试播网关收到合法帧即转发；端到端验收见[需求说明](../../docs/01-requirements.md)。
 
+## v2 本地场景联调
+
+从仓库根目录启动网关，用浏览器打开 [trial-01](http://127.0.0.1:8766/?match=trial-01)。网页会订阅 `WS /v2/matches/trial-01/live`。在另一个终端逐帧提交，依次查看空场、足球缺测和未知号码。
+
+```sh
+for sample in empty-pitch lost-ball unknown-number; do
+  curl --fail-with-body --request POST http://127.0.0.1:8766/v2/matches/trial-01/frames \
+    --header 'Content-Type: application/json' \
+    --data-binary "@schemas/v2/examples/${sample}.json"
+  printf '\n'
+  sleep 2
+done
+```
+
+SQLite 默认写入网关目录下的 `data/scenes.sqlite`，可用 `PITCHTRACE_DB` 指定文件。重复试播可在启动时设置 `PITCHTRACE_DB=:memory:`，每次启动从空库开始。验证重启恢复时使用磁盘文件。
+
+| HTTP 状态 | 含义 |
+| --- | --- |
+| 202 | 新帧已提交归档，或同键同内容已归档。 |
+| 400 | 请求体无法解析为 JSON。 |
+| 409 | `(matchId, streamEpoch, seq)` 相同且内容相异。 |
+| 413 | 请求体或转发快照超过 256,000 字节。 |
+| 422 | 场景字段无效、轨迹 ID 重复，或帧内比赛 ID 与路径不一致。 |
+| 500 | 写入归档失败。 |
+| 503 | 当前运行时缺少内置 SQLite。 |
+
+新订阅收到该场已提交的最新直播帧。重复写入和历史补传只确认归档，新周期的比赛时间需继续前进。完整字段与顺序规则见技术设计。本地网关提供场景流，历史查询、媒体接入和访问权限属于后续阶段。[v2 场景规范](../../docs/02-technical-design.md#6-数据契约分发和故障恢复)
+
 ## 重新构建试播网关
 
-在本目录运行以下命令重建 v1 网关。网关直接提供 `../web/dist/index.html`，前端构建方法见[观赛前端说明](../web/README.md)。
+在本目录使用 Node.js 22.13+ 运行以下命令。网关直接提供 `../web/dist/index.html`。[前端构建说明](../web/README.md)
 
 ```sh
 npm ci
+npm test
 npm run build
 node server.cjs
 ```

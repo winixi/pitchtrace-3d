@@ -36,7 +36,7 @@ pitchtrace-3d/
     │   ├── licenses/          第三方许可与署名
     │   ├── dist/index.html    构建产物（单文件，可离线打开）
     │   └── package.json
-    └── server/                本地试播网关（v1）
+    └── server/                本地试播网关（v1/v2）
         ├── server.mjs         源码
         ├── server.cjs         esbuild 打包产物，由 npm run build 生成
         ├── build.mjs           打包脚本
@@ -45,7 +45,7 @@ pitchtrace-3d/
 
 ## 构建与测试命令
 
-下列命令均已在仓库中验证。工作目录默认为仓库根目录。需要的工具：Swift 6.0+、Node.js 20.19+ 或 22.12+。
+下列命令均已在仓库中验证。工作目录默认为仓库根目录。Edge 使用 Swift 6.0+，完整本地网关测试使用 Node.js 22.13+。Node.js 20.19+ 可用于前端和 v1 试播。
 
 ### Edge（Swift）
 
@@ -69,6 +69,7 @@ npm run build     # 生成单文件 dist/index.html
 ```sh
 cd live/server
 npm ci
+npm test          # v2 归档、比赛隔离、恢复与 v1 回归
 npm run build     # 用 esbuild 把 server.mjs 打包成 server.cjs
 node server.cjs   # 监听 127.0.0.1:8766
 ```
@@ -79,7 +80,7 @@ node server.cjs   # 监听 127.0.0.1:8766
 node live/server/server.cjs   # 需先在 live/web 执行过 npm run build
 ```
 
-启动后用浏览器打开 <http://127.0.0.1:8766/>。环境变量 `PITCHTRACE_HOST`、`PITCHTRACE_PORT` 可改监听地址。
+启动后用浏览器打开 <http://127.0.0.1:8766/>。环境变量 `PITCHTRACE_HOST`、`PITCHTRACE_PORT` 可改监听地址，`PITCHTRACE_DB` 可指定 v2 SQLite 路径。
 
 ## 架构与边界
 
@@ -89,7 +90,7 @@ node live/server/server.cjs   # 需先在 live/web 执行过 npm run build
 - **Live**：写入并校验快照（先归档再推 WebSocket）→ 三维直播订阅 → HLS 实拍与回看 → 观赛与复核页面。订阅按比赛隔离，慢客户端跳到最新快照，回看按比赛时刻从归档补帧。
 - **解耦**：两类输出——结构化场景快照与原片媒体，分别经 WebSocket 与 HTTP/HLS 交付。两端各自维护 SQLite，即使同机试点也通过协议交互，不共享进程内存状态。
 
-改一边时不要越界改另一边的数据格式：场景字段和媒体路径属于共同版本化的契约（计划放 `schemas/v2/`），破坏性变更用新协议版本过渡，并在 `docs/02-technical-design.md` 记录。
+改一边时不要越界改另一边的数据格式。场景契约已放在 `schemas/v2/`，媒体路径见技术设计。破坏性变更用新协议版本过渡，并在 `docs/02-technical-design.md` 记录。
 
 ## 数据契约
 
@@ -100,9 +101,9 @@ node live/server/server.cjs   # 需先在 live/web 执行过 npm run build
 - 协议版本 `v` 固定为 1，时间 `t` 以秒计。每帧 1–32 名球员，每人有整数球衣号，每帧都有球坐标；骨骼可选。无法表示空场、丢球或未知号码——这正是 v2 要解决的。
 - 端点对合法帧返回 202，字段错误返回 422，无法解析的 JSON 返回 400。
 
-### v2（设计中）
+### v2 场景通路（本地已实现）
 
-`POST /v2/matches/{matchId}/frames` 提交，`WS /v2/matches/{matchId}/live` 订阅。一帧可含零个球员，球、号码、关节可缺失，承载测量时间与状态。帧键为 `(matchId, streamEpoch, seq)`，同键同内容幂等确认，同键异内容返回 409。前端已支持 v2 快照输入（见 `live/web/src/live-frame.js`），v2 网关仍未实现。完整字段、示例和媒体路径见 `docs/02-technical-design.md` 第 1.3 与第 6 节。
+`POST /v2/matches/{matchId}/frames` 提交，`WS /v2/matches/{matchId}/live` 订阅。一帧可含零个球员，球、号码、关节可缺失，承载测量时间与状态。帧键为 `(matchId, streamEpoch, seq)`，同键同内容幂等确认，同键异内容返回 409。归档和直播游标同事务提交，重启后订阅可恢复。完整字段、示例和规划中的媒体路径见 `docs/02-technical-design.md` 第 1.3 与第 6 节。
 
 ## 约定
 
@@ -124,7 +125,8 @@ node live/server/server.cjs   # 需先在 live/web 执行过 npm run build
 | Edge 采集与对时 | ⏳ 设计中 | 厂商 SDK / AVFoundation / RTSP，fMP4 分段与曝光时间索引。 |
 | Edge 检测、姿态、读号 | ⏳ 设计中 | Core ML + Vision，Python/OpenCV 做离线对照。 |
 | Edge 三维融合与动作 | ⏳ 设计中 | C++/OpenCV `calib3d` 经 C 接口供 Swift 调用。 |
-| 正式 v2 网关与归档 | ⏳ 设计中 | Fastify 写入校验、SQLite 归档、WebSocket 订阅、HLS 媒体。 |
+| 本地 v2 场景网关 | ✅ 已实现 | JSON Schema 校验、SQLite 归档、按比赛 WebSocket 订阅及重启恢复。 |
+| 正式公网网关与媒体 | ⏳ 设计中 | Fastify、访问权限、场景历史查询及 HLS 媒体。 |
 | 基于曝光时刻的原片同步复核 | ⏳ 设计中 | `GET /cameras/{cameraId}/locate?captureUtcUs=…` 定位。 |
 
 ## 关键文件
@@ -135,4 +137,5 @@ node live/server/server.cjs   # 需先在 live/web 执行过 npm run build
 - `live/web/src/receiver.js` —— WebSocket 接收与插值。
 - `live/web/src/app.js` —— 演示与直播两种模式及控制台。
 - `live/server/server.mjs` —— 网关源码；`server.cjs` 为其打包产物。
+- `schemas/v2/scene-frame.schema.json` —— v2 场景写入契约，网关校验直接使用。
 - `docs/02-technical-design.md` —— 改接口、加模块或调整延迟预算前必读。

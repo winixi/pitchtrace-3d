@@ -15,7 +15,7 @@ The [live viewing frontend](live/web/) can also connect to a WebSocket live data
 | Component | Runtime & technology | Responsibility in the complete system |
 | --- | --- | --- |
 | [PitchTrace Edge](edge/) | Pitch-side Mac mini; Swift/SwiftPM. Planned: Core ML, Vision, C++/OpenCV, FFmpeg, VideoToolbox. | Capture and synchronize four camera views, calibrate cameras, detect and track players and the ball, recognize shirt numbers, reconstruct 3D positions and skeletons, generate action candidates, and save/upload video clips and exposure-time indexes. |
-| [Live Server](live/server/) | Mac mini or a separate server; currently Node.js and `ws`. Planned: TypeScript, Fastify, SQLite. | Receive and validate Edge uploads, authorize access per match, archive scene data and media, distribute live snapshots, provide historical queries, and publish HLS footage. |
+| [Live Server](live/server/) | Mac mini or a separate server. Local gateway uses Node.js, `ws`, and SQLite. The full gateway is planned for TypeScript and Fastify. | Receive and validate Edge uploads, authorize access per match, archive scene data and media, distribute live snapshots, provide historical queries, and publish HLS footage. |
 | [Live Web](live/web/) | Viewer's browser; Vite build, Three.js rendering, HLS playback. | Render players and the ball from scene positions and skeletons; provide virtual camera controls, player following, pause/replay, footage comparison, and the manual review interface. |
 
 Camera calibration, recognition, and 3D measurement belong to Edge. Rendering and the six virtual viewpoints belong to Web; the four physical camera views provide the original footage. Server handles data delivery, storage, and access. See the [Edge design](docs/02-technical-design.md#pitchtrace-edge) and [Live design](docs/02-technical-design.md#pitchtrace-live).
@@ -25,21 +25,22 @@ Camera calibration, recognition, and 3D measurement belong to Edge. Rendering an
 | Component | Implemented now | Planned / not yet implemented |
 | --- | --- | --- |
 | Edge | Buildable SwiftPM executable skeleton with an empty entry point; it exits immediately when run. | Camera capture and synchronization, calibration, inference, tracking and 3D fusion, action generation, video production, and uploads. |
-| Live Server | Serves the built Web page; validates v1 snapshots at `POST /frame` and forwards them through `WS /live`; generates a simulated stream at about 20 Hz through `WS /demo`. Keeps only the latest received frame in memory. | Full v2 gateway, per-match isolation and authentication, persistent archives and historical queries, video/index ingestion, HLS publishing, and exposure-time footage lookup. |
+| Live Server | Serves the built Web page, the 20 Hz simulated stream, and v1 forwarding. The local v2 gateway validates and archives snapshots in SQLite, then publishes them by match over WebSocket. | Historical queries, device and viewer authentication, video/index ingestion, HLS publishing, and exposure-time footage lookup. |
 | Live Web | Built-in 60-second match, six virtual viewpoints, player following, skeleton display, live-frame freezing and return to live, reconnection, v1/v2 scene input, and independent playback of an external HLS source. v2 supports an empty pitch, a lost ball, and unknown shirt numbers. | Real-match historical replay backed by server archives, exposure-time synchronized footage review, and manual review/editing. |
 
-**Web's v2 input support does not make the sample server a v2 gateway.** HLS playback currently uses an external source with independent controls; synchronized 3D/footage replay is planned.
+HLS playback uses an external source with independent controls. Synchronized 3D and footage replay is planned.
 
 ### Current runnable data flows
 
 ```text
 Built-in 60-second match → Web (offline; no Edge or Server required)
 External v1 sender → POST /frame → Server → WS /live → Web
+v2 fixture or sender → POST /v2/matches/{matchId}/frames → SQLite → per-match WebSocket → Web
 Server demo generator → WS /demo → Web
 External HLS source → HTTP(S) → Web (independent video playback)
 ```
 
-The external v1 sender can be a script or another data producer. The repository's Edge executable does not yet produce or send match data, so the real-camera-to-Edge-to-Web pipeline is not operational yet.
+The v1 and v2 paths can be exercised with scripts or other data producers. Real-camera capture, reconstruction, and upload from Edge are planned.
 
 ### Planned full data flow
 
@@ -91,7 +92,7 @@ flowchart LR
 2. After reconnecting, Edge sends the current snapshot first and resumes live uploads, then uses available bandwidth to backfill historical snapshots, video clips, and indexes. Live data takes priority over the backlog.
 3. Server handles retries idempotently using scene frame keys and stable media paths. Backfilled old frames enter the archive without moving live viewers backward in time; media segments join HLS playlists only after the matching files and indexes are complete.
 
-**Implementation boundary:** Browser WebSocket reconnection is already implemented. Edge uploads, durable pending-upload storage, automatic retry/backfill, public HTTPS/WSS access with device/viewer authorization, and server-side v2 archival/idempotency are still planned. The current v1 gateway defaults to `127.0.0.1` and provides local or trusted-LAN trial playback without authentication or persistent archives; changing its listen address alone does not implement this public deployment.
+The local gateway defaults to `127.0.0.1` and supports v2 archival, idempotency, and browser reconnection. Edge upload queues, automatic backfill, and public HTTPS/WSS access with device and viewer authorization are planned.
 
 ## Project documentation
 
@@ -116,7 +117,7 @@ pitchtrace-3d/
     │   ├── src/               app / match / receiver / live-frame / pitch / rig / media / protocol
     │   ├── test/              Built-in match and protocol cases (node:test)
     │   └── dist/index.html    Build output, openable offline
-    └── server/                Local playback gateway (v1, Node.js)
+    └── server/                Local playback gateway (v1/v2, Node.js)
         ├── server.mjs         Source
         └── server.cjs         Bundled output
 ```
@@ -125,7 +126,7 @@ For each subproject, see [edge/README.md](edge/README.md), [live/web/README.md](
 
 ## Build & test
 
-Requires Swift 6.0+ and Node.js 20.19+ (or 22.12+). The commands below run from the repository root.
+Requires Swift 6.0+ for Edge and Node.js 22.13+ for the local v2 gateway. The Web build also supports Node.js 20.19+ on the Node 20 line. The commands below run from the repository root.
 
 ```sh
 # Edge · build (currently an empty entry skeleton, exits immediately when run)
@@ -138,19 +139,21 @@ cd live/web && npm test                   # checks the built-in match and data p
 cd live/web && npm run build              # generates dist/index.html
 
 # Live Server · build and start the playback gateway
-cd live/server && npm ci && npm run build # bundles server.mjs into server.cjs
+cd live/server && npm ci && npm test && npm run build
 node live/server/server.cjs               # listens on 127.0.0.1:8766
 ```
 
 ## Local playback
 
-To play back a WebSocket data stream, first run `npm run build` in `live/web`, then from the repository root run the following command and open <http://127.0.0.1:8766/>. Running the service requires Node.js 20 or higher.
+To play back a WebSocket data stream, first run `npm run build` in `live/web`, then from the repository root run the following command and open <http://127.0.0.1:8766/>. The v1 demo also runs on Node.js 20.19+.
 
 ```sh
 node live/server/server.cjs
 ```
 
 It listens on `127.0.0.1:8766` by default. On a trusted LAN you can set `PITCHTRACE_HOST` and `PITCHTRACE_PORT` to the Mac's LAN IP and port; viewers open the page at the corresponding address. For camera controls, data-frame format, and how to rebuild the gateway, see the [viewing frontend guide](live/web/README.md) and the [gateway interface guide](live/server/README.md).
+
+Open [trial-01](http://127.0.0.1:8766/?match=trial-01) to subscribe to the local v2 stream. Submit a fixture with the [sample commands](live/server/README.md#v2-本地场景联调).
 
 ## License
 
