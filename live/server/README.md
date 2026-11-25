@@ -37,7 +37,7 @@ curl --request POST http://127.0.0.1:8766/frame \
 | `team`            | 蓝队 `blue`、红队 `red`、红队门将 `gold`、蓝队门将 `green`。                                                                                                                                  |
 | `action`, `phase` | 可选。动作枚举为 `idle run carry pass trap cut slide shot dive celebrate`，进度为 0 至 1。驱动动画时逐帧提供相位。                                                                            |
 | `bones`           | 每位球员可选的局部关节旋转对象，键为下列骨骼名，值为归一化四元数 `[x,y,z,w]`。旋转使用该 GLB 骨架的父节点局部坐标，作为绝对局部旋转覆盖动画对应骨骼。                                         |
-| `focus`, `event`  | 可选。自动跟随的球员 ID、当前动作中文描述。                                                                                                                                                   |
+| `focus`, `event`  | 可选。自动跟随的球员 ID；当前动作的标识或描述（自由文本，≤64 字符）。前端按界面语言显示已知标识，未知值原样显示。内置 `/demo` 流发送动作标识。                                                                                                                  |
 
 骨骼名为 `body`、`middle`、`neck`，以及分别带 `left_` 或 `right_` 前缀的 `shoulder`、`elbow`、`thigh`、`knee`、`ankle`。若上游只有三维关键点，请先用各骨段方向、父子关系和绑定姿态完成重定向，再发送局部四元数。场景渲染器使用传入的轨迹、球衣号和骨骼；第一阶段四路单摄的标定、识别、OCR、跨机位融合及比赛规则判断属于上游系统。
 

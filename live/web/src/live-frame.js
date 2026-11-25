@@ -30,7 +30,7 @@ function observation(obj) {
 export function readScene(frame) {
   if (frame?.v === 1)
     return validFrame(frame)
-      ? { ...frame, event: frame.event || "比赛中" }
+      ? { ...frame, event: frame.event || "in_play" }
       : null;
   if (
     frame?.v !== 2 ||
@@ -82,7 +82,7 @@ export function readScene(frame) {
     }
   const recent = Array.isArray(frame.events) ? frame.events.at(-1) : null;
   const event =
-    typeof recent?.label === "string" ? recent.label.slice(0, 64) : "比赛中";
+    typeof recent?.label === "string" ? recent.label.slice(0, 64) : "in_play";
   return {
     v: 2,
     t: frame.matchTimeMs / 1000,

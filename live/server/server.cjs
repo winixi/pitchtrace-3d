@@ -14829,18 +14829,18 @@ function reversePose(id, t) {
   return { action, phase };
 }
 var chapters = [
-  [0, "\u5730\u9762\u4F20\u7403"],
-  [4.8, "\u8FDE\u7EED\u5E26\u7403"],
-  [9.7, "\u53D8\u5411\u8FC7\u4EBA"],
-  [14.7, "\u6ED1\u94F2\u4E89\u7403"],
-  [20.5, "\u8DDF\u8FDB\u5C04\u95E8"],
-  [26.4, "\u5C04\u95E8\u56DE\u653E"],
-  [30, "\u4E2D\u5708\u5F00\u7403"],
-  [33.2, "\u8FB9\u8DEF\u63A8\u8FDB"],
-  [43, "\u7A81\u7834\u9632\u7EBF"],
-  [46, "\u659C\u7EBF\u76F4\u585E"],
-  [52, "\u6A2A\u4F20\u63A5\u5E94"],
-  [56.4, "\u95E8\u524D\u6251\u6551"]
+  [0, "ground_pass"],
+  [4.8, "close_control"],
+  [9.7, "cut_inside"],
+  [14.7, "slide_tackle"],
+  [20.5, "finish"],
+  [26.4, "reverse_angle"],
+  [30, "kickoff"],
+  [33.2, "wing_buildup"],
+  [43, "breakthrough"],
+  [46, "diagonal_through"],
+  [52, "cross_support"],
+  [56.4, "box_save"]
 ];
 function demoFrame(seconds) {
   const t = cap(seconds, 0, 60), second = t >= 30, st = stage(Math.min(29.999, t)), g = second ? (t - 30) * 0.66 : timeFor(t, st);

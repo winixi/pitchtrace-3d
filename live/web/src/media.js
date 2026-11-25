@@ -1,8 +1,15 @@
 import Hls from "hls.js";
+import { onChange, t } from "./i18n.js";
 
 // The original camera stream has its own playback controls until a gateway offers a PTS index.
 export function setupMedia(form, video, address, status, stopButton) {
   let hls = null;
+  let statusKey = "";
+  function showStatus(key) {
+    statusKey = key;
+    status.textContent = key ? t(key) : "";
+  }
+  onChange(() => showStatus(statusKey));
   function stop() {
     hls?.destroy();
     hls = null;
@@ -12,7 +19,7 @@ export function setupMedia(form, video, address, status, stopButton) {
     video.removeAttribute("src");
     video.load();
     video.hidden = stopButton.hidden = true;
-    status.textContent = "";
+    showStatus("");
   }
   stopButton.onclick = stop;
   form.onsubmit = (e) => {
@@ -22,18 +29,18 @@ export function setupMedia(form, video, address, status, stopButton) {
       url = new URL(address.value);
       if (!["https:", "http:"].includes(url.protocol)) throw new Error();
     } catch {
-      status.textContent = "请输入有效的 HTTP 或 HTTPS 播放列表地址。";
+      showStatus("media.invalidUrl");
       return;
     }
     stop();
     video.hidden = stopButton.hidden = false;
-    status.textContent = "正在载入实拍视频…";
+    showStatus("media.loading");
     video.onloadeddata = () => {
-      status.textContent = "实拍视频独立播放";
+      showStatus("media.playing");
       video.play().catch(() => {});
     };
     video.onerror = () => {
-      status.textContent = "实拍视频无法播放，请检查播放地址、访问权限和编码。";
+      showStatus("media.error");
     };
     if (video.canPlayType("application/vnd.apple.mpegurl"))
       video.src = url.href;
@@ -42,14 +49,14 @@ export function setupMedia(form, video, address, status, stopButton) {
       hls.on(Hls.Events.ERROR, (_, error) => {
         if (error.fatal) {
           stop();
-          status.textContent = "实拍流中断，请检查播放列表和跨域配置后重试。";
+          showStatus("media.streamError");
         }
       });
       hls.attachMedia(video);
       hls.loadSource(url.href);
     } else {
       stop();
-      status.textContent = "此浏览器不支持 HLS 播放。";
+      showStatus("media.unsupported");
     }
   };
   return stop;

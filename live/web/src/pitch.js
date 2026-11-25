@@ -2,10 +2,10 @@ import * as T from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { t } from "./i18n.js";
 import { setupBody, setupHead, palmVertices, stride } from "./rig.js";
 import {
   appearanceFor,
-  bodyTypes,
   kitColors,
   bodyGeometries,
   faceReference,
@@ -527,7 +527,7 @@ export async function makePitch(canvas) {
           g.textBaseline = "middle";
           g.font = '44px "PingFang SC", "Microsoft YaHei", sans-serif';
           g.fillText(
-            `${["gold", "green"].includes(p.team) ? "门将 · " : ""}${bodyTypes[bodyType].label}`,
+            `${["gold", "green"].includes(p.team) ? t("appearance.keeperPrefix") + " · " : ""}${t("bodyTypeShort." + bodyType)}`,
             w / 2,
             h / 2,
           );
@@ -632,8 +632,7 @@ export async function makePitch(canvas) {
       controls.enabled = false;
       if (view === "director" && frame.showcase) {
         const { angle, group } = frame.showcase;
-        const low =
-          frame.event.includes("滑铲") || frame.event.includes("扑救");
+        const low = frame.event === "slide_extend" || frame.event === "keeper_dive";
         const distance = group
           ? Math.max(6.1, 2.85 / (Math.tan((16 * Math.PI) / 180) * cam.aspect))
           : low
@@ -704,7 +703,10 @@ export async function makePitch(canvas) {
         fov = 61;
       } else {
         const wide =
-          frame.event.includes("射门") || frame.event.includes("扑救");
+          frame.event === "finish" ||
+          frame.event === "reverse_angle" ||
+          frame.event === "box_save" ||
+          /射门|扑救/.test(frame.event);
         cameraTarget.copy(focus).lerp(playPosition, wide ? 0.5 : 0.22);
         cameraTarget.y = 0.91;
         position
@@ -766,6 +768,10 @@ export async function makePitch(canvas) {
   return {
     draw,
     needsRedraw: () => redrawNeeded,
+    // 语言切换后让所有球员徽章在下一帧重绘为当前语言。
+    localize: () => {
+      for (const p of Object.values(players)) p.bodyType = null;
+    },
     resetOrbit: () => {
       orbitNeedsInit = true;
       prevFocus = null;

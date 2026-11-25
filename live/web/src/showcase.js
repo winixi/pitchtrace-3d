@@ -3,22 +3,13 @@ import { roster } from "./match.js";
 
 export const showcaseDuration = 48;
 export const showcaseChapters = [
-  [0, "正面转头"],
-  [8, "侧面抬臂"],
-  [16, "背面颈肩"],
-  [24, "跑动姿态"],
-  [30, "摆腿射门"],
-  [36, "滑铲伸展"],
-  [42, "门将扑救"],
-];
-const descriptions = [
-  "三种体型与门将并排展示，观察转头时下颌、颈根与衣领的连接。",
-  "从侧面观察抬臂与轻微前倾，也可切换跟随球员比较不同体型。",
-  "从背面观察转头与胸肩联动，颈根保持在衣领内。",
-  "比较跑动中的肩臂、髋膝与颈肩变形。",
-  "标准体型展示完整摆腿与收腿，可暂停后自由环绕。",
-  "壮硕体型展示滑铲伸展，检查侧身与抬头时的连接。",
-  "门将展示手套、专用队服与侧向扑救动作。",
+  [0, "front_turn"],
+  [8, "side_raise"],
+  [16, "back_neck"],
+  [24, "run_pose"],
+  [30, "leg_swing"],
+  [36, "slide_extend"],
+  [42, "keeper_dive"],
 ];
 const cast = ["wing", "pass", "slide", "keeper"].map((id) =>
   roster.find((p) => p.id === id),
@@ -85,7 +76,7 @@ export function showcaseFrame(seconds) {
       angle: scene === 1 ? Math.PI / 2 : scene === 2 ? Math.PI : 0,
       group: scene === 0 || scene === 2 || scene === 3,
       ballAttachment: scene === 6 ? "hands" : null,
-      description: descriptions[scene],
+      description: showcaseChapters[scene][1],
     },
   };
 }

@@ -16,9 +16,9 @@ export function kitColors(team) {
 }
 
 export const bodyTypes = {
-  lean: { label: "精瘦", torso: [0.88, 0.88], limb: 0.88, head: 0.96 },
-  standard: { label: "标准", torso: [1, 1], limb: 1, head: 1 },
-  strong: { label: "壮硕", torso: [1.16, 1.18], limb: 1.15, head: 1.04 },
+  lean: { torso: [0.88, 0.88], limb: 0.88, head: 0.96 },
+  standard: { torso: [1, 1], limb: 1, head: 1 },
+  strong: { torso: [1.16, 1.18], limb: 1.15, head: 1.04 },
 };
 export const skinTones = ["#b98566", "#956246", "#68412e", "#d7a285"];
 const hairColors = ["#211b18", "#3e2b20", "#715034", "#151719"];

@@ -5,43 +5,45 @@ import {
   showcaseDuration,
   showcaseChapters,
 } from "./showcase.js";
-import { appearanceFor, bodyTypes } from "./appearance.js";
+import { appearanceFor } from "./appearance.js";
 import { setupMedia } from "./media.js";
 import { connectFrames } from "./receiver.js";
+import { t, onChange } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
+const eventText = (id) => t("event." + id, undefined, id);
+const descText = (id) => t("desc." + id, undefined, id);
+function showMessage(id, key) {
+  const element = $(id);
+  element.dataset.i18n = key;
+  element.textContent = t(key);
+}
 const cameras = [
-  ["director", "自动导播", "跟随持球与关键动作，射门时拉宽画面。"],
-  ["orbit", "自由环绕", "拖动旋转，滚轮或双指缩放，右键或双指拖动平移。"],
-  ["touchline", "边线机位", "从边线高位横向跟随足球。"],
-  ["goal", "球门机位", "从进攻端球门旁观察射门与扑救。"],
-  ["tactics", "战术俯视", "观察双方阵形、传球路线和无球跑动。"],
-  ["profile", "球员近景", "镜头跟随所选球员，适合查看头颈和触球姿态。"],
+  ["director", "camera.director", "hint.director"],
+  ["orbit", "camera.orbit", "hint.orbit"],
+  ["touchline", "camera.touchline", "hint.touchline"],
+  ["goal", "camera.goal", "hint.goal"],
+  ["tactics", "camera.tactics", "hint.tactics"],
+  ["profile", "camera.profile", "hint.profile"],
 ];
-const teams = {
-  neutral: "队伍待定",
-  blue: "蓝队",
-  red: "红队",
-  gold: "红队门将",
-  green: "蓝队门将",
-};
-function stamp(t) {
-  const s = Math.floor(Math.max(0, t));
+function stamp(sec) {
+  const s = Math.floor(Math.max(0, sec));
   return (
     String(Math.floor(s / 60)).padStart(2, "0") +
     ":" +
     String(s % 60).padStart(2, "0")
   );
 }
-const label = (p) =>
-  p
-    ? teams[p.team] +
-      " · " +
-      (p.number == null
-        ? "号码未知"
-        : String(p.number).padStart(2, "0") + " 号") +
-      (p.state === "predicted" ? " · 位置预测" : "")
-    : "场上暂无球员";
+const label = (p) => {
+  if (!p) return t("label.noPlayer");
+  let s = t("team." + p.team, undefined, p.team) + " · ";
+  s +=
+    p.number == null
+      ? t("label.numberUnknown")
+      : t("label.number", { n: String(p.number).padStart(2, "0") });
+  if (p.state === "predicted") s += " · " + t("label.positionPredicted");
+  return s;
+};
 
 async function start() {
   const pitch = await makePitch($("pitch"));
@@ -61,9 +63,14 @@ async function start() {
   let connection = null,
     liveFrame = null,
     frozenFrame = null,
-    demoState = null;
+    demoState = null,
+    liveSample = false,
+    liveStatus = "",
+    liveUrl = "",
+    feedError = "";
   const cueButtons = [],
     cameraButtons = [];
+  const loading = $("loading");
   const wsBase =
     (location.protocol === "https:" ? "wss://" : "ws://") +
     (location.protocol === "file:" ? "127.0.0.1:8766" : location.host);
@@ -81,22 +88,27 @@ async function start() {
   $("sourceLive").onclick = () => {
     $("feed").hidden = !$("feed").hidden;
     $("sourceLive").setAttribute("aria-expanded", String(!$("feed").hidden));
-    if (!$("feed").hidden) $("address").focus();
+    if (!$("feed").hidden) {
+      if (!connection) feedError = "";
+      updateFeedStatus();
+      $("address").focus();
+    }
   };
   $("address").value = localGateway + "/live";
   function updatePlay() {
     if (connection) {
-      const title = frozenFrame ? "返回直播" : "定格";
+      const title = t(frozenFrame ? "play.resume" : "play.freeze");
       if ($("play").textContent !== title) $("play").textContent = title;
       $("play").disabled = !liveFrame;
       return;
     }
     $("play").disabled = false;
-    $("play").textContent = playing
-      ? "暂停"
+    const title = playing
+      ? t("play.pause")
       : clock >= duration()
-        ? "重播"
-        : "播放";
+        ? t("play.replay")
+        : t("play.play");
+    if ($("play").textContent !== title) $("play").textContent = title;
   }
   function jump(t) {
     clock = Math.max(0, Math.min(duration(), t));
@@ -105,24 +117,28 @@ async function start() {
     last = null;
     updatePlay();
   }
+  function updateCameraTitle() {
+    const item = cameras.find(([id]) => id === camera);
+    $("cameraTitle").textContent =
+      t(item[1]) +
+      (camera === "profile"
+        ? " · " + $("profileDetail").selectedOptions[0].textContent
+        : "");
+    return item;
+  }
   function choose(v) {
     camera = v;
     pitch.resetOrbit();
     for (const [i, button] of cameraButtons.entries())
       button.setAttribute("aria-pressed", String(cameras[i][0] === v));
-    const item = cameras.find((c) => c[0] === v);
     $("profileControls").hidden = v !== "profile";
-    $("cameraTitle").textContent =
-      item[1] +
-      (v === "profile"
-        ? " · " + $("profileDetail").selectedOptions[0].textContent
-        : "");
-    $("hint").textContent = item[2];
+    const item = updateCameraTitle();
+    showMessage("hint", item[2]);
     dirty = pausedDirty = true;
   }
   for (const [id, title] of cameras) {
     const b = document.createElement("button");
-    b.textContent = title;
+    b.textContent = t(title);
     b.dataset.camera = id;
     b.onclick = () => choose(id);
     $("cameras").append(b);
@@ -133,15 +149,16 @@ async function start() {
     $("chapters").replaceChildren();
     cueButtons.length = 0;
     chapter = -1;
-    $("timelineTitle").textContent =
-      demoMode === "showcase" ? "人物与动作展示" : "动作时间轴";
-    for (const [t, name] of timeline()) {
+    $("timelineTitle").textContent = t(
+      demoMode === "showcase" ? "timeline.showcase" : "timeline.match",
+    );
+    for (const [time, name] of timeline()) {
       const b = document.createElement("button"),
         s = document.createElement("span");
-      s.textContent = stamp(t);
-      b.append(s, document.createTextNode(name));
-      b.dataset.time = t;
-      b.onclick = () => jump(t);
+      s.textContent = stamp(time);
+      b.append(s, document.createTextNode(eventText(name)));
+      b.dataset.time = time;
+      b.onclick = () => jump(time);
       $("chapters").append(b);
       cueButtons.push(b);
     }
@@ -153,7 +170,7 @@ async function start() {
     listed = key;
     const previous = $("target").value;
     $("target").replaceChildren(
-      new Option("自动跟随动作球员", ""),
+      new Option(t("target.auto"), ""),
       ...players.map((p) => new Option(label(p), p.id)),
     );
     if (players.some((p) => p.id === previous)) $("target").value = previous;
@@ -196,12 +213,13 @@ async function start() {
       if (document.fullscreenElement) await document.exitFullscreen();
       else await $("stage").requestFullscreen();
     } catch {
-      $("hint").textContent =
-        "此浏览器未开放全屏，可使用浏览器窗口的全屏按钮。";
+      showMessage("hint", "full.unsupported");
     }
   };
   document.addEventListener("fullscreenchange", () => {
-    $("full").textContent = document.fullscreenElement ? "退出全屏" : "全屏";
+    $("full").textContent = document.fullscreenElement
+      ? t("full.exit")
+      : t("full.enter");
     dirty = true;
   });
   window.addEventListener("resize", () => {
@@ -222,8 +240,8 @@ async function start() {
       $("loopControl").hidden =
         live;
     $("play").disabled = live;
-    $("play").textContent = live ? "定格" : "播放";
-    $("duration").textContent = live ? "直播" : stamp(duration());
+    $("play").textContent = live ? t("play.freeze") : t("play.play");
+    $("duration").textContent = live ? t("duration.live") : stamp(duration());
     $("seek").max = duration();
     $("showcaseDescription").hidden = live || demoMode !== "showcase";
     $("quality").textContent = "";
@@ -246,31 +264,61 @@ async function start() {
     dirty = pausedDirty = true;
     last = null;
   }
+  function updateFeedStatus() {
+    if (feedError) {
+      $("netstatus").textContent = t(feedError);
+    } else if (liveStatus) {
+      $("netstatus").textContent = t(liveStatus) + "　" + liveUrl;
+    } else {
+      $("netstatus").textContent = t(
+        !$("feed").hidden
+          ? "netstatus.feedDefault"
+          : demoMode === "showcase"
+            ? "netstatus.showcase"
+            : "netstatus.match",
+      );
+    }
+  }
+  function updateLiveStatus() {
+    const status = liveStatus ? t(liveStatus) : "";
+    $("signal").textContent =
+      t(liveSample ? "signal.sample" : "signal.live") +
+      (status ? " · " + status : "");
+    updateFeedStatus();
+    if (!liveFrame && !loading.hidden && !loading.dataset.i18n)
+      loading.textContent = status
+        ? status + " · " + t("loading.switchToDemo")
+        : t("loading.waiting");
+  }
   function openFeed(address, isSample) {
     let parsed;
     try {
       parsed = new URL(address);
       if (!["ws:", "wss:"].includes(parsed.protocol)) throw new Error();
       if (location.protocol === "https:" && parsed.protocol === "ws:") {
-        $("netstatus").textContent = "HTTPS 页面请使用 wss:// 安全连接。";
+        feedError = "feed.httpsOnly";
+        updateFeedStatus();
         return;
       }
     } catch {
-      $("netstatus").textContent = "请输入以 ws:// 或 wss:// 开头的地址。";
+      feedError = "feed.invalidUrl";
+      updateFeedStatus();
       return;
     }
     if (!connection) demoClocks[demoMode] = clock;
     connection?.stop();
     connection = null;
     liveFrame = null;
+    liveSample = isSample;
+    liveUrl = parsed.href;
+    liveStatus = "";
+    feedError = "";
     setLive(true);
-    $("loading").hidden = false;
-    $("loading").textContent = "正在等待数据帧…";
-    connection = connectFrames(parsed.href, (s) => {
-      $("signal").textContent =
-        (isSample ? "模拟数据流" : "直播数据") + " · " + s;
-      $("netstatus").textContent = s + "　" + parsed.href;
-      if (!liveFrame) $("loading").textContent = s + " · 可切换到内置演示";
+    loading.hidden = false;
+    delete loading.dataset.i18n;
+    connection = connectFrames(parsed.href, (status) => {
+      liveStatus = status;
+      updateLiveStatus();
     });
   }
   $("feedform").onsubmit = (e) => {
@@ -292,16 +340,16 @@ async function start() {
     connection?.stop();
     connection = null;
     liveFrame = null;
+    liveStatus = "";
+    feedError = "";
     setLive(false);
     buildTimeline();
     if (demoMode === "showcase") choose("director");
-    $("loading").hidden = true;
-    $("signal").textContent =
-      demoMode === "showcase" ? "人物展示 · 模拟动作" : "内置演示";
-    $("netstatus").textContent =
-      demoMode === "showcase"
-        ? "当前播放人物与动作展示。"
-        : "当前播放内置 60 秒比赛。";
+    loading.hidden = true;
+    $("signal").textContent = t(
+      demoMode === "showcase" ? "signal.showcase" : "signal.demo",
+    );
+    updateFeedStatus();
     updatePlay();
   }
   $("demo").onclick = () => openDemo("match");
@@ -317,7 +365,7 @@ async function start() {
       const incoming = connection.read(now);
       if (incoming) {
         if (!liveFrame) {
-          $("loading").hidden = true;
+          loading.hidden = true;
           dirty = true;
         }
         if (
@@ -374,13 +422,13 @@ async function start() {
         );
       if (frame.event !== oldEvent) {
         oldEvent = frame.event;
-        $("event").textContent = oldEvent;
+        $("event").textContent = eventText(oldEvent);
       }
       if (connection) {
         const status = [
-          frozenFrame ? "已定格" : "",
-          frame.v === 2 && !frame.ball ? "足球缺测" : "",
-          frame.ballState === "predicted" ? "球位预测" : "",
+          frozenFrame ? t("quality.frozen") : "",
+          frame.v === 2 && !frame.ball ? t("quality.ballLost") : "",
+          frame.ballState === "predicted" ? t("quality.ballPredicted") : "",
         ]
           .filter(Boolean)
           .join(" · ");
@@ -388,26 +436,23 @@ async function start() {
           $("quality").textContent = status;
       }
       if (!connection) {
-        const quality = "三种体型 · 四种肤色 · 三种发型";
+        const quality = t("quality.demo");
         if ($("quality").textContent !== quality)
           $("quality").textContent = quality;
-        if (
-          frame.showcase &&
-          $("showcaseDescription").textContent !== frame.showcase.description
-        )
-          $("showcaseDescription").textContent = frame.showcase.description;
+        if (frame.showcase) {
+          const desc = descText(frame.showcase.description);
+          if ($("showcaseDescription").textContent !== desc)
+            $("showcaseDescription").textContent = desc;
+        }
       }
       const appearance = subject && appearanceFor(subject.id);
       const shape =
         $("bodyType").value === "auto"
           ? appearance?.bodyType
           : $("bodyType").value;
-      const hair = { short: "短发", crop: "寸头", bald: "光头" }[
-        appearance?.hair
-      ];
       const info = subject
-        ? `${bodyTypes[shape].label} · ${hair}${["gold", "green"].includes(subject.team) ? " · 门将手套" : ""}`
-        : "场上暂无球员";
+        ? `${t("bodyTypeShort." + shape, undefined, shape)} · ${t("hair." + appearance.hair, undefined, appearance.hair)}${["gold", "green"].includes(subject.team) ? " · " + t("appearance.keeperGloves") : ""}`
+        : t("label.noPlayer");
       if ($("appearanceInfo").textContent !== info)
         $("appearanceInfo").textContent = info;
       const caption = label(subject);
@@ -434,11 +479,38 @@ async function start() {
   }
   $("pitch").addEventListener("webglcontextlost", (e) => {
     e.preventDefault();
-    $("loading").hidden = false;
-    $("loading").textContent = "图形上下文已中断，请刷新页面重新载入。";
+    loading.hidden = false;
+    showMessage("loading", "loading.contextLost");
   });
+  // 语言切换时静态文案已由 i18n 模块套用，这里重算依赖当前语言的动态文案。
+  function relocalize() {
+    for (const [i, button] of cameraButtons.entries())
+      button.textContent = t(cameras[i][1]);
+    updateCameraTitle();
+    buildTimeline();
+    listed = "";
+    if (oldEvent) $("event").textContent = eventText(oldEvent);
+    updatePlay();
+    $("full").textContent = document.fullscreenElement
+      ? t("full.exit")
+      : t("full.enter");
+    if (connection) {
+      $("duration").textContent = t("duration.live");
+      updateLiveStatus();
+    } else {
+      $("duration").textContent = stamp(duration());
+      $("signal").textContent = t(
+        demoMode === "showcase" ? "signal.showcase" : "signal.demo",
+      );
+      updateFeedStatus();
+    }
+    pitch.localize();
+    dirty = true;
+  }
+  onChange(relocalize);
+  relocalize();
   render(performance.now());
-  $("loading").hidden = true;
+  loading.hidden = true;
   $("play").disabled = false;
   document.body.dataset.ready = "true";
   document.body.dataset.source = "demo";
@@ -453,7 +525,6 @@ async function start() {
 }
 start().catch((e) => {
   console.error(e);
-  $("loading").textContent =
-    "球场未能载入。请使用启用图形加速、支持 WebGL 2 的浏览器打开。";
+  showMessage("loading", "loading.loadFailed");
   $("loading").classList.add("error");
 });

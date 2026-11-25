@@ -435,18 +435,18 @@ function reversePose(id, t) {
   return { action, phase };
 }
 export const chapters = [
-  [0, "地面传球"],
-  [4.8, "连续带球"],
-  [9.7, "变向过人"],
-  [14.7, "滑铲争球"],
-  [20.5, "跟进射门"],
-  [26.4, "射门回放"],
-  [30, "中圈开球"],
-  [33.2, "边路推进"],
-  [43, "突破防线"],
-  [46, "斜线直塞"],
-  [52, "横传接应"],
-  [56.4, "门前扑救"],
+  [0, "ground_pass"],
+  [4.8, "close_control"],
+  [9.7, "cut_inside"],
+  [14.7, "slide_tackle"],
+  [20.5, "finish"],
+  [26.4, "reverse_angle"],
+  [30, "kickoff"],
+  [33.2, "wing_buildup"],
+  [43, "breakthrough"],
+  [46, "diagonal_through"],
+  [52, "cross_support"],
+  [56.4, "box_save"],
 ];
 export function demoFrame(seconds) {
   const t = cap(seconds, 0, 60),

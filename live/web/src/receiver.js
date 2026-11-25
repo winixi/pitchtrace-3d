@@ -26,19 +26,19 @@ export function connectFrames(url, onState) {
   }
   function connect() {
     if (done) return;
-    set("连接中");
+    set("net.connecting");
     let firstOnSocket = true;
     try {
       socket = new WebSocket(url);
     } catch {
-      set("地址无效");
+      set("net.invalidUrl");
       return;
     }
     socket.onopen = () => {
       if (done) return;
       frames = [];
       last = 0;
-      set("等待第一帧");
+      set("net.waitingFirst");
     };
     socket.onmessage = (e) => {
       try {
@@ -70,14 +70,14 @@ export function connectFrames(url, onState) {
         frames.push({ t, frame: f });
         if (frames.length > 90) frames.shift();
         last = t;
-        set("数据已连接");
+        set("net.connected");
       } catch {
         /* Discard malformed frames without interrupting the last valid pose. */
       }
     };
     socket.onclose = () => {
       if (done) return;
-      set("连接中断 · 重连中");
+      set("net.reconnecting");
       retry = setTimeout(connect, 2200);
     };
   }
@@ -95,7 +95,7 @@ export function connectFrames(url, onState) {
     },
     read(now) {
       if (last && now - last > 1500 && socket?.readyState === WebSocket.OPEN)
-        set("画面停留 · 等待新帧");
+        set("net.stale");
       if (!frames.length) return null;
       const play = now - 100;
       while (frames.length > 2 && frames[1].t <= play) frames.shift();
