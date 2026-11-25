@@ -50,4 +50,38 @@ node live/server/tools/review-sample.mjs http://127.0.0.1:8766 review-edge-01 --
 
 打开 [review-edge-01](http://127.0.0.1:8766/?match=review-edge-01)，进入「归档回放」，在 `00:25.000` 暂停并切换两路同步原片。两路分别使用 30 fps 和 25 fps，预期命中同一预设曝光 UTC。`00:01.200` 可验证缺片提示。
 
+## G1 双机位曝光对时
+
+先用 `replay` 导出两路录像的 `frames.ndjson`。现场拍摄两路都能看到的共同闪光，由复核人员按同一选帧口径标注每次闪光对应的机位、片段号和 PTS。记录所有计划测量的闪光。某机位没拍到或无法确认时省略该机位，两路均缺测时保留空的 `frames`。报告使用帧清单里的曝光 UTC，现场采集需要记录时间戳来源和统一时钟的方式。
+
+将下例保存为 `flashes.json`。样例只需要执行上一节的录像生成和 `replay` 命令。现场实拍标注的 `sampleSource` 填 `field`，生成样例填 `synthetic`。
+
+```json
+{
+  "sampleSource": "synthetic",
+  "cameras": ["A", "B"],
+  "events": [
+    {
+      "id": "sample-pair",
+      "frames": {
+        "A": { "segment": 1, "pts": 35328 },
+        "B": { "segment": 1, "pts": 32256 }
+      }
+    },
+    {
+      "id": "sample-missing-b",
+      "frames": { "A": { "segment": 0, "pts": 0 } }
+    }
+  ]
+}
+```
+
+```sh
+swift run --package-path edge pitchtrace-edge audit-sync "$trial_dir/media/frames.ndjson" flashes.json > sync-report.json
+```
+
+报告逐项保留原帧引用、帧曝光时间、缺测机位和有符号偏差（第二机位减第一机位，单位 µs）。将完整配对的绝对偏差按升序排列，P95 取第 `ceil(0.95 × 配对数)` 个值。报告同时给出最大值、配对数和未配对数。零组完整配对时省略偏差统计及阈值判定。有效报告无论 P95 是否超出 5,000 µs 均正常输出。无效帧引用或重复使用同一帧会报错。
+
+生成样例预期为 2 次标注，其中 1 次配对、1 次未配对，P95 和最大值均为 0 µs。现场评审还要核对实拍证据、样本量、未配对数、双视角可见率和独立检查点。[G1 放行条件](../docs/03-development-plan.md#3-按周实施与放行条件)
+
 设备采集与推理的设计见[边缘计算技术方案](../docs/02-technical-design.md#pitchtrace-edge)。

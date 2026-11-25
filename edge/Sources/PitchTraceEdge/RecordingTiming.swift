@@ -11,6 +11,15 @@ struct RecordingError: LocalizedError {
 let maxSafeMediaInteger: Int64 = 9_007_199_254_740_991
 let maxMediaBytes = 128 * 1024 * 1024
 
+func exposureMicroseconds(_ timestamp: String) -> Int64? {
+    guard let value = Int64(timestamp), value >= 0, String(value) == timestamp else { return nil }
+    return value
+}
+
+func isMediaCameraID(_ cameraID: String) -> Bool {
+    cameraID.range(of: #"^[A-Za-z0-9_-]{1,64}\z"#, options: .regularExpression) != nil
+}
+
 struct MediaTimeBase: Codable, Equatable {
     let numerator: Int32
     let denominator: Int32
@@ -53,6 +62,26 @@ struct ReplayFrame: Encodable {
         try values.encode(frame.pts, forKey: .pts)
         try values.encode(frame.durationPts, forKey: .durationPts)
         try values.encode(frame.captureUtcUs, forKey: .captureUtcUs)
+    }
+}
+
+extension ReplayFrame: Decodable {
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        cameraId = try values.decode(String.self, forKey: .cameraId)
+        segment = try values.decode(Int64.self, forKey: .segment)
+        timeBase = try values.decode(MediaTimeBase.self, forKey: .timeBase)
+        frameNumber = try values.decodeIfPresent(Int64.self, forKey: .frameNumber)
+        let timestamp = try values.decode(String.self, forKey: .captureUtcUs)
+        guard let exposure = exposureMicroseconds(timestamp) else {
+            throw RecordingError("曝光 UTC 无效")
+        }
+        utc = exposure
+        frame = MediaFrame(
+            pts: try values.decode(Int64.self, forKey: .pts),
+            durationPts: try values.decode(Int64.self, forKey: .durationPts),
+            captureUtcUs: timestamp
+        )
     }
 }
 
@@ -127,8 +156,7 @@ struct CameraTiming {
             guard let exposure = byPTS.removeValue(forKey: pts) else {
                 throw RecordingError("\(position)：缺少曝光映射")
             }
-            guard let timestamp = exposure.captureUtcUs, let utc = Int64(timestamp),
-                  utc >= 0, String(utc) == timestamp else {
+            guard let timestamp = exposure.captureUtcUs, let utc = exposureMicroseconds(timestamp) else {
                 throw RecordingError("\(position)：曝光 UTC 缺失或无效")
             }
             if let number = exposure.frameNumber, number < 0 {

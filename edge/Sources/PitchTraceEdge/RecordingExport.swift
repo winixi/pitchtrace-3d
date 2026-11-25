@@ -169,7 +169,7 @@ func exportRecording(from input: URL, to output: URL) throws -> (frames: Int, ga
     ).filter { try $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true }
         .sorted { $0.lastPathComponent < $1.lastPathComponent }
     guard cameras.count == 2, cameras.allSatisfy({
-        $0.lastPathComponent.range(of: #"^[A-Za-z0-9_-]{1,64}\z"#, options: .regularExpression) != nil
+        isMediaCameraID($0.lastPathComponent)
     }) else {
         throw RecordingError("录像目录需要恰好两个以 v2 机位 ID 命名的子目录")
     }

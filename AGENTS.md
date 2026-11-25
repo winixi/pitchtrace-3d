@@ -122,7 +122,7 @@ node live/server/server.cjs   # 需先在 live/web 执行过 npm run build
 | --- | --- | --- |
 | 浏览器三维观赛前端 | ✅ 已实现 | 内置 60 秒比赛，六机位、骨骼、暂停定格、HLS 实拍；支持 v1 与 v2 快照输入。 |
 | 本地 v1 试播网关 | ✅ 已实现 | `POST /frame`、`/live`、`/demo`，复用前端校验器。 |
-| Edge 双机位录像输入 | ✅ 已实现 | 离线读取 H.264/fMP4 和曝光映射，输出重放清单、缺口和 v2 媒体索引。 |
+| Edge 双机位录像输入 | ✅ 已实现 | 离线读取 H.264/fMP4 和曝光映射，输出重放清单、缺口和 v2 媒体索引。提供基于共同闪光帧标注的 G1 对时报告。 |
 | Edge 采集与对时 | ⏳ 设计中 | 厂商 SDK / AVFoundation / RTSP，fMP4 分段与曝光时间索引。 |
 | Edge 检测、姿态、读号 | ⏳ 设计中 | Core ML + Vision，Python/OpenCV 做离线对照。 |
 | Edge 三维融合与动作 | ⏳ 设计中 | C++/OpenCV `calib3d` 经 C 接口供 Swift 调用。 |
