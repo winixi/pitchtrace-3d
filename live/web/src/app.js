@@ -11,6 +11,7 @@ import { setupRecording } from "./recording.js";
 import { connectFrames } from "./receiver.js";
 import { archiveFrameAt } from "./archive.js";
 import { setupArchive } from "./archive-panel.js";
+import { setupReview } from "./review.js";
 import { t, onChange } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
@@ -90,6 +91,19 @@ async function start() {
       status: $("archiveStatus"),
     },
     showArchiveFrames,
+  );
+  const review = setupReview(
+    {
+      panel: $("review"),
+      camera: $("reviewCamera"),
+      video: $("reviewVideo"),
+      status: $("reviewStatus"),
+    },
+    () => {
+      archivePlaying = false;
+      dirty = true;
+      updatePlay();
+    },
   );
   const cueButtons = [],
     cameraButtons = [];
@@ -387,6 +401,7 @@ async function start() {
     }
     seek.hidden = $("speed").hidden = !first;
     $("media").hidden = Boolean(first);
+    review.setAvailable(Boolean(first));
     $("sourceLive").setAttribute("aria-pressed", String(!first));
     if (loading.dataset.i18n !== "loading.contextLost")
       loading.hidden = Boolean(first || liveFrame);
@@ -412,11 +427,12 @@ async function start() {
     const historyMatch = parsed.pathname.match(
       /^\/v2\/matches\/([\w-]{1,64})\/live$/,
     );
-    archive.setMatch(
+    const archiveMatch =
       location.protocol !== "file:" && parsed.origin === wsBase
         ? (historyMatch?.[1] ?? null)
-        : null,
-    );
+        : null;
+    archive.setMatch(archiveMatch);
+    review.setMatch(archiveMatch);
     connection?.stop();
     connection = null;
     liveFrame = null;
@@ -450,6 +466,7 @@ async function start() {
     $("feed").hidden = true;
     $("sourceLive").setAttribute("aria-expanded", "false");
     archive.setMatch(null);
+    review.setMatch(null);
     connection?.stop();
     connection = null;
     liveFrame = null;
@@ -506,6 +523,7 @@ async function start() {
         }
         archivePlayhead = Math.round(archiveClock * 1000) / 1000;
         frame = archiveFrameAt(archiveFrames, archivePlayhead);
+        review.at(frame?.captureUtcUs, archivePlaying);
       } else {
         frame = frozenFrame || liveFrame;
       }

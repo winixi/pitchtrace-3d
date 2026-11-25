@@ -2407,7 +2407,7 @@ var require_websocket = __commonJS({
     var net = require("net");
     var querystring = require("querystring");
     var tls = require("tls");
-    var { randomBytes, createHash } = require("crypto");
+    var { randomBytes, createHash: createHash2 } = require("crypto");
     var { Duplex, Readable } = require("stream");
     var { URL: URL2 } = require("url");
     var PerMessageDeflate2 = require_permessage_deflate();
@@ -3098,7 +3098,7 @@ var require_websocket = __commonJS({
           abortHandshake(websocket, socket, "Invalid Upgrade header");
           return;
         }
-        const digest = createHash("sha1").update(key + GUID).digest("base64");
+        const digest = createHash2("sha1").update(key + GUID).digest("base64");
         if (res.headers["sec-websocket-accept"] !== digest) {
           abortHandshake(websocket, socket, "Invalid Sec-WebSocket-Accept header");
           return;
@@ -3395,7 +3395,7 @@ var require_stream = __commonJS({
       };
       duplex._final = function(callback) {
         if (ws.readyState === ws.CONNECTING) {
-          ws.once("open", function open() {
+          ws.once("open", function open2() {
             duplex._final(callback);
           });
           return;
@@ -3416,7 +3416,7 @@ var require_stream = __commonJS({
       };
       duplex._write = function(chunk, encoding, callback) {
         if (ws.readyState === ws.CONNECTING) {
-          ws.once("open", function open() {
+          ws.once("open", function open2() {
             duplex._write(chunk, encoding, callback);
           });
           return;
@@ -3483,7 +3483,7 @@ var require_websocket_server = __commonJS({
     var EventEmitter = require("events");
     var http2 = require("http");
     var { Duplex } = require("stream");
-    var { createHash } = require("crypto");
+    var { createHash: createHash2 } = require("crypto");
     var extension2 = require_extension();
     var PerMessageDeflate2 = require_permessage_deflate();
     var subprotocol2 = require_subprotocol();
@@ -3793,7 +3793,7 @@ var require_websocket_server = __commonJS({
           );
         }
         if (this._state > RUNNING) return abortHandshake(socket, 503);
-        const digest = createHash("sha1").update(key + GUID).digest("base64");
+        const digest = createHash2("sha1").update(key + GUID).digest("base64");
         const headers = [
           "HTTP/1.1 101 Switching Protocols",
           "Upgrade: websocket",
@@ -5717,8 +5717,8 @@ var require_keyword = __commonJS({
       var _a;
       const { gen, keyword, schema, parentSchema, $data, it } = cxt;
       checkAsyncKeyword(it, def);
-      const validate2 = !$data && def.compile ? def.compile.call(it.self, schema, parentSchema, it) : def.validate;
-      const validateRef = useKeyword(gen, keyword, validate2);
+      const validate3 = !$data && def.compile ? def.compile.call(it.self, schema, parentSchema, it) : def.validate;
+      const validateRef = useKeyword(gen, keyword, validate3);
       const valid = gen.let("valid");
       cxt.block$data(valid, validateKeyword);
       cxt.ok((_a = def.valid) !== null && _a !== void 0 ? _a : valid);
@@ -6791,28 +6791,28 @@ var require_compile = __commonJS({
         if (this.opts.code.process)
           sourceCode = this.opts.code.process(sourceCode, sch);
         const makeValidate = new Function(`${names_1.default.self}`, `${names_1.default.scope}`, sourceCode);
-        const validate2 = makeValidate(this, this.scope.get());
-        this.scope.value(validateName, { ref: validate2 });
-        validate2.errors = null;
-        validate2.schema = sch.schema;
-        validate2.schemaEnv = sch;
+        const validate3 = makeValidate(this, this.scope.get());
+        this.scope.value(validateName, { ref: validate3 });
+        validate3.errors = null;
+        validate3.schema = sch.schema;
+        validate3.schemaEnv = sch;
         if (sch.$async)
-          validate2.$async = true;
+          validate3.$async = true;
         if (this.opts.code.source === true) {
-          validate2.source = { validateName, validateCode, scopeValues: gen._values };
+          validate3.source = { validateName, validateCode, scopeValues: gen._values };
         }
         if (this.opts.unevaluated) {
           const { props, items } = schemaCxt;
-          validate2.evaluated = {
+          validate3.evaluated = {
             props: props instanceof codegen_1.Name ? void 0 : props,
             items: items instanceof codegen_1.Name ? void 0 : items,
             dynamicProps: props instanceof codegen_1.Name,
             dynamicItems: items instanceof codegen_1.Name
           };
-          if (validate2.source)
-            validate2.source.evaluated = (0, codegen_1.stringify)(validate2.evaluated);
+          if (validate3.source)
+            validate3.source.evaluated = (0, codegen_1.stringify)(validate3.evaluated);
         }
-        sch.validate = validate2;
+        sch.validate = validate3;
         return sch;
       } catch (e) {
         delete sch.validate;
@@ -8244,7 +8244,7 @@ var require_core = __commonJS({
         uriResolver
       };
     }
-    var Ajv2 = class {
+    var Ajv3 = class {
       constructor(opts = {}) {
         this.schemas = {};
         this.refs = {};
@@ -8614,9 +8614,9 @@ var require_core = __commonJS({
         }
       }
     };
-    Ajv2.ValidationError = validation_error_1.default;
-    Ajv2.MissingRefError = ref_error_1.default;
-    exports2.default = Ajv2;
+    Ajv3.ValidationError = validation_error_1.default;
+    Ajv3.MissingRefError = ref_error_1.default;
+    exports2.default = Ajv3;
     function checkOptions(checkOpts, options, msg, log2 = "error") {
       for (const key in checkOpts) {
         const opt = key;
@@ -10727,7 +10727,7 @@ var require_ajv = __commonJS({
     var draft7MetaSchema = require_json_schema_draft_07();
     var META_SUPPORT_DATA = ["/properties"];
     var META_SCHEMA_ID = "http://json-schema.org/draft-07/schema";
-    var Ajv2 = class extends core_1.default {
+    var Ajv3 = class extends core_1.default {
       _addVocabularies() {
         super._addVocabularies();
         draft7_1.default.forEach((v) => this.addVocabulary(v));
@@ -10746,11 +10746,11 @@ var require_ajv = __commonJS({
         return this.opts.defaultMeta = super.defaultMeta() || (this.getSchema(META_SCHEMA_ID) ? META_SCHEMA_ID : void 0);
       }
     };
-    exports2.Ajv = Ajv2;
-    module2.exports = exports2 = Ajv2;
-    module2.exports.Ajv = Ajv2;
+    exports2.Ajv = Ajv3;
+    module2.exports = exports2 = Ajv3;
+    module2.exports.Ajv = Ajv3;
     Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.default = Ajv2;
+    exports2.default = Ajv3;
     var validate_1 = require_validate();
     Object.defineProperty(exports2, "KeywordCxt", { enumerable: true, get: function() {
       return validate_1.KeywordCxt;
@@ -10787,8 +10787,8 @@ var require_ajv = __commonJS({
 
 // server.mjs
 var import_node_http = __toESM(require("node:http"), 1);
-var import_node_fs2 = __toESM(require("node:fs"), 1);
-var import_node_path2 = __toESM(require("node:path"), 1);
+var import_node_fs4 = __toESM(require("node:fs"), 1);
+var import_node_path4 = __toESM(require("node:path"), 1);
 
 // node_modules/ws/wrapper.mjs
 var import_stream = __toESM(require_stream(), 1);
@@ -19201,7 +19201,7 @@ var KeyframeTrack = class {
    */
   optimize() {
     const times = this.times.slice(), values = this.values.slice(), stride = this.getValueSize(), smoothInterpolation = this.getInterpolation() === InterpolateSmooth, lastIndex = times.length - 1;
-    let writeIndex = 1;
+    let writeIndex2 = 1;
     for (let i = 1; i < lastIndex; ++i) {
       let keep = false;
       const time = times[i];
@@ -19221,26 +19221,26 @@ var KeyframeTrack = class {
         }
       }
       if (keep) {
-        if (i !== writeIndex) {
-          times[writeIndex] = times[i];
-          const readOffset = i * stride, writeOffset = writeIndex * stride;
+        if (i !== writeIndex2) {
+          times[writeIndex2] = times[i];
+          const readOffset = i * stride, writeOffset = writeIndex2 * stride;
           for (let j = 0; j !== stride; ++j) {
             values[writeOffset + j] = values[readOffset + j];
           }
         }
-        ++writeIndex;
+        ++writeIndex2;
       }
     }
     if (lastIndex > 0) {
-      times[writeIndex] = times[lastIndex];
-      for (let readOffset = lastIndex * stride, writeOffset = writeIndex * stride, j = 0; j !== stride; ++j) {
+      times[writeIndex2] = times[lastIndex];
+      for (let readOffset = lastIndex * stride, writeOffset = writeIndex2 * stride, j = 0; j !== stride; ++j) {
         values[writeOffset + j] = values[readOffset + j];
       }
-      ++writeIndex;
+      ++writeIndex2;
     }
-    if (writeIndex !== times.length) {
-      this.times = times.slice(0, writeIndex);
-      this.values = values.slice(0, writeIndex * stride);
+    if (writeIndex2 !== times.length) {
+      this.times = times.slice(0, writeIndex2);
+      this.values = values.slice(0, writeIndex2 * stride);
     } else {
       this.times = times;
       this.values = values;
@@ -22301,12 +22301,572 @@ function prepareArchive(db) {
   };
 }
 
+// media-http.mjs
+var import_node_crypto = require("node:crypto");
+var import_node_fs3 = require("node:fs");
+var import_promises = require("node:fs/promises");
+var import_node_os = require("node:os");
+var import_node_path3 = require("node:path");
+
+// media-archive.mjs
+var import_node_fs2 = require("node:fs");
+var import_node_path2 = require("node:path");
+
+// media-index.mjs
+var import_ajv2 = __toESM(require_ajv(), 1);
+
+// ../../schemas/v2/media-index.schema.json
+var media_index_schema_default = {
+  $schema: "http://json-schema.org/draft-07/schema#",
+  title: "\u573A\u8FF9 v2 \u5A92\u4F53\u6BB5\u66DD\u5149\u7D22\u5F15",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "initSha256",
+    "segmentSha256",
+    "segmentBytes",
+    "timeBase",
+    "frames"
+  ],
+  properties: {
+    initSha256: { $ref: "#/definitions/sha256" },
+    segmentSha256: { $ref: "#/definitions/sha256" },
+    segmentBytes: { type: "integer", minimum: 1, maximum: 134217728 },
+    timeBase: {
+      type: "object",
+      additionalProperties: false,
+      required: ["numerator", "denominator"],
+      properties: {
+        numerator: { type: "integer", minimum: 1, maximum: 2147483647 },
+        denominator: {
+          type: "integer",
+          minimum: 1,
+          maximum: 2147483647
+        }
+      }
+    },
+    frames: {
+      type: "array",
+      minItems: 1,
+      maxItems: 4096,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["pts", "durationPts", "captureUtcUs"],
+        properties: {
+          pts: {
+            type: "integer",
+            minimum: -9007199254740991,
+            maximum: 9007199254740991
+          },
+          durationPts: {
+            type: "integer",
+            minimum: 1,
+            maximum: 9007199254740991
+          },
+          captureUtcUs: {
+            type: "string",
+            pattern: "^(0|[1-9][0-9]{0,18})$"
+          }
+        }
+      }
+    }
+  },
+  definitions: {
+    sha256: { type: "string", pattern: "^[a-f0-9]{64}$" }
+  }
+};
+
+// media-index.mjs
+var validate2 = new import_ajv2.default({ ownProperties: true }).compile(media_index_schema_default);
+var utcPattern = new RegExp(
+  media_index_schema_default.properties.frames.items.properties.captureUtcUs.pattern
+);
+var sha256Pattern = new RegExp(media_index_schema_default.definitions.sha256.pattern);
+var mediaMaxBytes = media_index_schema_default.properties.segmentBytes.maximum;
+var maxFrameDurationUs = 1e6;
+var maxUtcUs = 9223372036854775807n;
+var validSha256 = (value) => typeof value === "string" && sha256Pattern.test(value);
+function parseExposure(value) {
+  if (typeof value !== "string" || !utcPattern.test(value)) return null;
+  const utc = BigInt(value);
+  return utc <= maxUtcUs ? utc : null;
+}
+function readMediaIndex(input) {
+  if (!validate2(input)) return null;
+  const { numerator, denominator } = input.timeBase;
+  const firstPts = input.frames[0].pts;
+  let previousUtc = -1n;
+  let previousEnd = firstPts;
+  const frames = [];
+  for (const { captureUtcUs, pts, durationPts } of input.frames) {
+    const utc = parseExposure(captureUtcUs);
+    const endPts = pts + durationPts;
+    const durationUs = durationPts * numerator / denominator * 1e6;
+    if (utc === null || utc <= previousUtc || pts < previousEnd || !Number.isSafeInteger(endPts) || durationUs < 1 || durationUs > maxFrameDurationUs)
+      return null;
+    frames.push({
+      utc,
+      pts,
+      durationPts,
+      toleranceUs: Math.ceil(durationUs / 2)
+    });
+    previousUtc = utc;
+    previousEnd = endPts;
+  }
+  const ticks = previousEnd - firstPts;
+  const duration = ticks * numerator / denominator;
+  if (!Number.isSafeInteger(ticks) || duration > 120) return null;
+  return {
+    frames,
+    firstPts,
+    duration,
+    numerator,
+    denominator,
+    initSha256: input.initSha256,
+    segmentSha256: input.segmentSha256,
+    segmentBytes: input.segmentBytes,
+    payload: serializeSceneFrame(input)
+  };
+}
+
+// media-archive.mjs
+function openMediaArchive(filename, directory) {
+  const sqlite = process.getBuiltinModule?.("node:sqlite");
+  if (!sqlite) return null;
+  (0, import_node_fs2.mkdirSync)((0, import_node_path2.join)(directory, "parts"), { recursive: true });
+  (0, import_node_fs2.mkdirSync)((0, import_node_path2.join)(directory, "uploads"), { recursive: true });
+  if (filename !== ":memory:")
+    (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(filename), { recursive: true });
+  const db = new sqlite.DatabaseSync(filename);
+  try {
+    db.exec(`
+      PRAGMA busy_timeout = 1000;
+      CREATE TABLE IF NOT EXISTS media_init (
+        match_id TEXT, camera_id TEXT, epoch TEXT, digest TEXT NOT NULL, bytes INTEGER NOT NULL,
+        PRIMARY KEY (match_id, camera_id, epoch)
+      ) STRICT, WITHOUT ROWID;
+      CREATE TABLE IF NOT EXISTS media_segments (
+        match_id TEXT, camera_id TEXT, epoch TEXT, segment INTEGER,
+        digest TEXT NOT NULL, bytes INTEGER NOT NULL,
+        PRIMARY KEY (match_id, camera_id, epoch, segment)
+      ) STRICT, WITHOUT ROWID;
+      CREATE TABLE IF NOT EXISTS media_indexes (
+        match_id TEXT, camera_id TEXT, epoch TEXT, segment INTEGER,
+        init_digest TEXT NOT NULL, segment_digest TEXT NOT NULL, segment_bytes INTEGER NOT NULL,
+        first_pts INTEGER NOT NULL, duration REAL NOT NULL,
+        numerator INTEGER NOT NULL, denominator INTEGER NOT NULL,
+        first_utc INTEGER NOT NULL, last_utc INTEGER NOT NULL,
+        payload TEXT NOT NULL,
+        PRIMARY KEY (match_id, camera_id, epoch, segment)
+      ) STRICT, WITHOUT ROWID;
+      CREATE TABLE IF NOT EXISTS media_exposures (
+        match_id TEXT, camera_id TEXT, utc INTEGER, epoch TEXT, segment INTEGER,
+        pts INTEGER NOT NULL, duration_pts INTEGER NOT NULL, tolerance_us INTEGER NOT NULL,
+        PRIMARY KEY (match_id, camera_id, utc, epoch, segment),
+        FOREIGN KEY (match_id, camera_id, epoch, segment)
+          REFERENCES media_indexes (match_id, camera_id, epoch, segment)
+      ) STRICT, WITHOUT ROWID;
+      CREATE VIEW IF NOT EXISTS ready_media_segments AS
+        SELECT i.*, s.bytes, b.bytes AS init_bytes FROM media_indexes i
+        JOIN media_segments s USING (match_id, camera_id, epoch, segment)
+        JOIN media_init b USING (match_id, camera_id, epoch)
+        WHERE i.init_digest = b.digest AND i.segment_digest = s.digest AND i.segment_bytes = s.bytes;
+    `);
+    return prepareArchive2(db, directory);
+  } catch (error2) {
+    db.close();
+    throw error2;
+  }
+}
+function prepareArchive2(db, directory) {
+  const epochKey = "match_id = ? AND camera_id = ? AND epoch = ?";
+  const segmentKey = epochKey + " AND segment = ?";
+  const getInit = db.prepare(
+    "SELECT digest, bytes FROM media_init WHERE " + epochKey
+  );
+  const getSegment = db.prepare(
+    "SELECT digest, bytes FROM media_segments WHERE " + segmentKey
+  );
+  const expectedInit = db.prepare(
+    "SELECT init_digest FROM media_indexes WHERE " + epochKey + " LIMIT 1"
+  );
+  const getIndex = db.prepare(
+    "SELECT init_digest, segment_digest, segment_bytes, payload FROM media_indexes WHERE " + segmentKey
+  );
+  const addInit = db.prepare("INSERT INTO media_init VALUES (?, ?, ?, ?, ?)");
+  const addSegment = db.prepare(
+    "INSERT INTO media_segments VALUES (?, ?, ?, ?, ?, ?)"
+  );
+  const addIndex = db.prepare(
+    "INSERT INTO media_indexes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  );
+  const addExposure = db.prepare(
+    "INSERT INTO media_exposures VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+  );
+  const cameras = db.prepare(
+    "SELECT DISTINCT camera_id FROM ready_media_segments WHERE match_id = ? ORDER BY camera_id"
+  );
+  const fields = "epoch, segment, first_pts, duration, numerator, denominator, segment_digest, init_digest, bytes, init_bytes";
+  const getReady = db.prepare(
+    "SELECT " + fields + " FROM ready_media_segments WHERE " + segmentKey
+  );
+  const readyInit = db.prepare(
+    "SELECT init_digest AS digest, init_bytes AS bytes FROM ready_media_segments WHERE " + epochKey + " LIMIT 1"
+  );
+  const playlist = db.prepare(
+    "SELECT " + fields + " FROM ready_media_segments WHERE match_id = ? AND camera_id = ? ORDER BY first_utc, epoch, segment"
+  );
+  const nearest = db.prepare(`
+    SELECT r.epoch, r.segment, r.first_pts, r.numerator, r.denominator,
+      CAST(e.utc AS TEXT) AS exposure, e.pts, e.duration_pts,
+      CAST(e.utc - ? AS INTEGER) AS skew
+    FROM media_exposures e JOIN ready_media_segments r USING (match_id, camera_id, epoch, segment)
+    WHERE e.match_id = ? AND e.camera_id = ? AND e.utc BETWEEN ? AND ?
+      AND abs(e.utc - ?) <= e.tolerance_us
+    ORDER BY abs(e.utc - ?), e.utc, e.epoch, e.segment LIMIT 1
+  `);
+  const part = (digest) => (0, import_node_path2.join)(directory, "parts", digest);
+  function transaction(write) {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const result = write();
+      db.exec("COMMIT");
+      return result;
+    } catch (error2) {
+      db.exec("ROLLBACK");
+      throw error2;
+    }
+  }
+  function publishFile(upload) {
+    try {
+      (0, import_node_fs2.linkSync)(upload.filename, part(upload.digest));
+    } catch (error2) {
+      if (error2.code !== "EEXIST") throw error2;
+    }
+  }
+  return {
+    uploads: (0, import_node_path2.join)(directory, "uploads"),
+    part,
+    close: () => db.close(),
+    writeInit(key, upload) {
+      return transaction(() => {
+        const existing = getInit.get(...key);
+        if (existing) return existing.digest === upload.digest;
+        const expected = expectedInit.get(...key);
+        if (expected && expected.init_digest !== upload.digest) return false;
+        publishFile(upload);
+        addInit.run(...key, upload.digest, upload.bytes);
+        return true;
+      });
+    },
+    writeSegment(key, upload) {
+      return transaction(() => {
+        const existing = getSegment.get(...key);
+        if (existing) return existing.digest === upload.digest;
+        const expected = getIndex.get(...key);
+        if (expected && (expected.segment_digest !== upload.digest || expected.segment_bytes !== upload.bytes))
+          return false;
+        publishFile(upload);
+        addSegment.run(...key, upload.digest, upload.bytes);
+        return true;
+      });
+    },
+    writeIndex(key, index) {
+      return transaction(() => {
+        const existing = getIndex.get(...key);
+        if (existing) return existing.payload === index.payload;
+        const epoch = key.slice(0, 3);
+        const init = getInit.get(...epoch);
+        const expected = expectedInit.get(...epoch);
+        const segment = getSegment.get(...key);
+        if (init && init.digest !== index.initSha256 || expected && expected.init_digest !== index.initSha256 || segment && (segment.digest !== index.segmentSha256 || segment.bytes !== index.segmentBytes))
+          return false;
+        const { frames } = index;
+        addIndex.run(
+          ...key,
+          index.initSha256,
+          index.segmentSha256,
+          index.segmentBytes,
+          index.firstPts,
+          index.duration,
+          index.numerator,
+          index.denominator,
+          frames[0].utc,
+          frames.at(-1).utc,
+          index.payload
+        );
+        const [match, camera, mediaEpoch, number2] = key;
+        for (const frame of frames)
+          addExposure.run(
+            match,
+            camera,
+            frame.utc,
+            mediaEpoch,
+            number2,
+            frame.pts,
+            frame.durationPts,
+            frame.toleranceUs
+          );
+        return true;
+      });
+    },
+    cameraIds: (matchId) => cameras.all(matchId).map(({ camera_id }) => camera_id),
+    playlist: (matchId, cameraId) => playlist.all(matchId, cameraId),
+    readySegment: (key) => getReady.get(...key),
+    readyInit: (key) => readyInit.get(...key),
+    locate(matchId, cameraId, utc) {
+      const window2 = BigInt(maxFrameDurationUs / 2);
+      const low = utc > window2 ? utc - window2 : 0n;
+      const high = utc + window2 < maxUtcUs ? utc + window2 : maxUtcUs;
+      return nearest.get(utc, matchId, cameraId, low, high, utc, utc);
+    }
+  };
+}
+
+// media-http.mjs
+var indexMaxBytes = 1e6;
+var cameraPath = (match, camera) => `/v2/matches/${match}/cameras/${camera}`;
+var epochPath = (match, camera, epoch) => `${cameraPath(match, camera)}/epochs/${epoch}`;
+var hlsType = "application/vnd.apple.mpegurl";
+var UploadError = class extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+};
+function mediaRoute(pathname) {
+  const [
+    ,
+    version,
+    resource,
+    match,
+    cameras,
+    camera,
+    epochs,
+    epoch,
+    item,
+    segment,
+    extra,
+    overflow
+  ] = pathname.split("/");
+  if (version !== "v2" || resource !== "matches" || cameras !== "cameras" || !validSceneId(match))
+    return null;
+  if (camera === void 0) return { kind: "cameras", key: [match] };
+  if (!validSceneId(camera)) return null;
+  if (epoch === void 0 && (epochs === "locate" || epochs === "index.m3u8"))
+    return { kind: epochs, key: [match, camera] };
+  if (epochs !== "epochs" || !validSceneId(epoch)) return null;
+  const key = [match, camera, epoch];
+  if (item === "init.mp4" && segment === void 0)
+    return { kind: "init", key };
+  if (item !== "segments" || segment === void 0 || overflow !== void 0)
+    return null;
+  const numbered = /^(0|[1-9]\d*)(\.m4s|\.m3u8)?$/.exec(segment);
+  if (!numbered || !Number.isSafeInteger(Number(numbered[1]))) return null;
+  key.push(Number(numbered[1]));
+  if (numbered[2] === ".m4s" && extra === void 0)
+    return { kind: "segment", key };
+  if (numbered[2] === ".m3u8" && extra === void 0)
+    return { kind: "clip", key };
+  if (!numbered[2] && extra === "index") return { kind: "index", key };
+  return null;
+}
+async function readUpload(request, limit, consume) {
+  let count = 0;
+  for await (const chunk of request.iterator({ destroyOnReturn: false })) {
+    count += chunk.length;
+    if (count > limit) break;
+    await consume(chunk);
+  }
+  if (count > limit) {
+    request.resume();
+    throw new UploadError(413, "Media upload too large");
+  }
+  return count;
+}
+async function writeBinary(request, store, key, kind) {
+  const digest = request.headers["x-content-sha256"];
+  if (!validSha256(digest)) {
+    request.resume();
+    throw new UploadError(422, "A valid X-Content-SHA256 header is required");
+  }
+  const filename = (0, import_node_path3.join)(store.uploads, (0, import_node_crypto.randomUUID)());
+  const file = await (0, import_promises.open)(filename, "wx");
+  const hash = (0, import_node_crypto.createHash)("sha256");
+  try {
+    const bytes = await readUpload(request, mediaMaxBytes, async (chunk) => {
+      hash.update(chunk);
+      await file.writeFile(chunk);
+    });
+    if (!bytes || hash.digest("hex") !== digest)
+      throw new UploadError(422, "Media length or digest is invalid");
+    await file.sync();
+    const write = kind === "init" ? store.writeInit : store.writeSegment;
+    return write(key, { filename, digest, bytes });
+  } finally {
+    await file.close();
+    await (0, import_promises.unlink)(filename);
+  }
+}
+async function writeIndex(request, store, key) {
+  const chunks = [];
+  await readUpload(request, indexMaxBytes, (chunk) => chunks.push(chunk));
+  let data;
+  try {
+    data = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw new UploadError(400, "Invalid media index JSON");
+  }
+  const index = readMediaIndex(data);
+  if (!index) throw new UploadError(422, "Invalid media index");
+  return store.writeIndex(key, index);
+}
+function playlistText(match, camera, parts, clip) {
+  const target2 = parts.reduce(
+    (max, part) => Math.max(max, Math.ceil(part.duration)),
+    1
+  );
+  const lines = [
+    "#EXTM3U",
+    "#EXT-X-VERSION:7",
+    `#EXT-X-TARGETDURATION:${target2}`,
+    "#EXT-X-MEDIA-SEQUENCE:0",
+    "#EXT-X-INDEPENDENT-SEGMENTS"
+  ];
+  if (clip) lines.push("#EXT-X-PLAYLIST-TYPE:VOD");
+  let last;
+  for (const part of parts) {
+    const base = epochPath(match, camera, part.epoch);
+    if (last && (last.epoch !== part.epoch || last.segment + 1 !== part.segment || last.numerator !== part.numerator || last.denominator !== part.denominator || Math.abs(
+      (part.first_pts - last.first_pts) * last.numerator / last.denominator - last.duration
+    ) > 1e-6))
+      lines.push("#EXT-X-DISCONTINUITY");
+    if (last?.epoch !== part.epoch)
+      lines.push(`#EXT-X-MAP:URI="${base}/init.mp4"`);
+    lines.push(
+      `#EXTINF:${part.duration.toFixed(6)},`,
+      `${base}/segments/${part.segment}.m4s`
+    );
+    last = part;
+  }
+  return lines.concat("#EXT-X-ENDLIST", "").join("\n");
+}
+function locate(store, key, params) {
+  if (params.size !== 1) throw new UploadError(400, "Invalid exposure query");
+  const captureUtcUs = params.get("captureUtcUs");
+  const utc = parseExposure(captureUtcUs);
+  if (utc === null) throw new UploadError(400, "Invalid exposure time");
+  const frame = store.locate(...key, utc);
+  if (!frame) return null;
+  const [match, camera] = key;
+  const secondsPerTick = frame.numerator / frame.denominator;
+  const offsetSeconds = (frame.pts - frame.first_pts) * secondsPerTick;
+  return {
+    cameraId: camera,
+    captureUtcUs,
+    frameCaptureUtcUs: frame.exposure,
+    skewUs: frame.skew,
+    mediaEpoch: frame.epoch,
+    segment: frame.segment,
+    pts: frame.pts,
+    timeBase: { numerator: frame.numerator, denominator: frame.denominator },
+    offsetSeconds,
+    seekSeconds: offsetSeconds + frame.duration_pts * secondsPerTick / 2,
+    playlistUrl: `${epochPath(match, camera, frame.epoch)}/segments/${frame.segment}.m3u8`
+  };
+}
+function send(response, status, data, type = "text/plain; charset=utf-8") {
+  response.writeHead(status, {
+    "Content-Type": type,
+    "Cache-Control": "no-store"
+  });
+  response.end(data);
+}
+function createMediaHandler(filename, configuredDirectory) {
+  let store;
+  let temporary;
+  return {
+    async handle(request, response, pathname, query) {
+      const route = mediaRoute(pathname);
+      if (!route) return false;
+      const { kind, key } = route;
+      const put = request.method === "PUT" && ["init", "segment", "index"].includes(kind);
+      const get = request.method === "GET" && kind !== "index";
+      if (!put && !get) return false;
+      try {
+        if (store === void 0) {
+          const directory = configuredDirectory || (filename === ":memory:" ? temporary ??= (0, import_node_fs3.mkdtempSync)((0, import_node_path3.join)((0, import_node_os.tmpdir)(), "pitchtrace-media-")) : (0, import_node_path3.join)((0, import_node_path3.dirname)(filename), "media"));
+          store = openMediaArchive(filename, directory);
+        }
+        if (!store)
+          throw new UploadError(503, "v2 requires Node.js with SQLite support");
+        if (put) {
+          const accepted = kind === "index" ? await writeIndex(request, store, key) : await writeBinary(request, store, key, kind);
+          if (!accepted) throw new UploadError(409, "Conflicting media part");
+          send(response, 202, "Accepted");
+        } else if (kind === "cameras" || kind === "locate") {
+          const data = kind === "cameras" ? { cameraIds: store.cameraIds(...key) } : locate(store, key, new URLSearchParams(query));
+          if (!data) throw new UploadError(404, "No footage at this exposure");
+          send(
+            response,
+            200,
+            JSON.stringify(data),
+            "application/json; charset=utf-8"
+          );
+        } else if (kind === "index.m3u8" || kind === "clip") {
+          const parts = kind === "clip" ? [store.readySegment(key)].filter(Boolean) : store.playlist(...key);
+          if (!parts.length)
+            throw new UploadError(404, "No complete media segments");
+          send(
+            response,
+            200,
+            playlistText(key[0], key[1], parts, kind === "clip"),
+            hlsType
+          );
+        } else {
+          const part = kind === "init" ? store.readyInit(key) : store.readySegment(key);
+          if (!part) throw new UploadError(404, "Media part is unavailable");
+          const stream = (0, import_node_fs3.createReadStream)(
+            store.part(part.digest ?? part.segment_digest)
+          );
+          stream.once("error", () => {
+            if (response.headersSent) response.destroy();
+            else send(response, 404, "Media file is unavailable");
+          });
+          stream.once("open", () => {
+            response.writeHead(200, {
+              "Content-Type": "video/mp4",
+              "Content-Length": part.bytes
+            });
+            stream.pipe(response);
+          });
+          response.once("close", () => stream.destroy());
+        }
+      } catch (error2) {
+        if (error2 instanceof UploadError)
+          send(response, error2.status, error2.message);
+        else if (!request.aborted) {
+          console.error("v2 \u5A92\u4F53\u5F52\u6863\u8BF7\u6C42\u5931\u8D25", error2);
+          send(response, 500, "Media archive request failed");
+        }
+      }
+      return true;
+    },
+    close() {
+      store?.close();
+      if (temporary) (0, import_node_fs3.rmSync)(temporary, { recursive: true, force: true });
+    }
+  };
+}
+
 // server.mjs
 var host = process.env.PITCHTRACE_HOST || "127.0.0.1";
 var port = Number(process.env.PITCHTRACE_PORT || 8766);
-var serverDir = import_node_path2.default.dirname(process.argv[1]);
-var page = import_node_path2.default.resolve(serverDir, "../web/dist/index.html");
-var archivePath = process.env.PITCHTRACE_DB || import_node_path2.default.join(serverDir, "data", "scenes.sqlite");
+var serverDir = import_node_path4.default.dirname(process.argv[1]);
+var page = import_node_path4.default.resolve(serverDir, "../web/dist/index.html");
+var archivePath = process.env.PITCHTRACE_DB || import_node_path4.default.join(serverDir, "data", "scenes.sqlite");
+var media = createMediaHandler(archivePath, process.env.PITCHTRACE_MEDIA_DIR);
 var maxFrameBytes = 256e3;
 var wss = new import_websocket_server.default({ noServer: true, maxPayload: maxFrameBytes });
 var sceneViewers = /* @__PURE__ */ new Map();
@@ -22317,7 +22877,7 @@ function getArchive() {
   if (archive === void 0) archive = openSceneArchive(archivePath);
   return archive;
 }
-function send(socket, frame) {
+function send2(socket, frame) {
   if (socket.readyState === import_websocket.default.OPEN && socket.bufferedAmount < maxFrameBytes)
     socket.send(frame);
 }
@@ -22364,18 +22924,19 @@ var server = import_node_http.default.createServer(async (request, response) => 
   }
   const separator = request.url.indexOf("?");
   const pathname = separator < 0 ? request.url : request.url.slice(0, separator);
+  const queryString = separator < 0 ? "" : request.url.slice(separator + 1);
   if (request.method === "GET" && pathname === "/") {
-    if (!import_node_fs2.default.existsSync(page))
+    if (!import_node_fs4.default.existsSync(page))
       return reply(404, "Build the viewer with npm run build in live/web.");
     response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    import_node_fs2.default.createReadStream(page).on("error", () => response.destroy()).pipe(response);
+    import_node_fs4.default.createReadStream(page).on("error", () => response.destroy()).pipe(response);
     return;
   }
   const matchId = sceneRoute(pathname, "frames");
+  if (pathname.startsWith("/v2/matches/") && pathname.includes("/cameras") && await media.handle(request, response, pathname, queryString))
+    return;
   if (matchId && request.method === "GET") {
-    const params = new URLSearchParams(
-      separator < 0 ? "" : request.url.slice(separator + 1)
-    );
+    const params = new URLSearchParams(queryString);
     const query = readHistoryQuery(params, matchId);
     if (!query) return reply(400, "Invalid scene history query");
     try {
@@ -22407,7 +22968,7 @@ var server = import_node_http.default.createServer(async (request, response) => 
       return reply(400, "Invalid JSON");
     }
     receivedAt = Date.now();
-    for (const s of wss.clients) if (s.feed === "/live") send(s, latest);
+    for (const s of wss.clients) if (s.feed === "/live") send2(s, latest);
     return reply(202, "Accepted");
   }
   if (!validSceneFrame(frame, matchId))
@@ -22472,7 +23033,7 @@ server.on("upgrade", (req, socket, head) => {
     s.feed = req.url;
     s.on("error", () => s.terminate());
     if (s.feed === "/live" && latest && Date.now() - receivedAt < 1500)
-      send(s, latest);
+      send2(s, latest);
   });
 });
 function rejectSceneUpgrade(socket) {
@@ -22487,11 +23048,12 @@ var ticker = setInterval(() => {
   const data = JSON.stringify(
     demoFrame((performance.now() - beginning) / 1e3 % 60)
   );
-  viewers.forEach((s) => send(s, data));
+  viewers.forEach((s) => send2(s, data));
 }, 50);
 server.on("close", () => {
   clearInterval(ticker);
   archive?.close();
+  media.close();
 });
 server.listen(
   port,

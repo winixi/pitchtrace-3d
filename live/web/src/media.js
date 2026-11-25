@@ -1,9 +1,23 @@
 import Hls from "hls.js";
 import { onChange, t } from "./i18n.js";
 
-// The original camera stream has its own playback controls until a gateway offers a PTS index.
+export function attachHls(video, url, onFatal, config) {
+  if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    video.src = url;
+    return () => {};
+  }
+  if (!Hls.isSupported()) return null;
+  const hls = new Hls(config);
+  hls.on(Hls.Events.ERROR, (_, error) => {
+    if (error.fatal) onFatal();
+  });
+  hls.attachMedia(video);
+  hls.loadSource(url);
+  return () => hls.destroy();
+}
+
 export function setupMedia(form, video, address, status, stopButton) {
-  let hls = null;
+  let detach = null;
   let statusKey = "";
   function showStatus(key) {
     statusKey = key;
@@ -11,8 +25,8 @@ export function setupMedia(form, video, address, status, stopButton) {
   }
   onChange(() => showStatus(statusKey));
   function stop() {
-    hls?.destroy();
-    hls = null;
+    detach?.();
+    detach = null;
     video.onerror = null;
     video.onloadeddata = null;
     video.pause();
@@ -42,19 +56,11 @@ export function setupMedia(form, video, address, status, stopButton) {
     video.onerror = () => {
       showStatus("media.error");
     };
-    if (video.canPlayType("application/vnd.apple.mpegurl"))
-      video.src = url.href;
-    else if (Hls.isSupported()) {
-      hls = new Hls();
-      hls.on(Hls.Events.ERROR, (_, error) => {
-        if (error.fatal) {
-          stop();
-          showStatus("media.streamError");
-        }
-      });
-      hls.attachMedia(video);
-      hls.loadSource(url.href);
-    } else {
+    detach = attachHls(video, url.href, () => {
+      stop();
+      showStatus("media.streamError");
+    });
+    if (!detach) {
       stop();
       showStatus("media.unsupported");
     }

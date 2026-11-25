@@ -16,5 +16,6 @@ test("回放按比赛时间选择已存快照，并保留缺测与迟到帧", ()
   assert.equal(archiveFrameAt(frames, 1.3).players[0].number, null);
   assert.equal(archiveFrameAt(frames, 20).seq, unknown.seq);
   assert.equal(archiveFrameAt(frames, 25.05).seq, late.seq);
+  assert.equal(archiveFrameAt(frames, 25.05).captureUtcUs, late.captureUtcUs);
   assert.equal(archiveFrameAt(frames, 25.1).epoch, after.streamEpoch);
 });

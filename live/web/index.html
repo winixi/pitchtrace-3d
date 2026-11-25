@@ -532,6 +532,18 @@
         background: #111;
         max-height: 55vh;
       }
+      #review .feedrow {
+        margin-top: 10px;
+      }
+      #review select {
+        padding: 5px 8px;
+      }
+      #review video {
+        display: block;
+        width: min(480px, 100%);
+        margin-top: 8px;
+        background: #111;
+      }
       .headRight {
         display: flex;
         align-items: center;
@@ -722,6 +734,16 @@
             <span class="time" id="recordElapsed" aria-hidden="true" hidden></span>
             <a id="recordDownload" hidden data-i18n="record.download">Download video</a>
           </div>
+          <details class="feeds" id="review" hidden>
+            <summary data-i18n="review.open">Footage review</summary>
+            <div class="feedrow">
+              <label for="reviewCamera" data-i18n="review.camera">Footage camera</label>
+              <select id="reviewCamera" disabled></select>
+            </div>
+            <p id="reviewStatus" role="status"></p>
+            <video id="reviewVideo" aria-label="Footage review" data-i18n-aria-label="review.open"
+              preload="auto" muted playsinline hidden></video>
+          </details>
           <p id="showcaseDescription" hidden></p>
         </section>
         <aside>

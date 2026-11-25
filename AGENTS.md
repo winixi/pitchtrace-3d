@@ -128,7 +128,7 @@ node live/server/server.cjs   # 需先在 live/web 执行过 npm run build
 | 本地 v2 场景网关 | ✅ 已实现 | JSON Schema 校验、SQLite 归档、按比赛 WebSocket 订阅、重启恢复及分页历史查询。 |
 | 浏览器场景归档回放 | ✅ 已实现 | 同源 v2 比赛可加载时段、拖动、调速、暂停切机位及返回直播。 |
 | 正式公网网关与媒体 | ⏳ 设计中 | Fastify、访问权限及 HLS 媒体。 |
-| 基于曝光时刻的原片同步复核 | ⏳ 设计中 | `GET /cameras/{cameraId}/locate?captureUtcUs=…` 定位。 |
+| 本地 v2 原片归档和同步复核 | ✅ 已实现 | fMP4 与曝光索引三件校验、按曝光定位、浏览器暂停切换实拍机位。 |
 
 ## 关键文件
 
@@ -139,4 +139,5 @@ node live/server/server.cjs   # 需先在 live/web 执行过 npm run build
 - `live/web/src/app.js` —— 演示与直播两种模式及控制台。
 - `live/server/server.mjs` —— 网关源码；`server.cjs` 为其打包产物。
 - `schemas/v2/scene-frame.schema.json` —— v2 场景写入契约，网关校验直接使用。
+- `schemas/v2/media-index.schema.json` —— 逐帧 PTS 与曝光 UTC 的媒体索引契约。
 - `docs/02-technical-design.md` —— 改接口、加模块或调整延迟预算前必读。

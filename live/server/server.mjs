@@ -6,6 +6,7 @@ import { demoFrame } from "../web/src/match.js";
 import { validFrame } from "../web/src/protocol.js";
 import { openSceneArchive } from "./scene-archive.mjs";
 import { readHistoryQuery } from "./history-query.mjs";
+import { createMediaHandler } from "./media-http.mjs";
 import {
   sceneRoute,
   serializeSceneFrame,
@@ -18,6 +19,7 @@ const serverDir = path.dirname(process.argv[1]);
 const page = path.resolve(serverDir, "../web/dist/index.html");
 const archivePath =
   process.env.PITCHTRACE_DB || path.join(serverDir, "data", "scenes.sqlite");
+const media = createMediaHandler(archivePath, process.env.PITCHTRACE_MEDIA_DIR);
 const maxFrameBytes = 256000;
 const wss = new WebSocketServer({ noServer: true, maxPayload: maxFrameBytes });
 const sceneViewers = new Map();
@@ -84,6 +86,7 @@ const server = http.createServer(async (request, response) => {
   const separator = request.url.indexOf("?");
   const pathname =
     separator < 0 ? request.url : request.url.slice(0, separator);
+  const queryString = separator < 0 ? "" : request.url.slice(separator + 1);
   if (request.method === "GET" && pathname === "/") {
     if (!fs.existsSync(page))
       return reply(404, "Build the viewer with npm run build in live/web.");
@@ -94,10 +97,14 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   const matchId = sceneRoute(pathname, "frames");
+  if (
+    pathname.startsWith("/v2/matches/") &&
+    pathname.includes("/cameras") &&
+    (await media.handle(request, response, pathname, queryString))
+  )
+    return;
   if (matchId && request.method === "GET") {
-    const params = new URLSearchParams(
-      separator < 0 ? "" : request.url.slice(separator + 1),
-    );
+    const params = new URLSearchParams(queryString);
     const query = readHistoryQuery(params, matchId);
     if (!query) return reply(400, "Invalid scene history query");
     try {
@@ -221,6 +228,7 @@ const ticker = setInterval(() => {
 server.on("close", () => {
   clearInterval(ticker);
   archive?.close();
+  media.close();
 });
 server.listen(port, host, () =>
   console.log("PitchTrace 3D   http://" + host + ":" + server.address().port),

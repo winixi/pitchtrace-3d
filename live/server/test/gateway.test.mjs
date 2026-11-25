@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { on, once } from "node:events";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { WebSocket } from "ws";
 import v1 from "../../../schemas/v1/examples/demo-frame.json" with { type: "json" };
@@ -299,6 +302,162 @@ test("v2 历史单页限制载荷并保留下一页起点", { timeout: 5000 }, a
   );
   assert.equal(second.nextCursor, null);
 });
+
+test(
+  "v2 媒体完整提交、幂等重传、分段定位与重启",
+  { timeout: 10000 },
+  async (t) => {
+    const folder = await mkdtemp(join(tmpdir(), "pitchtrace-media-test-"));
+    const database = join(folder, "archive.sqlite");
+    t.after(() => rm(folder, { recursive: true, force: true }));
+    const server = await launch(t, database);
+    const cameras = trial + "/cameras";
+    const camera = cameras + "/A";
+    const epoch = camera + "/epochs/test";
+    const segment = epoch + "/segments/1";
+    const clip = segment + ".m3u8";
+    const init = Buffer.from("试播归档初始化数据");
+    const bytes = Buffer.from("试播归档分段数据");
+    const sha = (input) => createHash("sha256").update(input).digest("hex");
+    const capture = "1795494600000000";
+    const index = {
+      initSha256: sha(init),
+      segmentSha256: sha(bytes),
+      segmentBytes: bytes.length,
+      timeBase: { numerator: 1, denominator: 1000 },
+      frames: [
+        { pts: 2000, durationPts: 40, captureUtcUs: capture },
+        { pts: 2040, durationPts: 40, captureUtcUs: "1795494600040000" },
+      ],
+    };
+    const put = async (path, body, headers) => {
+      const response = await fetch(server.base + path, {
+        method: "PUT",
+        body,
+        headers,
+        signal: AbortSignal.timeout(5000),
+      });
+      await response.text();
+      return response.status;
+    };
+    const binary = (path, body, digest = sha(body)) =>
+      put(path, body, {
+        "Content-Type": "video/mp4",
+        "X-Content-SHA256": digest,
+      });
+    const putIndex = (path, data = index) =>
+      put(path, JSON.stringify(data), { "Content-Type": "application/json" });
+    const lookup = (base, utc = capture) =>
+      fetch(base + camera + "/locate?captureUtcUs=" + utc);
+
+    assert.equal(await putIndex(segment + "/index"), 202);
+    const uploads = join(folder, "media", "uploads");
+    const interrupted = request(server.base + segment + ".m4s", {
+      method: "PUT",
+      headers: {
+        "Content-Length": bytes.length,
+        "X-Content-SHA256": sha(bytes),
+      },
+    });
+    const failed = once(interrupted, "error");
+    interrupted.write(bytes.subarray(0, 3));
+    for (let i = 0; i < 100 && !(await readdir(uploads)).length; i++)
+      await delay(10);
+    try {
+      assert.equal((await readdir(uploads)).length, 1);
+    } finally {
+      interrupted.destroy();
+      await failed;
+    }
+    for (let i = 0; i < 100 && (await readdir(uploads)).length; i++)
+      await delay(10);
+    assert.deepEqual(await readdir(uploads), []);
+    assert.equal(await binary(segment + ".m4s", bytes, "0".repeat(64)), 422);
+    assert.equal(
+      await binary(segment + ".m4s", Buffer.from("不匹配的片段")),
+      409,
+    );
+    assert.equal(await binary(segment + ".m4s", bytes), 202);
+    assert.equal((await lookup(server.base)).status, 404);
+    assert.equal(
+      (await fetch(server.base + camera + "/index.m3u8")).status,
+      404,
+    );
+    assert.equal((await fetch(server.base + segment + ".m4s")).status, 404);
+    assert.deepEqual(await (await fetch(server.base + cameras)).json(), {
+      cameraIds: [],
+    });
+
+    assert.equal(
+      await binary(epoch + "/init.mp4", Buffer.from("不匹配的头")),
+      409,
+    );
+    assert.equal(await binary(epoch + "/init.mp4", init), 202);
+    assert.deepEqual(
+      await Promise.all([
+        binary(segment + ".m4s", bytes),
+        putIndex(segment + "/index"),
+      ]),
+      [202, 202],
+    );
+    assert.equal(
+      await putIndex(segment + "/index", {
+        ...index,
+        timeBase: { numerator: 1, denominator: 2000 },
+      }),
+      409,
+    );
+    assert.equal(
+      await putIndex(epoch + "/segments/2/index", {
+        ...index,
+        frames: [index.frames[1], index.frames[0]],
+      }),
+      422,
+    );
+    assert.equal((await lookup(server.base, "123x")).status, 400);
+    assert.equal((await lookup(server.base, "1795494600080000")).status, 404);
+    const response = await lookup(server.base, "1795494600043000");
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      cameraId: "A",
+      captureUtcUs: "1795494600043000",
+      frameCaptureUtcUs: index.frames[1].captureUtcUs,
+      skewUs: -3000,
+      mediaEpoch: "test",
+      segment: 1,
+      pts: 2040,
+      timeBase: index.timeBase,
+      offsetSeconds: 0.04,
+      seekSeconds: 0.06,
+      playlistUrl: clip,
+    });
+    assert.deepEqual(
+      await (await fetch(server.base + match("trial-02") + "/cameras")).json(),
+      { cameraIds: [] },
+    );
+    assert.deepEqual(await readdir(uploads), []);
+    assert.equal((await readdir(join(folder, "media", "parts"))).length, 2);
+    await server.stop();
+
+    const restarted = await launch(t, database);
+    assert.deepEqual(await (await fetch(restarted.base + cameras)).json(), {
+      cameraIds: ["A"],
+    });
+    const playlist = await (await fetch(restarted.base + clip)).text();
+    assert.ok(playlist.includes(`#EXT-X-MAP:URI="${epoch}/init.mp4"`));
+    assert.ok(playlist.includes(`#EXTINF:0.080000,\n${segment}.m4s`));
+    assert.ok(playlist.includes("#EXT-X-ENDLIST"));
+    assert.equal((await lookup(restarted.base)).status, 200);
+    for (const [path, expected] of [
+      [epoch + "/init.mp4", init],
+      [segment + ".m4s", bytes],
+    ]) {
+      const result = await fetch(restarted.base + path);
+      assert.equal(result.status, 200);
+      assert.deepEqual(Buffer.from(await result.arrayBuffer()), expected);
+    }
+  },
+);
 
 test("v1 试播、校验和转发可继续独立运行", { timeout: 5000 }, async (t) => {
   const server = await launch(t, ":memory:");

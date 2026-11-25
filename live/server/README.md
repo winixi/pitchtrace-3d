@@ -69,7 +69,7 @@ SQLite 默认写入网关目录下的 `data/scenes.sqlite`，可用 `PITCHTRACE_
 | 500 | 写入归档失败。 |
 | 503 | 当前运行时缺少内置 SQLite。 |
 
-新订阅收到该场已提交的最新直播帧。重复写入和历史补传只确认归档，新周期的比赛时间需继续前进。媒体接入和访问权限按后续阶段交付。[v2 场景规范](../../docs/02-technical-design.md#6-数据契约分发和故障恢复)
+新订阅收到该场已提交的最新直播帧。重复写入和历史补传只确认归档，新周期的比赛时间需继续前进。[v2 场景规范](../../docs/02-technical-design.md#6-数据契约分发和故障恢复)
 
 ## v2 历史查询与回放
 
@@ -93,6 +93,33 @@ curl --fail-with-body 'http://127.0.0.1:8766/v2/matches/trial-01/frames?fromMs=1
 ```
 
 省略起止时间时，首个请求读取截至最新归档的 30 秒。响应中的 `bounds` 是整场归档范围，`range` 是本次查询范围，`frames` 是完整快照。把 `nextCursor` 作为 `cursor` 发送可继续下一页，到末页为 `null`。默认每页最多 100 帧，可指定 1–200 帧。单页快照载荷上限约 1 MB，无匹配帧时返回空数组，参数无效返回 400。[排序与分页语义](../../docs/02-technical-design.md#6-数据契约分发和故障恢复)
+
+## v2 原片归档与同步复核
+
+需要 Node.js 22.13+。两路联调样例由 FFmpeg 和 ffprobe 生成，FFmpeg 需提供 `libx264`。从仓库根目录启动网关，在另一个终端生成并导入样例。
+
+```sh
+node live/server/server.cjs
+```
+
+```sh
+node live/server/tools/review-sample.mjs http://127.0.0.1:8766
+```
+
+打开 [review-01](http://127.0.0.1:8766/?match=review-01)，点击「归档回放」，拖到 `00:25.000` 后展开「同步原片复核」。A 路是红色标记、30 fps，B 路是蓝色标记、25 fps。两路使用不同的媒体 PTS，同一三维时刻均命中曝光差 0 ms。切换 A、B 后三维仍停在 `00:25.000`。拖到 `00:01.200` 可检查原片缺口提示。再次导入不同编码版本时，可给样例命令追加新的比赛 ID。
+
+媒体接口以 `/v2/matches/{matchId}/cameras` 为前缀。
+
+| 方法与相对路径 | 行为 |
+| --- | --- |
+| `PUT /{cameraId}/epochs/{mediaEpoch}/init.mp4` | 以请求体上传 fMP4 初始化文件。 |
+| `PUT /{cameraId}/epochs/{mediaEpoch}/segments/{n}.m4s` | 以请求体上传关键帧起始的 H.264/fMP4 原片段。 |
+| `PUT /{cameraId}/epochs/{mediaEpoch}/segments/{n}/index` | 上传曝光索引 JSON，含两份 SHA-256、片段字节数、时基、逐帧 PTS、时长和曝光 UTC。 |
+| `GET /` | 返回具有完整片段的 `cameraIds`，实际路径以 `/cameras` 结尾。 |
+| `GET /{cameraId}/index.m3u8` | 返回当次查询时已归档的片段列表。 |
+| `GET /{cameraId}/locate?captureUtcUs=…` | 返回匹配曝光、差值、媒体 epoch、片段、PTS、时基及单段复核播放列表。缺口返回 404。 |
+
+二进制上传需要 `X-Content-SHA256`，值为 64 位小写十六进制摘要。三件齐备且校验匹配后才对浏览器可见。同路径重传相同内容返回 202，内容或交叉校验冲突返回 409，摘要或索引格式错误返回 422。二进制单件上限 128 MiB，索引上限 1 MB。SQLite 存储媒体元数据和曝光索引，原始字节默认放在数据库同目录的 `media/`，可用 `PITCHTRACE_MEDIA_DIR` 指定位置。使用磁盘数据库和媒体目录验证重启恢复。[曝光索引格式](../../schemas/v2/media-index.schema.json)
 
 ## 重新构建试播网关
 

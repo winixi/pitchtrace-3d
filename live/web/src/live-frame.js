@@ -87,6 +87,11 @@ export function readScene(frame) {
     v: 2,
     t: frame.matchTimeMs / 1000,
     matchId: frame.matchId,
+    captureUtcUs:
+      typeof frame.captureUtcUs === "string" &&
+      /^(0|[1-9]\d{0,18})$/.test(frame.captureUtcUs)
+        ? frame.captureUtcUs
+        : undefined,
     epoch: frame.streamEpoch,
     seq: frame.seq,
     event,
