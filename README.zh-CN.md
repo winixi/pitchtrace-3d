@@ -24,7 +24,7 @@
 
 | 组成部分 | 当前已实现 | 规划中／尚未实现 |
 | --- | --- | --- |
-| Edge | 可构建的 SwiftPM 可执行项目骨架；入口为空，运行后立即退出。 | 相机采集与对时、标定、推理、追踪与三维融合、动作生成、视频生产和上传。 |
+| Edge | 双机位录像输入、按曝光时间离线重放，导出 v2 fMP4 媒体和索引。 | 实时相机采集与对时、标定、推理、追踪与三维融合、动作生成和上传。 |
 | Live Server | 提供观赛页、模拟流和 v1 转发。本地 v2 网关归档并发布场景，提供分页历史查询，并归档 fMP4 原片及逐帧曝光索引。 | 设备与观众鉴权、公网分发和媒体留存管理。 |
 | Live Web | 内置比赛、六个虚拟机位、跟随球员、骨骼显示、v1/v2 直播、本地 v2 归档回放及按曝光时刻暂停复核原片。v2 支持空场、丢球和未知球衣号。 | 人工审核与修订。 |
 
@@ -129,9 +129,9 @@ pitchtrace-3d/
 Edge 需要 Swift 6.0+，本地 v2 网关需要 Node.js 22.13+。前端也支持 Node 20 系列的 20.19+。下列命令从仓库根目录运行。
 
 ```sh
-# Edge · 构建（当前为空入口骨架，运行后立即退出）
+# Edge · 构建和测试
 swift build --package-path edge
-swift run  --package-path edge pitchtrace-edge
+swift test --package-path edge --disable-xctest
 
 # Live Web · 开发、测试与构建单文件前端
 cd live/web && npm ci && npm run dev      # 开发服务器

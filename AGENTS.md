@@ -51,7 +51,8 @@ pitchtrace-3d/
 
 ```sh
 swift build --package-path edge
-swift run  --package-path edge pitchtrace-edge   # 当前为空入口，运行后立即退出
+swift test --package-path edge --disable-xctest
+swift run --package-path edge pitchtrace-edge --help
 ```
 
 ### Live Web（浏览器前端）
@@ -110,7 +111,7 @@ node live/server/server.cjs   # 需先在 live/web 执行过 npm run build
 - **坐标系**：中圈地面为原点，X 沿长边、Z 沿短边、Y 向上，单位米。球员用足底与地面交点定位，足球用球心高度。朝向 `yaw` 单位弧度，0 朝 +Z，正角转向 +X。关节旋转用绑定骨架局部四元数 `[x,y,z,w]`。
 - **身份**：轨迹 ID、名单 ID、球衣号分别存储，两队同号按球队区分。更正号码后历史轨迹沿用原轨迹 ID。
 - **缺测是一等状态**：未识别号码、球出视野、单视角高球、脚部被挡都需保留对应状态，不得用 0 号或原点填补未知观测。
-- **测试**：Live Web 用 Node 内置 `node --test`（无额外框架），用例覆盖内置比赛全程、空场丢球、未知号码与非法帧拒绝。Edge 目前无测试。改协议或 `live-frame.js` 后务必跑 `npm test`。
+- **测试**：Live Web 用 Node 内置 `node --test`（无额外框架），用例覆盖内置比赛全程、空场丢球、未知号码与非法帧拒绝。Edge 用 Swift Testing 覆盖曝光映射、时序校验和录像缺口。改协议或 `live-frame.js` 后务必跑 `npm test`。
 - **构建产物**：`live/web/dist/index.html` 与 `live/server/server.cjs` 由构建生成，可入库以便离线试播，但改动源码后需重新构建。
 
 ## 实现状态
@@ -121,7 +122,7 @@ node live/server/server.cjs   # 需先在 live/web 执行过 npm run build
 | --- | --- | --- |
 | 浏览器三维观赛前端 | ✅ 已实现 | 内置 60 秒比赛，六机位、骨骼、暂停定格、HLS 实拍；支持 v1 与 v2 快照输入。 |
 | 本地 v1 试播网关 | ✅ 已实现 | `POST /frame`、`/live`、`/demo`，复用前端校验器。 |
-| Edge SwiftPM 骨架 | ✅ 可构建 | 空入口，采集、推理、融合、上发均未实现。 |
+| Edge 双机位录像输入 | ✅ 已实现 | 离线读取 H.264/fMP4 和曝光映射，输出重放清单、缺口和 v2 媒体索引。 |
 | Edge 采集与对时 | ⏳ 设计中 | 厂商 SDK / AVFoundation / RTSP，fMP4 分段与曝光时间索引。 |
 | Edge 检测、姿态、读号 | ⏳ 设计中 | Core ML + Vision，Python/OpenCV 做离线对照。 |
 | Edge 三维融合与动作 | ⏳ 设计中 | C++/OpenCV `calib3d` 经 C 接口供 Swift 调用。 |

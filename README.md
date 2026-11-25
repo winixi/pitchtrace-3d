@@ -24,7 +24,7 @@ Camera calibration, recognition, and 3D measurement belong to Edge. Rendering an
 
 | Component | Implemented now | Planned / not yet implemented |
 | --- | --- | --- |
-| Edge | Buildable SwiftPM executable skeleton with an empty entry point; it exits immediately when run. | Camera capture and synchronization, calibration, inference, tracking and 3D fusion, action generation, video production, and uploads. |
+| Edge | Dual-camera recording input, exposure-ordered offline replay, and v2 fMP4 media export. | Live camera capture and synchronization, calibration, inference, tracking and 3D fusion, action generation, and uploads. |
 | Live Server | Serves the Web page, the simulated stream, and v1 forwarding. The local v2 gateway archives and publishes scenes, offers paginated history, and archives fMP4 footage with per-frame exposure indexes. | Device and viewer authentication, public streaming, and operational media retention. |
 | Live Web | Built-in match, six virtual viewpoints, player following, skeleton display, v1/v2 live scenes, local v2 archive replay, and paused footage review by exposure time. v2 supports an empty pitch, a lost ball, and unknown shirt numbers. | Manual review and corrections. |
 
@@ -129,9 +129,9 @@ For each subproject, see [edge/README.md](edge/README.md), [live/web/README.md](
 Requires Swift 6.0+ for Edge and Node.js 22.13+ for the local v2 gateway. The Web build also supports Node.js 20.19+ on the Node 20 line. The commands below run from the repository root.
 
 ```sh
-# Edge · build (currently an empty entry skeleton, exits immediately when run)
+# Edge · build and test
 swift build --package-path edge
-swift run  --package-path edge pitchtrace-edge
+swift test --package-path edge --disable-xctest
 
 # Live Web · develop, test, and build the single-file frontend
 cd live/web && npm ci && npm run dev      # dev server

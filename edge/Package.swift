@@ -3,10 +3,12 @@ import PackageDescription
 
 let package = Package(
     name: "PitchTraceEdge",
+    platforms: [.macOS(.v14)],
     products: [
         .executable(name: "pitchtrace-edge", targets: ["PitchTraceEdge"])
     ],
     targets: [
-        .executableTarget(name: "PitchTraceEdge")
+        .executableTarget(name: "PitchTraceEdge"),
+        .testTarget(name: "PitchTraceEdgeTests", dependencies: ["PitchTraceEdge"])
     ]
 )
