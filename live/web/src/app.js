@@ -7,6 +7,7 @@ import {
 } from "./showcase.js";
 import { appearanceFor } from "./appearance.js";
 import { setupMedia } from "./media.js";
+import { setupRecording } from "./recording.js";
 import { connectFrames } from "./receiver.js";
 import { t, onChange } from "./i18n.js";
 
@@ -71,6 +72,12 @@ async function start() {
   const cueButtons = [],
     cameraButtons = [];
   const loading = $("loading");
+  const recording = setupRecording($("pitch"), {
+    button: $("record"),
+    status: $("recordStatus"),
+    countdown: $("recordCountdown"),
+    download: $("recordDownload"),
+  });
   const wsBase =
     (location.protocol === "https:" ? "wss://" : "ws://") +
     (location.protocol === "file:" ? "127.0.0.1:8766" : location.host);
@@ -96,6 +103,9 @@ async function start() {
   };
   $("address").value = localGateway + "/live";
   function updatePlay() {
+    recording.setAvailable(
+      loading.hidden && (connection ? !!liveFrame && !frozenFrame : playing),
+    );
     if (connection) {
       const title = t(frozenFrame ? "play.resume" : "play.freeze");
       if ($("play").textContent !== title) $("play").textContent = title;
@@ -315,6 +325,7 @@ async function start() {
     feedError = "";
     setLive(true);
     loading.hidden = false;
+    recording.setAvailable(false);
     delete loading.dataset.i18n;
     connection = connectFrames(parsed.href, (status) => {
       liveStatus = status;
@@ -405,10 +416,11 @@ async function start() {
       if (
         dirty ||
         playing ||
+        recording.active ||
         connection ||
         camera === "orbit" ||
         pitch.needsRedraw()
-      )
+      ) {
         pitch.draw(
           frame,
           {
@@ -420,6 +432,8 @@ async function start() {
           },
           pausedDirty || pitch.needsRedraw() ? 0 : Math.min(dt, 0.15),
         );
+        recording.captureFrame(now);
+      }
       if (frame.event !== oldEvent) {
         oldEvent = frame.event;
         $("event").textContent = eventText(oldEvent);
@@ -480,6 +494,8 @@ async function start() {
   $("pitch").addEventListener("webglcontextlost", (e) => {
     e.preventDefault();
     loading.hidden = false;
+    recording.setAvailable(false);
+    recording.interrupt();
     showMessage("loading", "loading.contextLost");
   });
   // 语言切换时静态文案已由 i18n 模块套用，这里重算依赖当前语言的动态文案。
@@ -511,7 +527,7 @@ async function start() {
   relocalize();
   render(performance.now());
   loading.hidden = true;
-  $("play").disabled = false;
+  updatePlay();
   document.body.dataset.ready = "true";
   document.body.dataset.source = "demo";
   const matchId = new URLSearchParams(location.search).get("match");

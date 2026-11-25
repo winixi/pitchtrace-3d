@@ -67,7 +67,8 @@
       button:focus-visible,
       input:focus-visible,
       select:focus-visible,
-      summary:focus-visible {
+      summary:focus-visible,
+      .recording a:focus-visible {
         outline: 2px solid #def4aa;
         outline-offset: 3px;
       }
@@ -220,6 +221,16 @@
       }
       .transport select {
         padding: 5px;
+      }
+      .recording {
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 12px;
+      }
+      .recording a {
+        color: #d1ed8b;
       }
       aside {
         border: 1px solid #37483d;
@@ -660,6 +671,14 @@
               <option value="1.5">1.5×</option>
               <option value="2">2×</option>
             </select>
+          </div>
+          <div class="recording">
+            <button type="button" id="record" disabled data-i18n="record.start">
+              Record 30 s
+            </button>
+            <span class="muted" id="recordStatus" role="status"></span>
+            <span class="time" id="recordCountdown" aria-hidden="true" hidden></span>
+            <a id="recordDownload" hidden data-i18n="record.download">Download video</a>
           </div>
           <p id="showcaseDescription" hidden></p>
         </section>
