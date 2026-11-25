@@ -103,7 +103,7 @@ node live/server/server.cjs   # 需先在 live/web 执行过 npm run build
 
 ### v2 场景通路（本地已实现）
 
-`POST /v2/matches/{matchId}/frames` 提交，`WS /v2/matches/{matchId}/live` 订阅。一帧可含零个球员，球、号码、关节可缺失，承载测量时间与状态。帧键为 `(matchId, streamEpoch, seq)`，同键同内容幂等确认，同键异内容返回 409。归档和直播游标同事务提交，重启后订阅可恢复。完整字段、示例和规划中的媒体路径见 `docs/02-technical-design.md` 第 1.3 与第 6 节。
+`POST /v2/matches/{matchId}/frames` 提交，`WS /v2/matches/{matchId}/live` 订阅，`GET /v2/matches/{matchId}/frames` 按比赛时段分页查询。快照可保留球员、足球、号码及关节的缺测状态。帧键为 `(matchId, streamEpoch, seq)`，同键同内容幂等确认，同键异内容返回 409。归档和直播游标同事务提交，重启后订阅可恢复。完整字段、示例和规划中的媒体路径见 `docs/02-technical-design.md` 第 1.3 与第 6 节。
 
 ## 约定
 
@@ -125,8 +125,9 @@ node live/server/server.cjs   # 需先在 live/web 执行过 npm run build
 | Edge 采集与对时 | ⏳ 设计中 | 厂商 SDK / AVFoundation / RTSP，fMP4 分段与曝光时间索引。 |
 | Edge 检测、姿态、读号 | ⏳ 设计中 | Core ML + Vision，Python/OpenCV 做离线对照。 |
 | Edge 三维融合与动作 | ⏳ 设计中 | C++/OpenCV `calib3d` 经 C 接口供 Swift 调用。 |
-| 本地 v2 场景网关 | ✅ 已实现 | JSON Schema 校验、SQLite 归档、按比赛 WebSocket 订阅及重启恢复。 |
-| 正式公网网关与媒体 | ⏳ 设计中 | Fastify、访问权限、场景历史查询及 HLS 媒体。 |
+| 本地 v2 场景网关 | ✅ 已实现 | JSON Schema 校验、SQLite 归档、按比赛 WebSocket 订阅、重启恢复及分页历史查询。 |
+| 浏览器场景归档回放 | ✅ 已实现 | 同源 v2 比赛可加载时段、拖动、调速、暂停切机位及返回直播。 |
+| 正式公网网关与媒体 | ⏳ 设计中 | Fastify、访问权限及 HLS 媒体。 |
 | 基于曝光时刻的原片同步复核 | ⏳ 设计中 | `GET /cameras/{cameraId}/locate?captureUtcUs=…` 定位。 |
 
 ## 关键文件

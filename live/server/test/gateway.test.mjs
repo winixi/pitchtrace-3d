@@ -198,6 +198,108 @@ test(
   },
 );
 
+test(
+  "v2 历史按比赛和时间分页，补传不会改变正在读取的结果",
+  { timeout: 10000 },
+  async (t) => {
+    const server = await launch(t, ":memory:");
+    const path = trial + "/frames";
+    const [before, after, late] = clockReset;
+    const get = (query = "", endpoint = path) =>
+      fetch(server.base + endpoint + query, {
+        signal: AbortSignal.timeout(5000),
+      });
+    const read = async (query, endpoint) => {
+      const response = await get(query, endpoint);
+      assert.equal(response.status, 200);
+      return response.json();
+    };
+
+    assert.deepEqual(await read(), {
+      bounds: null,
+      range: null,
+      frames: [],
+      nextCursor: null,
+    });
+    for (const frame of [empty, lost, unknown, before, after, late])
+      assert.equal(await server.post(path, frame), 202);
+    const other = { ...lost, matchId: "trial-02" };
+    const otherPath = match(other.matchId) + "/frames";
+    assert.equal(await server.post(otherPath, other), 202);
+    assert.deepEqual((await read("", otherPath)).frames, [other]);
+
+    const query = "?fromMs=1250&toMs=25100&limit=2";
+    const first = await read(query);
+    assert.deepEqual(first.bounds, {
+      fromMs: empty.matchTimeMs,
+      toMs: after.matchTimeMs,
+    });
+    assert.deepEqual(first.range, {
+      fromMs: lost.matchTimeMs,
+      toMs: after.matchTimeMs,
+    });
+    assert.deepEqual(first.frames, [lost, unknown]);
+    assert.ok(first.nextCursor);
+    const trailing = { ...late, seq: late.seq + 1 };
+    assert.equal(await server.post(path, trailing), 202);
+    const second = await read("?limit=2&cursor=" + first.nextCursor);
+    assert.deepEqual(second.frames, [before, late]);
+    const third = await read("?limit=2&cursor=" + second.nextCursor);
+    assert.deepEqual(third.frames, [after]);
+    assert.equal(third.nextCursor, null);
+    const refreshed = await read("?fromMs=25050&toMs=25050");
+    assert.deepEqual(refreshed.frames, [late, trailing]);
+
+    for (const query of [
+      "?fromMs=0",
+      "?fromMs=50&toMs=49",
+      "?fromMs=0&toMs=60001",
+      "?fromMs=0.25&toMs=1",
+      "?fromMs=0&toMs=9007199254740992",
+      "?limit=0",
+      "?limit=201",
+      "?limit=1&limit=2",
+      "?cursor=invalid",
+      "?fromMs=1200&toMs=25100&cursor=" + first.nextCursor,
+    ])
+      assert.equal((await get(query)).status, 400);
+    assert.equal(
+      (await get("?cursor=" + first.nextCursor, otherPath)).status,
+      400,
+    );
+    assert.deepEqual((await read("?fromMs=0&toMs=1199")).frames, []);
+
+    const newer = { ...after, seq: 1, matchTimeMs: 60000 };
+    assert.equal(await server.post(path, newer), 202);
+    const recent = await read();
+    assert.deepEqual(recent.range, { fromMs: 30000, toMs: 60000 });
+    assert.deepEqual(recent.frames, [newer]);
+  },
+);
+
+test("v2 历史单页限制载荷并保留下一页起点", { timeout: 5000 }, async (t) => {
+  const server = await launch(t, ":memory:");
+  const path = trial + "/frames";
+  const padding = "x".repeat(250000);
+  for (let seq = 0; seq < 4; seq++)
+    assert.equal(await server.post(path, { ...empty, seq, padding }), 202);
+  const response = await fetch(server.base + path);
+  assert.equal(response.status, 200);
+  assert.ok(Number(response.headers.get("content-length")) < 1_000_000);
+  const first = await response.json();
+  assert.deepEqual(
+    first.frames.map(({ seq }) => seq),
+    [0, 1, 2],
+  );
+  const next = await fetch(server.base + path + "?cursor=" + first.nextCursor);
+  const second = await next.json();
+  assert.deepEqual(
+    second.frames.map(({ seq }) => seq),
+    [3],
+  );
+  assert.equal(second.nextCursor, null);
+});
+
 test("v1 试播、校验和转发可继续独立运行", { timeout: 5000 }, async (t) => {
   const server = await launch(t, ":memory:");
   const demo = await server.subscribe("/demo");

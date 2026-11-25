@@ -5,6 +5,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { demoFrame } from "../web/src/match.js";
 import { validFrame } from "../web/src/protocol.js";
 import { openSceneArchive } from "./scene-archive.mjs";
+import { readHistoryQuery } from "./history-query.mjs";
 import {
   sceneRoute,
   serializeSceneFrame,
@@ -80,7 +81,9 @@ const server = http.createServer(async (request, response) => {
     response.writeHead(code, { "Content-Type": "text/plain; charset=utf-8" });
     response.end(body);
   }
-  const pathname = request.url.split("?", 1)[0];
+  const separator = request.url.indexOf("?");
+  const pathname =
+    separator < 0 ? request.url : request.url.slice(0, separator);
   if (request.method === "GET" && pathname === "/") {
     if (!fs.existsSync(page))
       return reply(404, "Build the viewer with npm run build in live/web.");
@@ -90,10 +93,32 @@ const server = http.createServer(async (request, response) => {
       .pipe(response);
     return;
   }
+  const matchId = sceneRoute(pathname, "frames");
+  if (matchId && request.method === "GET") {
+    const params = new URLSearchParams(
+      separator < 0 ? "" : request.url.slice(separator + 1),
+    );
+    const query = readHistoryQuery(params, matchId);
+    if (!query) return reply(400, "Invalid scene history query");
+    try {
+      const store = getArchive();
+      if (!store) return reply(503, "v2 requires Node.js with SQLite support");
+      const body = JSON.stringify(store.history(matchId, query));
+      response.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Length": Buffer.byteLength(body),
+        "Cache-Control": "no-store",
+      });
+      response.end(body);
+    } catch (error) {
+      console.error("v2 场景历史读取失败", error);
+      reply(500, "Scene archive read failed");
+    }
+    return;
+  }
   if (request.method !== "POST") return reply(404, "Unknown endpoint");
 
   const v1 = request.url === "/frame";
-  const matchId = sceneRoute(pathname, "frames");
   if (!v1 && !matchId) return reply(404, "Unknown endpoint");
   const { frame, code, message } = await readFrame(request);
   if (code) return reply(code, message);

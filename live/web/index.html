@@ -39,7 +39,8 @@
       }
       button,
       select,
-      input[type="url"] {
+      input[type="url"],
+      #archiveForm input {
         border: 1px solid #405147;
         border-radius: 6px;
         background: #1c2923;
@@ -483,6 +484,7 @@
       }
       .sourceButtons {
         display: flex;
+        flex-wrap: wrap;
         gap: 6px;
       }
       .sourceButtons button {
@@ -502,6 +504,20 @@
       }
       .feedPanel label {
         font-size: 13px;
+      }
+      #archiveForm label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      #archiveForm input {
+        width: 8ch;
+      }
+      #archiveBounds:empty {
+        display: none;
+      }
+      #archiveStatus:empty {
+        margin: 0;
       }
       #quality {
         font-size: 12px;
@@ -599,6 +615,13 @@
           >
             Live
           </button>
+          <button
+            type="button"
+            id="archiveToggle"
+            aria-expanded="false"
+            aria-controls="archivePanel"
+            hidden
+          >Archive replay</button>
         </div>
         <small id="quality"></small>
       </div>
@@ -625,6 +648,25 @@
         <p id="netstatus" role="status">
           Enter the match WebSocket address, or connect to the local sample stream.
         </p>
+      </section>
+      <section
+        class="feedPanel"
+        id="archivePanel"
+        aria-label="Archive replay"
+        data-i18n-aria-label="archive.open"
+        hidden
+      >
+        <form class="feedrow" id="archiveForm">
+          <label><span data-i18n="archive.from">From (s)</span>
+            <input id="archiveFrom" type="number" min="0" step="0.001" />
+          </label>
+          <label><span data-i18n="archive.to">To (s)</span>
+            <input id="archiveTo" type="number" min="0" step="0.001" />
+          </label>
+          <button type="submit" id="archiveSubmit" data-i18n="archive.load">Load range</button>
+        </form>
+        <p id="archiveBounds"></p>
+        <p id="archiveStatus" role="status"></p>
       </section>
       <div class="layout">
         <section aria-label="Match view" data-i18n-aria-label="aria.match">

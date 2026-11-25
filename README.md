@@ -25,8 +25,8 @@ Camera calibration, recognition, and 3D measurement belong to Edge. Rendering an
 | Component | Implemented now | Planned / not yet implemented |
 | --- | --- | --- |
 | Edge | Buildable SwiftPM executable skeleton with an empty entry point; it exits immediately when run. | Camera capture and synchronization, calibration, inference, tracking and 3D fusion, action generation, video production, and uploads. |
-| Live Server | Serves the built Web page, the 20 Hz simulated stream, and v1 forwarding. The local v2 gateway validates and archives snapshots in SQLite, then publishes them by match over WebSocket. | Historical queries, device and viewer authentication, video/index ingestion, HLS publishing, and exposure-time footage lookup. |
-| Live Web | Built-in 60-second match, six virtual viewpoints, player following, skeleton display, live-frame freezing and return to live, reconnection, v1/v2 scene input, and independent playback of an external HLS source. v2 supports an empty pitch, a lost ball, and unknown shirt numbers. | Real-match historical replay backed by server archives, exposure-time synchronized footage review, and manual review/editing. |
+| Live Server | Serves the built Web page, the 20 Hz simulated stream, and v1 forwarding. The local v2 gateway validates and archives snapshots in SQLite, publishes them by match over WebSocket, and provides paginated history queries. | Device and viewer authentication, video/index ingestion, HLS publishing, and exposure-time footage lookup. |
+| Live Web | Built-in 60-second match, six virtual viewpoints, player following, skeleton display, live-frame freezing and return to live, reconnection, v1/v2 scene input, local v2 archive replay, and independent playback of an external HLS source. v2 supports an empty pitch, a lost ball, and unknown shirt numbers. | Exposure-time synchronized footage review and manual review/editing. |
 
 HLS playback uses an external source with independent controls. Synchronized 3D and footage replay is planned.
 
@@ -153,7 +153,7 @@ node live/server/server.cjs
 
 It listens on `127.0.0.1:8766` by default. On a trusted LAN you can set `PITCHTRACE_HOST` and `PITCHTRACE_PORT` to the Mac's LAN IP and port; viewers open the page at the corresponding address. For camera controls, data-frame format, and how to rebuild the gateway, see the [viewing frontend guide](live/web/README.md) and the [gateway interface guide](live/server/README.md).
 
-Open [trial-01](http://127.0.0.1:8766/?match=trial-01) to subscribe to the local v2 stream. Submit a fixture with the [sample commands](live/server/README.md#v2-本地场景联调).
+Open [trial-01](http://127.0.0.1:8766/?match=trial-01) to subscribe to the local v2 stream. Submit fixtures and select **Archive replay** to watch them again. [Sample commands](live/server/README.md#v2-本地场景联调) · [Archive replay](live/server/README.md#v2-历史查询与回放)
 
 ## License
 

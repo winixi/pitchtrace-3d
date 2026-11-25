@@ -9,6 +9,8 @@ import { appearanceFor } from "./appearance.js";
 import { setupMedia } from "./media.js";
 import { setupRecording } from "./recording.js";
 import { connectFrames } from "./receiver.js";
+import { archiveFrameAt } from "./archive.js";
+import { setupArchive } from "./archive-panel.js";
 import { t, onChange } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
@@ -34,6 +36,10 @@ function stamp(sec) {
     ":" +
     String(s % 60).padStart(2, "0")
   );
+}
+function archiveStamp(sec) {
+  const ms = Math.round(sec * 1000);
+  return stamp(ms / 1000) + "." + String(ms % 1000).padStart(3, "0");
 }
 const label = (p) => {
   if (!p) return t("label.noPlayer");
@@ -69,6 +75,22 @@ async function start() {
     liveStatus = "",
     liveUrl = "",
     feedError = "";
+  let archiveFrames = [],
+    archiveClock = 0,
+    archivePlaying = false;
+  const archive = setupArchive(
+    {
+      toggle: $("archiveToggle"),
+      panel: $("archivePanel"),
+      form: $("archiveForm"),
+      from: $("archiveFrom"),
+      to: $("archiveTo"),
+      submit: $("archiveSubmit"),
+      boundsLabel: $("archiveBounds"),
+      status: $("archiveStatus"),
+    },
+    showArchiveFrames,
+  );
   const cueButtons = [],
     cameraButtons = [];
   const loading = $("loading");
@@ -103,6 +125,20 @@ async function start() {
   };
   $("address").value = localGateway + "/live";
   function updatePlay() {
+    if (archiveFrames.length) {
+      const end = archiveFrames.at(-1).t;
+      recording.setAvailable(archivePlaying && loading.hidden);
+      const title = t(
+        archivePlaying
+          ? "play.pause"
+          : archiveClock >= end
+            ? "play.replay"
+            : "play.play",
+      );
+      if ($("play").textContent !== title) $("play").textContent = title;
+      $("play").disabled = end === archiveFrames[0].t;
+      return;
+    }
     recording.setAvailable(
       loading.hidden && (connection ? !!liveFrame && !frozenFrame : playing),
     );
@@ -186,6 +222,16 @@ async function start() {
     if (players.some((p) => p.id === previous)) $("target").value = previous;
   }
   function toggle() {
+    if (archiveFrames.length) {
+      if ($("play").disabled) return;
+      if (archiveClock >= archiveFrames.at(-1).t)
+        archiveClock = archiveFrames[0].t;
+      archivePlaying = !archivePlaying;
+      last = null;
+      dirty = true;
+      updatePlay();
+      return;
+    }
     if (connection) {
       if (liveFrame) frozenFrame = frozenFrame ? null : liveFrame;
       dirty = pausedDirty = true;
@@ -199,7 +245,17 @@ async function start() {
     updatePlay();
   }
   $("play").onclick = toggle;
-  $("seek").oninput = (e) => jump(+e.target.value);
+  $("seek").oninput = (e) => {
+    if (!archiveFrames.length) {
+      jump(e.target.valueAsNumber);
+      return;
+    }
+    archiveClock = e.target.valueAsNumber;
+    if (archiveClock >= archiveFrames.at(-1).t) archivePlaying = false;
+    last = null;
+    dirty = pausedDirty = true;
+    updatePlay();
+  };
   $("profileDetail").onchange = () => choose("profile");
   $("bodyType").onchange =
     $("bones").onchange =
@@ -291,14 +347,51 @@ async function start() {
   }
   function updateLiveStatus() {
     const status = liveStatus ? t(liveStatus) : "";
-    $("signal").textContent =
-      t(liveSample ? "signal.sample" : "signal.live") +
-      (status ? " · " + status : "");
+    $("signal").textContent = archiveFrames.length
+      ? t("archive.open")
+      : t(liveSample ? "signal.sample" : "signal.live") +
+        (status ? " · " + status : "");
     updateFeedStatus();
     if (!liveFrame && !loading.hidden && !loading.dataset.i18n)
       loading.textContent = status
         ? status + " · " + t("loading.switchToDemo")
         : t("loading.waiting");
+  }
+  function showArchiveFrames(frames) {
+    if (!archiveFrames.length && !frames.length) return;
+    archiveFrames = frames;
+    archivePlaying = false;
+    frozenFrame = null;
+    last = null;
+    dirty = pausedDirty = true;
+    const seek = $("seek");
+    const first = frames[0];
+    if (first) {
+      archiveClock = first.t;
+      seek.min = first.t;
+      seek.max = frames.at(-1).t;
+      seek.step = ".001";
+      seek.value = first.t;
+      seek.disabled = first.t === frames.at(-1).t;
+      $("duration").textContent = archiveStamp(frames.at(-1).t);
+      document.body.dataset.source = "archive";
+      stopMedia();
+      $("media").open = false;
+    } else {
+      seek.min = 0;
+      seek.step = ".01";
+      seek.disabled = false;
+      seek.removeAttribute("aria-valuetext");
+      $("duration").textContent = t("duration.live");
+      document.body.dataset.source = "live";
+    }
+    seek.hidden = $("speed").hidden = !first;
+    $("media").hidden = Boolean(first);
+    $("sourceLive").setAttribute("aria-pressed", String(!first));
+    if (loading.dataset.i18n !== "loading.contextLost")
+      loading.hidden = Boolean(first || liveFrame);
+    updateLiveStatus();
+    updatePlay();
   }
   function openFeed(address, isSample) {
     let parsed;
@@ -316,6 +409,14 @@ async function start() {
       return;
     }
     if (!connection) demoClocks[demoMode] = clock;
+    const historyMatch = parsed.pathname.match(
+      /^\/v2\/matches\/([\w-]{1,64})\/live$/,
+    );
+    archive.setMatch(
+      location.protocol !== "file:" && parsed.origin === wsBase
+        ? (historyMatch?.[1] ?? null)
+        : null,
+    );
     connection?.stop();
     connection = null;
     liveFrame = null;
@@ -348,6 +449,7 @@ async function start() {
     $("target").value = "";
     $("feed").hidden = true;
     $("sourceLive").setAttribute("aria-expanded", "false");
+    archive.setMatch(null);
     connection?.stop();
     connection = null;
     liveFrame = null;
@@ -372,6 +474,7 @@ async function start() {
     const dt = last == null ? 0 : Math.max(0, (now - last) / 1000);
     last = now;
     let frame;
+    let archivePlayhead;
     if (connection) {
       const incoming = connection.read(now);
       if (incoming) {
@@ -388,7 +491,24 @@ async function start() {
         liveFrame = incoming;
         updatePlay();
       }
-      frame = frozenFrame || liveFrame;
+      if (archiveFrames.length) {
+        const end = archiveFrames.at(-1).t;
+        if (archivePlaying) {
+          archiveClock = Math.min(
+            end,
+            archiveClock + dt * Number($("speed").value),
+          );
+          if (archiveClock === end) {
+            archivePlaying = false;
+            dirty = true;
+            updatePlay();
+          }
+        }
+        archivePlayhead = Math.round(archiveClock * 1000) / 1000;
+        frame = archiveFrameAt(archiveFrames, archivePlayhead);
+      } else {
+        frame = frozenFrame || liveFrame;
+      }
     } else {
       if (playing) {
         clock += dt * Number($("speed").value);
@@ -415,9 +535,8 @@ async function start() {
           frame.players[0];
       if (
         dirty ||
-        playing ||
+        (connection ? !archiveFrames.length || archivePlaying : playing) ||
         recording.active ||
-        connection ||
         camera === "orbit" ||
         pitch.needsRedraw()
       ) {
@@ -441,6 +560,9 @@ async function start() {
       if (connection) {
         const status = [
           frozenFrame ? t("quality.frozen") : "",
+          archivePlayhead !== undefined && archivePlayhead - frame.t >= 1
+            ? t("archive.gap")
+            : "",
           frame.v === 2 && !frame.ball ? t("quality.ballLost") : "",
           frame.ballState === "predicted" ? t("quality.ballPredicted") : "",
         ]
@@ -474,7 +596,14 @@ async function start() {
         oldSubject = caption;
         $("subject").textContent = caption;
       }
-      if (prevSecond !== Math.floor(frame.t) || dirty) {
+      if (archivePlayhead !== undefined) {
+        const time = archiveStamp(archivePlayhead);
+        if ($("clock").textContent !== time) {
+          $("clock").textContent = time;
+          $("seek").value = archivePlayhead;
+          $("seek").setAttribute("aria-valuetext", time);
+        }
+      } else if (prevSecond !== Math.floor(frame.t) || dirty) {
         prevSecond = Math.floor(frame.t);
         $("clock").textContent = stamp(frame.t);
       }
@@ -511,7 +640,9 @@ async function start() {
       ? t("full.exit")
       : t("full.enter");
     if (connection) {
-      $("duration").textContent = t("duration.live");
+      $("duration").textContent = archiveFrames.length
+        ? archiveStamp(archiveFrames.at(-1).t)
+        : t("duration.live");
       updateLiveStatus();
     } else {
       $("duration").textContent = stamp(duration());

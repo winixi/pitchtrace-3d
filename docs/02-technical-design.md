@@ -4,7 +4,7 @@
 
 ## 1. 系统与模块边界
 
-同一仓库规划两个独立构建、测试和发布的产品。**PitchTrace Edge** 从实拍画面生产比赛数据和视频片段；**PitchTrace Live** 接收两类数据，为观众及复核员提供直播与回看。首场试点两个进程可同驻一台 Mac mini，接口也支持把直播服务部署到另一台主机。[直播前端](../live/web/) 已实现内置演示、v1/v2 场景订阅和独立 HLS 观看；[试播网关](../live/server/)提供 v1 数据。边缘端已建立可执行项目骨架，采集与重建、v2 服务端及原片定位接口仍为开发设计。
+同一仓库规划两个独立构建、测试和发布的产品。**PitchTrace Edge** 从实拍画面生产比赛数据和视频片段。**PitchTrace Live** 接收两类数据，为观众及复核员提供直播与回看。首场试点两个进程可同驻一台 Mac mini，接口也支持把直播服务部署到另一台主机。直播前端已有内置演示、v1/v2 场景订阅、本地归档回放和独立 HLS 观看。试播网关支持 v1 转发及 v2 场景写入、订阅和历史查询。边缘端已建立可执行项目骨架，采集、重建与原片定位接口待开发。[直播前端](../live/web/) · [试播网关](../live/server/)
 
 ```mermaid
 flowchart LR
@@ -70,7 +70,7 @@ flowchart LR
 | Edge → Live | `POST /frames`（本地已实现） | 写入完整场景快照，见第 6 节。以 `(matchId,streamEpoch,seq)` 去重。同键同内容重试成功，同键异内容返回 409。 |
 | Edge → Live | `PUT /cameras/{cameraId}/epochs/{mediaEpoch}/init.mp4` 和 `PUT /cameras/{cameraId}/epochs/{mediaEpoch}/segments/{n}.m4s` | 上传初始化文件和第 n 个媒体段；服务端核对大小、摘要并原子提交。网络中断可按同一路径重传。 |
 | Edge → Live | `PUT /cameras/{cameraId}/epochs/{mediaEpoch}/segments/{n}/index` | 发送媒体段摘要、时基、逐帧 PTS 与曝光 UTC 映射。初始化文件、媒体段和索引全部匹配后，Live 才将该段加入播放列表；缺件可补传。 |
-| Live → 浏览器 | `WS /live`（本地已实现）、`GET /frames?fromMs=…&toMs=…`（规划） | 直播推完整快照。回看计划按比赛时段拉取归档，限制单次范围并分页，按比赛授权读取。 |
+| Live → 浏览器 | `WS /live`、`GET /frames?fromMs=…&toMs=…`（本地已实现） | 直播推完整快照。回看按比赛时段分页拉取归档。公网按比赛授权读取仍在规划。 |
 | Live → 浏览器 | `GET /cameras/{cameraId}/index.m3u8` 及受控片段读取 | 发送实拍视频。网页通过 `GET /cameras/{cameraId}/locate?captureUtcUs=…` 查询片段号、媒体 epoch、目标 PTS 和时基，定位到触球附近。机位缺片时标明缺口，其他机位和三维画面继续。 |
 
 比赛创建时由 Live 分配比赛 ID，场务把相同 ID、场地和名单版本配置给 Edge。Edge 通过配置取得网关地址与设备凭据，网关校验设备是否可写入该比赛。场景使用 `streamEpoch`、媒体使用各通道的 `mediaEpoch`；两类数据通过比赛 ID 和曝光 UTC 对齐。
@@ -167,6 +167,12 @@ macOS 首轮在单人裁片上调用 Vision 的 `VNDetectHumanBodyPoseRequest` �
 - 只有号码、球等字段均已知且满足 v1 约束的帧可通过兼容适配器发布到 v1。其余情况由 v2 直接展示；避免用 0 号或球场原点填补未知观测。正式观赛端需支持真实比赛回看、失球标记、按时刻选择原片及断线恢复。
 - 实拍通路按比赛、相机输出 HLS 播放列表与分段，提议路径为 `/v2/matches/{matchId}/cameras/{cameraId}/index.m3u8`。保留短期现场观看窗口，终场生成归档列表。浏览器根据场景帧的曝光时刻查询相机分段与目标 PTS；拖动回看时同时重定位三维和原片。验证浏览器对所选编码与播放方式的支持，在带宽不足时优先提供选中机位。
 - 采集端与写入 API 使用设备凭据，观看、修改、下载原片分权；跨设备部署使用加密传输。用于本地开发的演示网关默认监听回环地址。网关以比赛隔离订阅，慢客户端可跳到最新快照，归档写入单独排队。
+
+### v2 场景历史与回放
+
+- `GET /v2/matches/{matchId}/frames` 以 `fromMs`、`toMs` 指定比赛毫秒闭区间，单次跨度最多 60,000 ms。省略两者时取截至最新归档时刻的 30,000 ms。响应包含整场 `bounds`、本次 `range`、`frames` 和 `nextCursor`。空库的默认查询返回空数组和 `null` 范围。
+- 以 `(matchTimeMs, streamEpoch, seq)` 升序分页，同时间先按周期标识再按序号排序。使用服务器返回的 `nextCursor` 续页，保留首次查询所见的归档范围与数据。并行补传在重新查询后纳入结果。每页默认 100 帧，最多 200 帧，快照载荷约 1 MB 时提前分页。
+- 同源观赛页按比赛时间播放归档快照，切换虚拟机位保持暂停时刻。同一时刻存在多帧时，界面显示该时刻排序最后的一帧。离最近快照达到 1 秒时显示缺帧提示。直播 WebSocket 继续接收数据，退出回放后显示最新帧。[本地回放步骤](../live/server/README.md#v2-历史查询与回放)
 
 ### 固定协议回归样例
 

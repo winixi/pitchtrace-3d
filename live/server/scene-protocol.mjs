@@ -5,9 +5,12 @@ import { validBones } from "../web/src/protocol.js";
 const validate = new Ajv({ ownProperties: true }).compile(schema);
 const id = new RegExp(schema.definitions.id.pattern);
 
+export const validSceneId = (value) =>
+  typeof value === "string" && id.test(value);
+
 export function sceneRoute(pathname, endpoint) {
   const route = /^\/v2\/matches\/([^/]+)\/(frames|live)$/.exec(pathname);
-  return route?.[2] === endpoint && id.test(route[1]) ? route[1] : null;
+  return route?.[2] === endpoint && validSceneId(route[1]) ? route[1] : null;
 }
 
 export function validSceneFrame(frame, matchId) {

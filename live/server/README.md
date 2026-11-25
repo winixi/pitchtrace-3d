@@ -69,7 +69,30 @@ SQLite 默认写入网关目录下的 `data/scenes.sqlite`，可用 `PITCHTRACE_
 | 500 | 写入归档失败。 |
 | 503 | 当前运行时缺少内置 SQLite。 |
 
-新订阅收到该场已提交的最新直播帧。重复写入和历史补传只确认归档，新周期的比赛时间需继续前进。完整字段与顺序规则见技术设计。本地网关提供场景流，历史查询、媒体接入和访问权限属于后续阶段。[v2 场景规范](../../docs/02-technical-design.md#6-数据契约分发和故障恢复)
+新订阅收到该场已提交的最新直播帧。重复写入和历史补传只确认归档，新周期的比赛时间需继续前进。媒体接入和访问权限按后续阶段交付。[v2 场景规范](../../docs/02-technical-design.md#6-数据契约分发和故障恢复)
+
+## v2 历史查询与回放
+
+以同一个网关打开 [trial-01](http://127.0.0.1:8766/?match=trial-01)，写入上一节的样例后，点击「归档回放」。使用时间轴拖动、暂停、调整倍速或换机位。「返回直播」跳回最近的直播帧。可选时段以比赛秒数填写，单次最多 60 秒。
+
+要加入时钟重置与迟到帧，再从仓库根目录执行以下命令。
+
+```sh
+node -e 'for (const f of require("./schemas/v2/examples/clock-reset.json")) console.log(JSON.stringify(f))' |
+  while IFS= read -r frame; do
+    curl --fail-with-body --request POST http://127.0.0.1:8766/v2/matches/trial-01/frames \
+      --header 'Content-Type: application/json' --data-binary "$frame"
+    printf '\n'
+  done
+```
+
+在回放里拖到 `00:25.050` 可查看迟到的旧周期帧，`00:25.100` 为新周期的首帧。直接查询以毫秒指定闭区间。
+
+```sh
+curl --fail-with-body 'http://127.0.0.1:8766/v2/matches/trial-01/frames?fromMs=1200&toMs=25100&limit=2'
+```
+
+省略起止时间时，首个请求读取截至最新归档的 30 秒。响应中的 `bounds` 是整场归档范围，`range` 是本次查询范围，`frames` 是完整快照。把 `nextCursor` 作为 `cursor` 发送可继续下一页，到末页为 `null`。默认每页最多 100 帧，可指定 1–200 帧。单页快照载荷上限约 1 MB，无匹配帧时返回空数组，参数无效返回 400。[排序与分页语义](../../docs/02-technical-design.md#6-数据契约分发和故障恢复)
 
 ## 重新构建试播网关
 

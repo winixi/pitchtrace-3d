@@ -21967,96 +21967,6 @@ function validBones(bones) {
 // scene-archive.mjs
 var import_node_fs = require("node:fs");
 var import_node_path = require("node:path");
-function openSceneArchive(filename) {
-  const sqlite = process.getBuiltinModule?.("node:sqlite");
-  if (!sqlite) return null;
-  if (filename !== ":memory:")
-    (0, import_node_fs.mkdirSync)((0, import_node_path.dirname)(filename), { recursive: true });
-  const db = new sqlite.DatabaseSync(filename);
-  try {
-    db.exec(`
-      PRAGMA busy_timeout = 1000;
-      CREATE TABLE IF NOT EXISTS scene_frames (
-        match_id TEXT NOT NULL,
-        stream_epoch TEXT NOT NULL,
-        seq INTEGER NOT NULL,
-        match_time_ms INTEGER NOT NULL,
-        payload TEXT NOT NULL,
-        PRIMARY KEY (match_id, stream_epoch, seq)
-      ) STRICT;
-      CREATE TABLE IF NOT EXISTS scene_live_epochs (
-        match_id TEXT NOT NULL,
-        stream_epoch TEXT NOT NULL,
-        PRIMARY KEY (match_id, stream_epoch)
-      ) STRICT;
-      CREATE TABLE IF NOT EXISTS scene_live (
-        match_id TEXT PRIMARY KEY,
-        stream_epoch TEXT NOT NULL,
-        seq INTEGER NOT NULL,
-        FOREIGN KEY (match_id, stream_epoch, seq)
-          REFERENCES scene_frames (match_id, stream_epoch, seq)
-      ) STRICT;
-    `);
-    return prepareArchive(db);
-  } catch (error2) {
-    db.close();
-    throw error2;
-  }
-}
-function prepareArchive(db) {
-  const stored = db.prepare(`
-    SELECT payload FROM scene_frames
-    WHERE match_id = ? AND stream_epoch = ? AND seq = ?
-  `);
-  const latest2 = db.prepare(`
-    SELECT f.stream_epoch, f.seq, f.match_time_ms, f.payload
-    FROM scene_live l JOIN scene_frames f USING (match_id, stream_epoch, seq)
-    WHERE l.match_id = ?
-  `);
-  const knownEpoch = db.prepare(`
-    SELECT 1 FROM scene_live_epochs WHERE match_id = ? AND stream_epoch = ?
-  `);
-  const insert = db.prepare("INSERT INTO scene_frames VALUES (?, ?, ?, ?, ?)");
-  const markEpoch = db.prepare("INSERT INTO scene_live_epochs VALUES (?, ?)");
-  const setLatest = db.prepare(`
-    INSERT INTO scene_live VALUES (?, ?, ?)
-    ON CONFLICT (match_id) DO UPDATE SET stream_epoch = excluded.stream_epoch, seq = excluded.seq
-  `);
-  function advancesLive(frame, current) {
-    if (!current) return true;
-    if (frame.streamEpoch === current.stream_epoch)
-      return frame.seq > current.seq && frame.matchTimeMs >= current.match_time_ms;
-    return frame.matchTimeMs > current.match_time_ms && !knownEpoch.get(frame.matchId, frame.streamEpoch);
-  }
-  return {
-    latest: (matchId) => latest2.get(matchId)?.payload,
-    write(frame, payload) {
-      const { matchId, streamEpoch, seq, matchTimeMs } = frame;
-      db.exec("BEGIN IMMEDIATE");
-      try {
-        const existing = stored.get(matchId, streamEpoch, seq);
-        if (existing) {
-          db.exec("COMMIT");
-          return existing.payload === payload ? "duplicate" : "conflict";
-        }
-        insert.run(matchId, streamEpoch, seq, matchTimeMs, payload);
-        const current = latest2.get(matchId);
-        const publish = advancesLive(frame, current);
-        if (publish) {
-          if (current?.stream_epoch !== streamEpoch)
-            markEpoch.run(matchId, streamEpoch);
-          setLatest.run(matchId, streamEpoch, seq);
-        }
-        db.exec("COMMIT");
-        return publish ? "live" : "archived";
-      } catch (error2) {
-        db.exec("ROLLBACK");
-        throw error2;
-      }
-    },
-    close: () => db.close()
-  };
-}
 
 // scene-protocol.mjs
 var import_ajv = __toESM(require_ajv(), 1);
@@ -22164,9 +22074,10 @@ var scene_frame_schema_default = {
 // scene-protocol.mjs
 var validate = new import_ajv.default({ ownProperties: true }).compile(scene_frame_schema_default);
 var id = new RegExp(scene_frame_schema_default.definitions.id.pattern);
+var validSceneId = (value) => typeof value === "string" && id.test(value);
 function sceneRoute(pathname, endpoint) {
   const route = /^\/v2\/matches\/([^/]+)\/(frames|live)$/.exec(pathname);
-  return route?.[2] === endpoint && id.test(route[1]) ? route[1] : null;
+  return route?.[2] === endpoint && validSceneId(route[1]) ? route[1] : null;
 }
 function validSceneFrame(frame, matchId) {
   if (!validate(frame) || frame.matchId !== matchId) return false;
@@ -22183,6 +22094,211 @@ function serializeSceneFrame(frame) {
       Object.keys(value).sort().map((key) => [key, value[key]])
     );
   });
+}
+
+// history-query.mjs
+var DEFAULT_HISTORY_MS = 3e4;
+var MAX_HISTORY_MS = 6e4;
+var DEFAULT_PAGE_SIZE = 100;
+var MAX_PAGE_SIZE = 200;
+var validIndex = (value) => Number.isSafeInteger(value) && value >= 0;
+var validRange = (fromMs, toMs) => validIndex(fromMs) && validIndex(toMs) && fromMs <= toMs && toMs - fromMs <= MAX_HISTORY_MS;
+function readIndex(value) {
+  return value !== null && /^(0|[1-9]\d*)$/.test(value) ? Number(value) : null;
+}
+function decodeCursor(value, matchId) {
+  if (!/^[A-Za-z0-9_-]{1,512}$/.test(value)) return null;
+  try {
+    const parts = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+    if (!Array.isArray(parts) || parts.length !== 7) return null;
+    const [match, fromMs, toMs, watermark, time, epoch, seq] = parts;
+    if (match !== matchId || !validRange(fromMs, toMs) || !validIndex(watermark) || !validIndex(time) || time < fromMs || time > toMs || !validSceneId(epoch) || !validIndex(seq))
+      return null;
+    return { range: { fromMs, toMs }, watermark, time, epoch, seq };
+  } catch {
+    return null;
+  }
+}
+function encodeHistoryCursor(matchId, range, watermark, last) {
+  return Buffer.from(
+    JSON.stringify([
+      matchId,
+      range.fromMs,
+      range.toMs,
+      watermark,
+      last.match_time_ms,
+      last.stream_epoch,
+      last.seq
+    ])
+  ).toString("base64url");
+}
+function readHistoryQuery(params, matchId) {
+  const keys = /* @__PURE__ */ new Set();
+  for (const key of params.keys()) {
+    if (keys.has(key) || !["fromMs", "toMs", "limit", "cursor"].includes(key))
+      return null;
+    keys.add(key);
+  }
+  const limit = params.has("limit") ? readIndex(params.get("limit")) : DEFAULT_PAGE_SIZE;
+  if (!validIndex(limit) || limit < 1 || limit > MAX_PAGE_SIZE) return null;
+  let range = null;
+  if (params.has("fromMs") || params.has("toMs")) {
+    const fromMs = readIndex(params.get("fromMs"));
+    const toMs = readIndex(params.get("toMs"));
+    if (!validRange(fromMs, toMs)) return null;
+    range = { fromMs, toMs };
+  }
+  const cursor = params.has("cursor") ? decodeCursor(params.get("cursor"), matchId) : null;
+  if (params.has("cursor") && !cursor || cursor && range && (cursor.range.fromMs !== range.fromMs || cursor.range.toMs !== range.toMs))
+    return null;
+  return { range, limit, cursor };
+}
+
+// scene-archive.mjs
+var pagePayloadBytes = 1e6;
+function openSceneArchive(filename) {
+  const sqlite = process.getBuiltinModule?.("node:sqlite");
+  if (!sqlite) return null;
+  if (filename !== ":memory:")
+    (0, import_node_fs.mkdirSync)((0, import_node_path.dirname)(filename), { recursive: true });
+  const db = new sqlite.DatabaseSync(filename);
+  try {
+    db.exec(`
+      PRAGMA busy_timeout = 1000;
+      CREATE TABLE IF NOT EXISTS scene_frames (
+        match_id TEXT NOT NULL,
+        stream_epoch TEXT NOT NULL,
+        seq INTEGER NOT NULL,
+        match_time_ms INTEGER NOT NULL,
+        payload TEXT NOT NULL,
+        PRIMARY KEY (match_id, stream_epoch, seq)
+      ) STRICT;
+      CREATE INDEX IF NOT EXISTS scene_frames_by_time
+        ON scene_frames (match_id, match_time_ms, stream_epoch, seq);
+      CREATE TABLE IF NOT EXISTS scene_live_epochs (
+        match_id TEXT NOT NULL,
+        stream_epoch TEXT NOT NULL,
+        PRIMARY KEY (match_id, stream_epoch)
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS scene_live (
+        match_id TEXT PRIMARY KEY,
+        stream_epoch TEXT NOT NULL,
+        seq INTEGER NOT NULL,
+        FOREIGN KEY (match_id, stream_epoch, seq)
+          REFERENCES scene_frames (match_id, stream_epoch, seq)
+      ) STRICT;
+    `);
+    return prepareArchive(db);
+  } catch (error2) {
+    db.close();
+    throw error2;
+  }
+}
+function prepareArchive(db) {
+  const stored = db.prepare(`
+    SELECT payload FROM scene_frames
+    WHERE match_id = ? AND stream_epoch = ? AND seq = ?
+  `);
+  const latest2 = db.prepare(`
+    SELECT f.stream_epoch, f.seq, f.match_time_ms, f.payload
+    FROM scene_live l JOIN scene_frames f USING (match_id, stream_epoch, seq)
+    WHERE l.match_id = ?
+  `);
+  const knownEpoch = db.prepare(`
+    SELECT 1 FROM scene_live_epochs WHERE match_id = ? AND stream_epoch = ?
+  `);
+  const insert = db.prepare("INSERT INTO scene_frames VALUES (?, ?, ?, ?, ?)");
+  const markEpoch = db.prepare("INSERT INTO scene_live_epochs VALUES (?, ?)");
+  const setLatest = db.prepare(`
+    INSERT INTO scene_live VALUES (?, ?, ?)
+    ON CONFLICT (match_id) DO UPDATE SET stream_epoch = excluded.stream_epoch, seq = excluded.seq
+  `);
+  const latestRowId = db.prepare(
+    "SELECT COALESCE(MAX(rowid), 0) AS watermark FROM scene_frames"
+  );
+  const historyBounds = db.prepare(`
+    SELECT
+      (SELECT match_time_ms FROM scene_frames WHERE match_id = ? AND rowid <= ?
+        ORDER BY match_time_ms LIMIT 1) AS fromMs,
+      (SELECT match_time_ms FROM scene_frames WHERE match_id = ? AND rowid <= ?
+        ORDER BY match_time_ms DESC LIMIT 1) AS toMs
+  `);
+  const historyRows = db.prepare(`
+    SELECT match_time_ms, stream_epoch, seq, payload FROM scene_frames
+    WHERE match_id = ? AND match_time_ms BETWEEN ? AND ? AND rowid <= ?
+      AND (match_time_ms, stream_epoch, seq) > (?, ?, ?)
+    ORDER BY match_time_ms, stream_epoch, seq
+    LIMIT ?
+  `);
+  function advancesLive(frame, current) {
+    if (!current) return true;
+    if (frame.streamEpoch === current.stream_epoch)
+      return frame.seq > current.seq && frame.matchTimeMs >= current.match_time_ms;
+    return frame.matchTimeMs > current.match_time_ms && !knownEpoch.get(frame.matchId, frame.streamEpoch);
+  }
+  return {
+    latest: (matchId) => latest2.get(matchId)?.payload,
+    history(matchId, query) {
+      const { cursor, limit } = query;
+      const watermark = cursor?.watermark ?? latestRowId.get().watermark;
+      const extent = historyBounds.get(matchId, watermark, matchId, watermark);
+      const bounds = extent.fromMs === null ? null : extent;
+      const range = cursor?.range ?? query.range ?? (bounds && {
+        fromMs: Math.max(bounds.fromMs, bounds.toMs - DEFAULT_HISTORY_MS),
+        toMs: bounds.toMs
+      });
+      if (!range) return { bounds, range, frames: [], nextCursor: null };
+      const { fromMs, toMs } = range;
+      const frames = [];
+      let bytes = 0;
+      let last;
+      let nextCursor = null;
+      for (const row of historyRows.iterate(
+        matchId,
+        fromMs,
+        toMs,
+        watermark,
+        cursor?.time ?? fromMs,
+        cursor?.epoch ?? "",
+        cursor?.seq ?? -1,
+        limit + 1
+      )) {
+        bytes += Buffer.byteLength(row.payload);
+        if (frames.length === limit || last && bytes > pagePayloadBytes) {
+          nextCursor = encodeHistoryCursor(matchId, range, watermark, last);
+          break;
+        }
+        frames.push(JSON.parse(row.payload));
+        last = row;
+      }
+      return { bounds, range, frames, nextCursor };
+    },
+    write(frame, payload) {
+      const { matchId, streamEpoch, seq, matchTimeMs } = frame;
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        const existing = stored.get(matchId, streamEpoch, seq);
+        if (existing) {
+          db.exec("COMMIT");
+          return existing.payload === payload ? "duplicate" : "conflict";
+        }
+        insert.run(matchId, streamEpoch, seq, matchTimeMs, payload);
+        const current = latest2.get(matchId);
+        const publish = advancesLive(frame, current);
+        if (publish) {
+          if (current?.stream_epoch !== streamEpoch)
+            markEpoch.run(matchId, streamEpoch);
+          setLatest.run(matchId, streamEpoch, seq);
+        }
+        db.exec("COMMIT");
+        return publish ? "live" : "archived";
+      } catch (error2) {
+        db.exec("ROLLBACK");
+        throw error2;
+      }
+    },
+    close: () => db.close()
+  };
 }
 
 // server.mjs
@@ -22246,7 +22362,8 @@ var server = import_node_http.default.createServer(async (request, response) => 
     response.writeHead(code2, { "Content-Type": "text/plain; charset=utf-8" });
     response.end(body);
   }
-  const pathname = request.url.split("?", 1)[0];
+  const separator = request.url.indexOf("?");
+  const pathname = separator < 0 ? request.url : request.url.slice(0, separator);
   if (request.method === "GET" && pathname === "/") {
     if (!import_node_fs2.default.existsSync(page))
       return reply(404, "Build the viewer with npm run build in live/web.");
@@ -22254,9 +22371,31 @@ var server = import_node_http.default.createServer(async (request, response) => 
     import_node_fs2.default.createReadStream(page).on("error", () => response.destroy()).pipe(response);
     return;
   }
+  const matchId = sceneRoute(pathname, "frames");
+  if (matchId && request.method === "GET") {
+    const params = new URLSearchParams(
+      separator < 0 ? "" : request.url.slice(separator + 1)
+    );
+    const query = readHistoryQuery(params, matchId);
+    if (!query) return reply(400, "Invalid scene history query");
+    try {
+      const store = getArchive();
+      if (!store) return reply(503, "v2 requires Node.js with SQLite support");
+      const body = JSON.stringify(store.history(matchId, query));
+      response.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Length": Buffer.byteLength(body),
+        "Cache-Control": "no-store"
+      });
+      response.end(body);
+    } catch (error2) {
+      console.error("v2 \u573A\u666F\u5386\u53F2\u8BFB\u53D6\u5931\u8D25", error2);
+      reply(500, "Scene archive read failed");
+    }
+    return;
+  }
   if (request.method !== "POST") return reply(404, "Unknown endpoint");
   const v1 = request.url === "/frame";
-  const matchId = sceneRoute(pathname, "frames");
   if (!v1 && !matchId) return reply(404, "Unknown endpoint");
   const { frame, code, message } = await readFrame(request);
   if (code) return reply(code, message);
