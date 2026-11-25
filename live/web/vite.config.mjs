@@ -19,6 +19,8 @@ export default defineConfig({
       transformIndexHtml: {
         order: "pre",
         handler(html) {
+          const logo =
+            "data:image/png;base64," + read("../../assets/pitchtrace-logo.png", "base64");
           const models = assets.map(
             (n) =>
               '<script type="application/octet-stream" id="asset-' +
@@ -28,6 +30,7 @@ export default defineConfig({
               "</script>",
           );
           return html
+            .replaceAll("__BRAND_ICON__", logo)
             .replace("__ASSETS__", () => models.join("\n"))
             .replace("__LICENSES__", () =>
               escapeHtml(

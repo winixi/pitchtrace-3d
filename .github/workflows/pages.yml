@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'live/web/**'
+      - 'assets/pitchtrace-logo.png'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
