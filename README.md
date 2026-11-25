@@ -4,7 +4,9 @@ English | **[中文](README.zh-CN.md)**
 
 PitchTrace 3D is a 3D tracking and replay project for football (soccer) matches. The first-phase MVP uses one camera at each of four positions around the pitch. It aims to reconstruct players, the ball, and skeletal motion from synchronized views on an M6 Mac mini, letting viewers freely switch angles to review passes, shots, and challenges.
 
-The [live viewing frontend](live/web/) is runnable. It ships with a built-in 60-second match and can also switch to a WebSocket live data feed and external HLS footage. After cloning, you can open the [offline viewing page](live/web/dist/index.html) directly in a browser.
+**[Try the 3D demo](https://winixi.github.io/pitchtrace-3d/)** to watch the built-in 60-second match and explore the player showcase.
+
+The [live viewing frontend](live/web/) can also connect to a WebSocket live data feed and play external HLS footage. After cloning, you can open the [offline viewing page](live/web/dist/index.html) directly in a browser.
 
 ## Subprojects and responsibilities
 

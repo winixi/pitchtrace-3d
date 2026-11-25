@@ -1,0 +1,59 @@
+name: 发布在线 3D 演示
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'live/web/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: live/web
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: 设置 Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: 配置 GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: 安装依赖
+        run: npm ci
+      - name: 运行测试
+        run: npm test
+      - name: 构建观赛前端
+        run: npm run build
+      - name: 上传静态文件
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: live/web/dist
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 发布到 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
