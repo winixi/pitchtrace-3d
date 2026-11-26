@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "remind-test-on-edge-swift-change",
+      "trigger": "PostFileSave",
+      "description": "修改 Edge Swift 源文件后提醒运行 Swift 测试",
+      "matcher": "edge/Sources/PitchTraceEdge/.*\\.swift$",
+      "action": {
+        "type": "agent",
+        "prompt": "刚刚保存了 edge/Sources/PitchTraceEdge/ 下的 Swift 源文件。完成本次改动后，请运行 `swift test --package-path edge --disable-xctest`，确认录像时序、曝光审计、媒体周期与上行相关用例通过，再继续后续工作。新增公开 API 时记得在 edge/Tests/PitchTraceEdgeTests/ 补对应用例。"
+      }
+    }
+  ]
+}

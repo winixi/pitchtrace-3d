@@ -12,8 +12,32 @@ inclusion: always
 - **网页观众**：跟球、跟球员、自由环绕、暂停回看、返回延时直播。
 - **复核员**：查看原片与骨骼对照，标记确认／排除／证据不足。
 
+## 实现状态（改动前必读）
+
+| 能力 | 状态 |
+| --- | --- |
+| 浏览器三维观赛（内置比赛、六机位、骨骼、暂停、HLS）| ✅ 已实现 |
+| 浏览器场景归档回放（拖动、调速、换机位、返回直播）| ✅ 已实现 |
+| 浏览器原片复核面板（HLS 播放、按曝光定位、缺口提示）| ✅ 已实现 |
+| v1 试播网关（`POST /frame`、`/live`、`/demo`）| ✅ 已实现 |
+| v2 场景归档与订阅（SQLite、分页历史、重启恢复）| ✅ 已实现 |
+| v2 原片归档与同步复核（fMP4 三件校验、按曝光定位）| ✅ 已实现 |
+| Edge CLI（replay、audit-sync、audit-visibility、calibrate、publish-media 等）| ✅ 已实现 |
+| Edge 录像重放（2–4 机位，跨周期，ffprobe 校验）| ✅ 已实现 |
+| Edge 闪光对时审计（`audit-sync`）| ✅ 已实现 |
+| Edge 分区双视角可见率（`audit-visibility`）| ✅ 已实现 |
+| Edge 离线镜头与场地标定（`calibrate-intrinsics`、`calibrate`）| ✅ 已实现 |
+| Edge Python 几何工具链（tracking、pose、scene_archive 等）| ✅ 已实现 |
+| Edge Swift 单元与集成测试 | ✅ 已实现 |
+| Edge 实机采集与对时（厂商 SDK／AVFoundation／RTSP）| ⏳ 设计中 |
+| Edge Core ML + Vision 单视角检测与姿态 | ⏳ 设计中 |
+| Edge C++/OpenCV 三维融合正式接入 | ⏳ 设计中 |
+| 正式公网网关（Fastify、访问权限、HLS 分发）| ⏳ 设计中 |
+
+详细说明见 [AGENTS.md](../../AGENTS.md) 实现状态表。**不要假设「设计中」的能力已可用。**
+
 ## 范围守则
 
-- 改动前先区分「已实现」与「设计中」状态，见 [AGENTS.md](../../AGENTS.md) 实现状态表。不要假设未完成的链路可用：Edge 采集与推理、正式 v2 网关、原片同步复核目前均为设计。
 - 缺测是一等状态。未识别号码、球出视野、单视角高球、脚部被挡都需保留对应状态，不得用 0 号或原点填补未知观测。
 - 两个子项目（Edge 与 Live）独立构建、测试和发布，通过场景快照与媒体接口解耦。不要让一端直接读写另一端的进程内存状态或数据库。
+- 改 Live 侧数据契约时同步更新 `schemas/v2/`，前端与网关都要更新并通过 `npm test`。

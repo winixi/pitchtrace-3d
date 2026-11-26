@@ -1,10 +1,10 @@
 ---
 inclusion: fileMatch
-fileMatchPattern: ["**/live/web/src/protocol.js", "**/live/web/src/live-frame.js", "**/live/server/server.mjs", "**/docs/02-technical-design.md"]
+fileMatchPattern: ["**/live/web/src/protocol.js", "**/live/web/src/live-frame.js", "**/live/server/server.mjs", "**/live/server/scene-protocol.mjs", "**/live/server/media-index.mjs", "**/docs/02-technical-design.md", "**/schemas/v2/**"]
 ---
 # 数据契约规范
 
-改动场景快照或网关转发前必读。完整契约见 [docs/02-technical-design.md](../../docs/02-technical-design.md) 第 1.3 与第 6 节。
+改动场景快照、媒体索引或网关转发前必读。完整契约见 [docs/02-technical-design.md](../../docs/02-technical-design.md) 第 1.3 与第 6 节。
 
 ## 坐标系
 
@@ -29,16 +29,30 @@ fileMatchPattern: ["**/live/web/src/protocol.js", "**/live/web/src/live-frame.js
 
 - 协议版本 `v` 固定为 1，时间 `t` 以秒计。
 - 每帧 1–32 名球员，每人有整数球衣号，每帧都有球坐标，骨骼可选。
-- 校验在 `live/web/src/protocol.js` 的 `validFrame`，网关复用同一函数。
+- 校验在 `live/web/src/protocol.js` 的 `validFrame`，网关直接 import 复用。
 - 端点返回：合法 202，字段错误 422，无法解析的 JSON 400。
 
-## v2（设计中，前端已支持输入）
+## v2 场景（已实现）
 
+- JSON Schema 源：`schemas/v2/scene-frame.schema.json`，网关经 `live/server/scene-protocol.mjs` 读取。
 - 帧键为 `(matchId, streamEpoch, seq)`。同键同内容幂等确认，同键异内容返回 409。
-- 一帧可含零个球员；球、号码、关节可缺失，承载测量时间与状态。
-- 路径以 `/v2/matches/{matchId}` 为前缀；媒体用各通道 `mediaEpoch`。
+- 一帧可含零个球员；球、号码、关节可缺失，承载测量时间与状态（`measured | predicted | lost`）。
+- `serializeSceneFrame` 对对象字段排序后序列化，保证幂等比较不受字段顺序影响。
+- 路径前缀：`/v2/matches/{matchId}`（frames 端点与 live WebSocket）。
 - 只有号码、球等字段均已知且满足 v1 约束的帧才能通过兼容适配器发到 v1。
+
+## v2 媒体（已实现）
+
+- JSON Schema 源：`schemas/v2/media-index.schema.json`，网关经 `live/server/media-index.mjs` 读取。
+- 路径前缀：`/v2/matches/{matchId}/cameras/{cameraId}/epochs/{mediaEpoch}`。
+- 三件：`init.mp4`、`segments/{n}.m4s`、`segments/{n}/index`（JSON 曝光索引）。
+- 二进制上传需 `X-Content-SHA256` 头（64 位小写十六进制）。三件齐备且校验匹配后对浏览器可见。
+- 同路径重传相同内容返回 202；内容或交叉校验冲突返回 409。
+- Edge 侧结构：`edge/Sources/PitchTraceEdge/MediaPublishing.swift`，需 `initSha256`、`segmentSha256`、`segmentBytes` 与本地字节一致。
 
 ## 改动检查
 
-改 `protocol.js` 或 `live-frame.js` 后必须运行 `cd live/web && npm test`，确认内置比赛全程、空场丢球、未知号码与非法帧拒绝用例通过。
+- 改 `protocol.js` 或 `live-frame.js` 后：`cd live/web && npm test`。
+- 改 `scene-protocol.mjs`、`media-index.mjs` 或对应 schema 后：`cd live/server && npm test`。
+- 改任何服务端模块（`scene-archive.mjs`、`media-http.mjs`、`history-query.mjs` 等）后：`npm run build`。
+- 破坏性契约变更需在 `docs/02-technical-design.md` 记录新版本号，并保持旧版兼容或过渡。
