@@ -2,9 +2,16 @@
 
 # <sup><img src="assets/pitchtrace-logo.png" width="28" height="28" align="middle" alt=""></sup> 场迹 · PitchTrace 3D
 
+[![CI](https://img.shields.io/github/actions/workflow/status/winixi/pitchtrace-3d/pages.yml?branch=main&label=CI&logo=github)](https://github.com/winixi/pitchtrace-3d/actions/workflows/pages.yml)
+[![Release](https://badgen.net/github/release/winixi/pitchtrace-3d)](https://github.com/winixi/pitchtrace-3d/releases)
+[![Stars](https://img.shields.io/github/stars/winixi/pitchtrace-3d?style=flat&color=blue)](https://github.com/winixi/pitchtrace-3d/stargazers)
+[![License](https://img.shields.io/github/license/winixi/pitchtrace-3d?color=blue)](LICENSE)
+
 场迹是一个面向足球比赛的三维跟踪与回放项目。第一阶段 MVP 在球场四周各设一台单摄像头，共四个机位，计划在 M6 Mac mini 上利用同步画面重建球员、足球和骨骼动作，让观众自由切换视角回看传球、射门和拼抢。
 
 **[在线体验 3D 演示](https://winixi.github.io/pitchtrace-3d/)**，观看内置的 60 秒比赛和人物展示。
+
+[![内置三维比赛在导播机位暂停时的画面，包含机位控件和动作时间轴](assets/pitchtrace-demo.png)](https://winixi.github.io/pitchtrace-3d/)
 
 [直播观赛前端](live/web/) 也支持连接 WebSocket 直播数据和播放外部 HLS 实拍视频。克隆仓库后可直接用浏览器打开[离线观赛页](live/web/dist/index.html)。
 

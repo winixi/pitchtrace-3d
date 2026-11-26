@@ -2,9 +2,16 @@ English | **[中文](README.zh-CN.md)**
 
 # <sup><img src="assets/pitchtrace-logo.png" width="28" height="28" align="middle" alt=""></sup> PitchTrace 3D
 
+[![CI](https://img.shields.io/github/actions/workflow/status/winixi/pitchtrace-3d/pages.yml?branch=main&label=CI&logo=github)](https://github.com/winixi/pitchtrace-3d/actions/workflows/pages.yml)
+[![Release](https://badgen.net/github/release/winixi/pitchtrace-3d)](https://github.com/winixi/pitchtrace-3d/releases)
+[![Stars](https://img.shields.io/github/stars/winixi/pitchtrace-3d?style=flat&color=blue)](https://github.com/winixi/pitchtrace-3d/stargazers)
+[![License](https://img.shields.io/github/license/winixi/pitchtrace-3d?color=blue)](LICENSE)
+
 PitchTrace 3D is a 3D tracking and replay project for football (soccer) matches. The first-phase MVP uses one camera at each of four positions around the pitch. It aims to reconstruct players, the ball, and skeletal motion from synchronized views on an M6 Mac mini, letting viewers freely switch angles to review passes, shots, and challenges.
 
 **[Try the 3D demo](https://winixi.github.io/pitchtrace-3d/)** to watch the built-in 60-second match and explore the player showcase.
+
+[![Built-in 3D match paused in Director view, with camera controls and an action timeline](assets/pitchtrace-demo.png)](https://winixi.github.io/pitchtrace-3d/)
 
 The [live viewing frontend](live/web/) can also connect to a WebSocket live data feed and play external HLS footage. After cloning, you can open the [offline viewing page](live/web/dist/index.html) directly in a browser.
 
