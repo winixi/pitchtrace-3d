@@ -24,8 +24,8 @@ flowchart LR
 
 | 模块 | 部署与实现建议 | 输入 → 输出／责任 |
 | --- | --- | --- |
-| 设备、比赛、标定（R01、R03） | Mac mini 上的配置服务，SQLite 保存版本和状态；OpenCV 负责几何计算 | 相机序号、镜头参数、测量点 → 场地模型、内外参、误差、有效起止时刻。 |
-| 采集与原片（R02、R10） | 按设备选 GigE/USB 厂商 SDK 或 RTSP 客户端。按通道独立采集，原码分段落盘；编码流可用 VideoToolbox 解码 | 曝光时间与码流 → 可重放的原片、帧号索引、统一时钟映射。 |
+| 设备、比赛、标定（R01、R03） | Mac mini 上的配置服务，SQLite 保存版本和状态；OpenCV 负责几何计算；Web UI 提供监控与控制界面 | 相机序号、镜头参数、测量点 → 场地模型、内外参、误差、有效起止时刻。 |
+| 采集与原片（R02、R10） | 按设备选 GigE/USB 厂商 SDK 或 RTSP 客户端。按通道独立采集，原码分段落盘；编码流可用 VideoToolbox 解码。Web UI 实时显示各机位状态 | 曝光时间与码流 → 可重放的原片、帧号索引、统一时钟映射。 |
 | 单视角视觉（R04、R05、R06） | 第一版用 Python/OpenCV 跑录像基线，目标机用可转换为 Core ML 的模型比较精度和耗时 | 图像 → 人、球、关键点、号码候选及置信度，全部带机位与时间。 |
 | 三维融合与动作（R04–R07） | Mac mini，先实现可离线复算的几何与时序处理器，再对接实时窗口 | 多视角观测、标定、名单 → 稳定轨迹 ID、球心三维位置、骨骼、事件与证据。 |
 | 分发与观看（R07、R08、R09、R10） | 场景快照经 WebSocket 发布；原片按比赛时间索引为 HLS 或本地分段文件；浏览器用 Three.js 绘制 | 结构化状态和原片是两种输出。六个虚拟机位在浏览器生成，四个实拍视角用于核验。 |
@@ -39,7 +39,7 @@ flowchart LR
 
 | 实现单元 | 首版技术选择 | 输入、处理和输出 |
 | --- | --- | --- |
-| 采集与视频 | Swift、厂商 SDK 或 AVFoundation、FFmpeg 的 libavformat、Apple VideoToolbox | 工业相机通过厂商 SDK 读取帧和硬件时钟；macOS 可识别的摄像头可用 AVFoundation；网络机型用 libavformat 接入 RTSP。能取得曝光时间且满足同步门槛的通道才参与精确三维融合。对 H.264 兼容输入直接重新封装，其他输入按需解码并编码为 H.264。输出可独立寻址的 fMP4 初始化文件、关键帧对齐的媒体段及曝光时间索引。[Apple 视频采集](https://developer.apple.com/documentation/avfoundation/avcapturevideodataoutput) · [FFmpeg 封装格式](https://ffmpeg.org/ffmpeg-formats.html) |
+| 采集与视频 | Swift、厂商 SDK 或 AVFoundation、FFmpeg 的 libavformat、Apple VideoToolbox；嵌入式 Web UI（Vapor + WebSocket）用于监控 | 工业相机通过厂商 SDK 读取帧和硬件时钟；macOS 可识别的摄像头可用 AVFoundation；网络机型用 libavformat 接入 RTSP。能取得曝光时间且满足同步门槛的通道才参与精确三维融合。对 H.264 兼容输入直接重新封装，其他输入按需解码并编码为 H.264。输出可独立寻址的 fMP4 初始化文件、关键帧对齐的媒体段及曝光时间索引。Web UI 实时显示各机位帧率、曝光偏差、队列深度和告警。[Apple 视频采集](https://developer.apple.com/documentation/avfoundation/avcapturevideodataoutput) · [FFmpeg 封装格式](https://ffmpeg.org/ffmpeg-formats.html) · [Web UI 设计](../../docs/08-edge-web-ui-design.md) |
 | 检测与推理 | Swift 调用 Core ML 和 Vision；Python/OpenCV 用于离线标注检查、模型对照与误差评估 | 人、球检测先跑轻量 Core ML 模型；在球员裁切上用 Vision 建立姿态和背号 OCR 基线。按时刻、相机、局部轨迹记录观测。Python 产出的基准样例与线上重复输入比较。 |
 | 标定与融合 | C++/OpenCV `calib3d`，通过窄 C 接口供 Swift 调用 | 保存内外参及版本，先按同一曝光窗口组帧，再做跨视角分配、三角化、重投影检查和时序滤波。输出场地坐标、来源机位和质量；局部骨骼重定向后再进入场景快照。 |
 | 调度与持久化 | Swift Concurrency、有界队列、SQLite、文件系统、URLSession | 每路采集独立排队。录像与推理分开消费；记录队列中最老帧的年龄。视频先落盘，场景帧与待上传条目持久化后发送。直播端宕机时保留采集，重连先发当前快照，再按带宽补历史。 |

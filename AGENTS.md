@@ -24,7 +24,8 @@ pitchtrace-3d/
 ├── docs/
 │   ├── 01-requirements.md     详细需求说明（R01–R12 与验收口径）
 │   ├── 02-technical-design.md  技术实现方案（模块、对时、契约）
-│   └── 03-development-plan.md 落地开发计划（排期、放行条件）
+│   ├── 03-development-plan.md 落地开发计划（排期、放行条件）
+│   └── 08-edge-web-ui-design.md Edge Web UI 技术设计（监控、控制、告警）
 ├── edge/                      PitchTrace Edge（SwiftPM）
 │   ├── Package.swift
 │   └── Sources/PitchTraceEdge/PitchTraceEdge.swift
