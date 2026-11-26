@@ -123,9 +123,10 @@ node live/server/server.cjs   # 需先在 live/web 执行过 npm run build
 | 浏览器三维观赛前端 | ✅ 已实现 | 内置 60 秒比赛，六机位、骨骼、暂停定格、HLS 实拍；支持 v1 与 v2 快照输入。 |
 | 本地 v1 试播网关 | ✅ 已实现 | `POST /frame`、`/live`、`/demo`，复用前端校验器。 |
 | Edge 离线录像输入与原片提交 | ✅ 已实现 | 2–4 路 H.264/fMP4 按曝光归并，导出缺口和 v2 索引，标注共同闪光生成对时报告。`publish-media` 按机位将已导出的原片和索引提交到网关。 |
-| Edge 采集与对时 | ⏳ 设计中 | 厂商 SDK / AVFoundation / RTSP，fMP4 分段与曝光时间索引。 |
-| Edge 检测、姿态、读号 | ⏳ 设计中 | Core ML + Vision，Python/OpenCV 做离线对照。 |
-| Edge 三维融合与动作 | ⏳ 设计中 | C++/OpenCV `calib3d` 经 C 接口供 Swift 调用。 |
+| Edge 采集与对时 | 文件源回归通过 | FFmpeg 分路接入文件、RTSP、AVFoundation，曝光清单逐帧核验与独立媒体周期，设备曝光来源需由采集端提供。 |
+| Edge 几何与视觉 | 已有软件实现 | 棋盘格内参、多机位外参、移机巡检、版本切换、Vision 人体与 OCR、可选 Core ML 球检测或受控球色检测。 |
+| Edge 重建与动作 | 已有软件实现 | 足点投影、跨视角轨迹、球与关节三角化、局部骨骼、名单关联和五类规则候选，实拍精度待测。 |
+| Edge 整场运行 | 可离线与连续运行 | `run-match`、`stream-match`、SQLite 证据、独立上行、重试、复算比较和真值评估。入口与测试见 [Edge README](edge/README.md)。 |
 | 本地 v2 场景网关 | ✅ 已实现 | JSON Schema 校验、SQLite 归档、按比赛 WebSocket 订阅、重启恢复及分页历史查询。 |
 | 浏览器场景归档回放 | ✅ 已实现 | 同源 v2 比赛可加载时段、拖动、调速、暂停切机位及返回直播。 |
 | 正式公网网关与媒体 | ⏳ 设计中 | Fastify、访问权限及 HLS 媒体。 |

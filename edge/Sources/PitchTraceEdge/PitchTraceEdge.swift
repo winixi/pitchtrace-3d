@@ -11,6 +11,21 @@ enum PitchTraceEdge {
           pitchtrace-edge audit-visibility <frames.ndjson> <可见性标注.json>
           pitchtrace-edge calibrate-intrinsics <棋盘格照片清单.json>
           pitchtrace-edge calibrate <场地标定.json>
+          pitchtrace-edge audit-calibration <标定报告.json> <机位巡检.json>
+          pitchtrace-edge capture <采集配置.json> <采集根目录>
+          pitchtrace-edge attach-exposures <采集根目录> <机位> <媒体周期> <曝光清单.ndjson>
+          pitchtrace-edge process-match <比赛配置.json> <replay 导出目录> <场景库.sqlite>
+          pitchtrace-edge reconstruct-match <比赛配置.json> <二维观测.ndjson> <场景库.sqlite>
+          pitchtrace-edge run-match <比赛配置.json> <运行目录>
+          pitchtrace-edge stream-match <比赛配置.json> <采集根目录> <运行目录>
+          pitchtrace-edge evaluate-match <场景库.sqlite> <比赛 ID> <场景周期> <真值.ndjson>
+          pitchtrace-edge retention <运行目录> [--apply]
+          pitchtrace-edge export-scenes <场景库.sqlite> <比赛 ID> <场景周期> [筛选项]
+          pitchtrace-edge publish-scenes <场景库.sqlite> <网关地址> <比赛 ID> <场景周期> [--backfill-bytes-per-second N]
+          pitchtrace-edge compare-scenes <场景库.sqlite> <比赛 ID> <旧周期> <新周期>
+          pitchtrace-edge scene-evidence <场景库.sqlite> <比赛 ID> <场景周期> <seq>
+          pitchtrace-edge match-info <场景库.sqlite> <比赛 ID> <场景周期>
+          pitchtrace-edge vision-worker [Core ML 检测模型]
           pitchtrace-edge publish-media <网关地址> <比赛 ID> <含 epochs 的机位目录>
           pitchtrace-edge publish-media <网关地址> <比赛 ID> <媒体周期> <平铺机位目录>
         """
@@ -58,17 +73,46 @@ enum PitchTraceEdge {
                 let isLensCalibration = arguments[0] == "calibrate-intrinsics"
                 operation = isLensCalibration ? "镜头内参标定" : "离线场地标定"
                 let scriptName = isLensCalibration ? "intrinsics" : "calibrate"
-                guard let script = Bundle.module.url(
-                    forResource: scriptName, withExtension: "py", subdirectory: "Geometry"
-                ) else {
-                    throw RecordingError("缺少随 Edge 分发的离线标定脚本")
+                try runPython(scriptName, Array(arguments.dropFirst()))
+            case ("capture", 3), ("attach-exposures", 5):
+                operation = "分机位采集与曝光映射"
+                let prefix = arguments[0] == "capture" ? [] : ["attach"]
+                try runPython("capture", prefix + arguments.dropFirst())
+            case ("audit-calibration", 3):
+                operation = "机位巡检"
+                try runPython("audit_calibration", Array(arguments.dropFirst()))
+            case ("evaluate-match", 5):
+                operation = "离线真值评估"
+                try runPython("evaluate_match", Array(arguments.dropFirst()))
+            case ("retention", 2),
+                 ("retention", 3) where arguments[2] == "--apply":
+                operation = "运行目录留存检查"
+                try runPython("retention", Array(arguments.dropFirst()))
+            case ("vision-worker", 1), ("vision-worker", 2):
+                operation = "单视角观测"
+                try runVisionWorker(modelURL: arguments.dropFirst().first.map { URL(fileURLWithPath: $0) })
+            case ("process-match", 4), ("reconstruct-match", 4), ("stream-match", 4), ("run-match", 3):
+                operation = "比赛场景重建"
+                guard let executable = Bundle.main.executableURL else { throw RecordingError("无法定位 Edge 程序") }
+                if arguments[0] == "run-match" {
+                    try runPython("run_match", Array(arguments.dropFirst()) + [executable.path])
+                } else if arguments[0] == "stream-match" {
+                    try runPython("stream_match", Array(arguments.dropFirst()) + [executable.path])
+                } else {
+                    try runPython("process_match", arguments + [executable.path])
                 }
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-                process.arguments = ["python3", "-B", script.path, arguments[1]]
-                try process.run()
-                process.waitUntilExit()
-                if process.terminationStatus != 0 { exit(1) }
+            case ("publish-scenes", 5), ("publish-scenes", 7), ("export-scenes", 4...), ("compare-scenes", 5),
+                 ("scene-evidence", 5), ("match-info", 4):
+                operation = "场景归档"
+                let command: String
+                switch arguments[0] {
+                case "publish-scenes": command = "publish"
+                case "export-scenes": command = "export"
+                case "scene-evidence": command = "evidence"
+                case "compare-scenes": command = "compare"
+                default: command = "info"
+                }
+                try runPython("scene_archive", [command] + arguments.dropFirst())
             case ("publish-media", 4), ("publish-media", 5):
                 operation = "原片提交"
                 guard let gateway = URL(string: arguments[1]) else {
@@ -93,6 +137,18 @@ enum PitchTraceEdge {
             exit(1)
         }
     }
+}
+
+private func runPython(_ name: String, _ arguments: [String]) throws {
+    guard let script = Bundle.module.url(forResource: name, withExtension: "py", subdirectory: "Geometry") else {
+        throw RecordingError("缺少随 Edge 分发的 \(name).py")
+    }
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    process.arguments = ["python3", "-B", script.path] + arguments
+    try process.run()
+    process.waitUntilExit()
+    if process.terminationStatus != 0 { exit(1) }
 }
 
 private func writeJSON(_ value: some Encodable) throws {

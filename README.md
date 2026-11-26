@@ -33,7 +33,7 @@ Camera calibration, recognition, and 3D measurement belong to Edge. Rendering an
 
 | Component | Implemented now | Planned / not yet implemented |
 | --- | --- | --- |
-| Edge | Exposure-ordered offline replay and flash timing reports for 2–4 cameras. Export and upload of v2 footage and frame indexes per camera. | Live capture and synchronization, calibration, inference, 3D fusion, action detection, automated publishing and backfill. |
+| Edge | File, RTSP and AVFoundation inputs, exposure mapping, calibration, player and ball tracking, pose and action candidates, scene and media upload with recovery. | Target-camera clock integration, model accuracy and sustained four-camera throughput on the target Mac. |
 | Live Server | Serves the Web page, the simulated stream, and v1 forwarding. The local v2 gateway archives and publishes scenes, offers paginated history, and archives fMP4 footage with per-frame exposure indexes. | Device and viewer authentication, public streaming, and operational media retention. |
 | Live Web | Built-in match, six virtual viewpoints, player following, skeleton display, v1/v2 live scenes, local v2 archive replay, and paused footage review by exposure time. v2 supports an empty pitch, a lost ball, and unknown shirt numbers. | Manual review and corrections. |
 
@@ -49,11 +49,11 @@ Server demo generator → WS /demo → Web
 External HLS source → HTTP(S) → Web (independent video playback)
 ```
 
-The v1 and v2 paths can be exercised with scripts or other data producers. Real-camera capture, reconstruction, and upload from Edge are planned.
+Edge can also process synchronized recordings and publish v2 frames and indexed footage. [Run a two-camera match locally](edge/README.md)
 
 ### Planned full data flow
 
-The complete pipeline has two outputs from Edge: structured scene snapshots (players, ball, skeletons, and action candidates), and original video clips with exposure-time indexes. The following diagram is the target architecture, not an implemented end-to-end pipeline.
+Edge delivers scene snapshots and indexed video through separate interfaces. The diagram shows how both reach the browser.
 
 ```mermaid
 flowchart LR
@@ -101,7 +101,7 @@ flowchart LR
 2. After reconnecting, Edge sends the current snapshot first and resumes live uploads, then uses available bandwidth to backfill historical snapshots, video clips, and indexes. Live data takes priority over the backlog.
 3. Server handles retries idempotently using scene frame keys and stable media paths. Backfilled old frames enter the archive without moving live viewers backward in time; media segments join HLS playlists only after the matching files and indexes are complete.
 
-The local gateway defaults to `127.0.0.1` and supports v2 archival, idempotency, and browser reconnection. Edge upload queues, automatic backfill, and public HTTPS/WSS access with device and viewer authorization are planned.
+The local gateway supports v2 archival and idempotent retries. Edge persists scenes and resumes uploads. Public HTTPS/WSS with device and viewer authorization is planned.
 
 ## Project documentation
 

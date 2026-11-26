@@ -1,6 +1,6 @@
 # PitchTrace Edge
 
-场迹的场边计算子项目。第一阶段 MVP 计划在 M6 Mac mini 上接入四路单摄，每个机位一台相机，以同步画面重建人球轨迹。当前可用 2–4 个机位的离线录像按曝光时刻重放、核对共同闪光、统计球和脚踝的双视角可见率，并按机位将原片和索引提交给本地 v2 网关。
+场迹的场边计算子项目。第一阶段 MVP 计划在 M6 Mac mini 上接入四路单摄，每个机位一台相机，以同步画面重建人球轨迹。软件支持分机位采集、按曝光标定与重建、动作候选复核、SQLite 归档和 v2 场景与原片上行。
 
 从双机位实拍到四路试点的模块分工、逐周交付物和验收门槛见 [Edge 需求与开发计划](../docs/07-edge-development-plan.md)。
 
@@ -12,6 +12,43 @@ swift test --package-path edge --disable-xctest
 ```
 
 在仅安装 Command Line Tools 的 Swift 6.4.2 环境，若测试提示 `plugin for module 'TestingMacros' not found`，可在上面的 `swift test` 命令末尾追加 `-Xswiftc -plugin-path -Xswiftc /Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing`。
+
+## 不接相机跑完一场样例
+
+比赛处理需要 Python 3.10+、带 FFmpeg 后端的 OpenCV、NumPy、FFmpeg 和 ffprobe。以下命令生成 2 秒双机位 H.264/fMP4 录像及独立坐标真值。球色检测读取原片像素，样例还提供一份带球员和球的二维标注，供几何与身份模块独立复算。
+
+```sh
+swift build --package-path edge
+trial_dir=$(mktemp -d)
+python3 -B edge/samples/generate-match.py "$trial_dir/input"
+edge/.build/debug/pitchtrace-edge run-match "$trial_dir/input/match.json" "$trial_dir/run"
+edge/.build/debug/pitchtrace-edge reconstruct-match "$trial_dir/input/annotated.json" "$trial_dir/input/observations.ndjson" "$trial_dir/run/scenes.sqlite"
+edge/.build/debug/pitchtrace-edge scene-evidence "$trial_dir/run/scenes.sqlite" training video 5
+edge/.build/debug/pitchtrace-edge compare-scenes "$trial_dir/run/scenes.sqlite" training video annotated
+edge/.build/debug/pitchtrace-edge evaluate-match "$trial_dir/run/scenes.sqlite" training annotated "$trial_dir/input/truth.ndjson"
+```
+
+每个场景周期各有 20 帧。第 5 帧起隔离 A 机位，此时只有 B 看到了球，球心三维位置缺测。第 9 帧恢复双路标定。第 12 帧开始球被遮挡，短时预测到期后转为丢失。标注复算中，7 号球员在机位切换前后沿用同一轨迹 ID。首个周期使用只找指定颜色球的 `color-ball` 检测器，球员来自第二个周期的独立二维标注。
+
+| 环节 | 命令与输入 |
+| --- | --- |
+| 采集和对时 | `capture` 独立运行各机位，`attach-exposures` 核验设备逐帧时钟，`replay` 导出原片。见[采集与健康状态](capture.md)。 |
+| 配置与标定 | `calibrate-intrinsics`、`calibrate` 估计参数，`audit-calibration` 复查移机和几何覆盖。比赛按曝光选取有效机位。见[巡检](calibration-audit.md)和[比赛配置](match-config.md)。 |
+| 视觉与重建 | `process-match` 从录像解码并观测；`reconstruct-match` 接受按曝光排序的二维 NDJSON。见[检测与模型](vision.md)、[轨迹融合](tracking.md)和[身份、姿态与动作](analysis.md)。 |
+| 编排、上行与恢复 | `run-match` 处理已有录像或启动采集，可分别提交场景及原片。`stream-match` 跟随正在采集的媒体段。见[离线运行](run-match.md)、[连续处理](stream-match.md)和[场景归档](scene-archive.md)。 |
+| 复核与留存 | `scene-evidence` 取原帧和关节证据，`match-info` 取运行版本，`export-scenes` 过滤导出，`compare-scenes` 比对复算结果，`evaluate-match` 计量独立真值，`retention` 预览到期清理。见[真值评估](evaluation.md)和[场景归档](scene-archive.md)。 |
+
+比赛配置的 `detector.backend` 默认为 `vision`，在 macOS 上调用系统人体检测、姿态和 OCR。可用 `detector.model` 指定能输出带类别框的 Core ML 足球模型，路径相对于比赛配置。受控球色的训练录像可用 `detector.ballHSV` 设置 OpenCV 的 HSV 上下界，作为无模型或模型漏检时的球候选。`detector.teamColors` 将球队 ID 映射到样衣 sRGB 三元组（0–255），色差大或两队难以区分时保留球队未知。
+
+整套回归从仓库根目录执行。Node 集成用例复用 Live 网关的 v2 校验器，首次运行需安装其锁定依赖。部分用例会在本机回环地址启动临时网关。
+
+```sh
+npm ci --prefix live/server
+swift build --package-path edge
+swift test --package-path edge --disable-xctest
+python3 -B -m unittest discover -s edge/Tests/Integration -p 'test_*.py'
+node --test edge/Tests/Integration/{calibration,intrinsics,match-pipeline,media-epoch-replay,run-match}.mjs
+```
 
 ## 离线录像输入
 
