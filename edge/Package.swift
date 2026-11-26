@@ -8,7 +8,7 @@ let package = Package(
         .executable(name: "pitchtrace-edge", targets: ["PitchTraceEdge"])
     ],
     targets: [
-        .executableTarget(name: "PitchTraceEdge"),
+        .executableTarget(name: "PitchTraceEdge", resources: [.copy("Geometry")]),
         .testTarget(name: "PitchTraceEdgeTests", dependencies: ["PitchTraceEdge"])
     ]
 )

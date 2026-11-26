@@ -45,6 +45,29 @@ swift run --package-path edge pitchtrace-edge replay "./录像目录" "./新输�
 
 导出保留各机位的输入布局。使用 `epochs/` 的机位在每条帧记录中增加 `mediaEpoch`，通过机位、周期、片段号、PTS 可取回唯一原帧。平铺录像继续使用原帧记录格式。
 
+## 离线几何标定
+
+`calibrate` 使用已知镜头内参、畸变参数和场地点的像素标注，为 2–4 台相机估计世界坐标到相机坐标的外参，再从多个视角重建独立检查点。该命令需要 PATH 中的 `python3` 能导入 OpenCV 4.5 或更新版本（`cv2`）和 NumPy（`numpy`）。从仓库根目录运行双机位合成样例。[标定样例](samples/calibration.json)
+
+```sh
+swift run --package-path edge pitchtrace-edge calibrate edge/samples/calibration.json > calibration-report.json
+```
+
+准备自己的输入时，使用以下字段。
+
+| 字段 | 填写方法 |
+| --- | --- |
+| `calibrationId`、`sampleSource` | 为这组机位、镜头和分辨率指定标定版本。合成数据填 `synthetic`，实测数据填 `field`。 |
+| `cameras` | 每个机位填写 `imageSize: [宽, 高]`、以像素为单位的 `fx, fy, cx, cy` 和 OpenCV 畸变系数 `[k1, k2, p1, p2, k3]`。标注使用这组内参对应的原始分辨率，像素原点在左上角，`u` 向右、`v` 向下。 |
+| `fitPoints` | 每点填写唯一 `id`、场地坐标 `worldM: [X,Y,Z]` 和看得到该点的各机位 `pixels: {机位: [u,v]}`。以中圈地面为原点，X 沿长边，Y 向上，Z 沿短边，单位米。每机位至少需要 4 个分散的共面点，或 6 个非共面的点。 |
+| `checkPoints` | 用相同格式填写预留地面点和已知高度的点，每个点使用独立测量的坐标。某机位缺测时省略该机位。 |
+
+报告的 `cameras` 给出各机位的旋转矩阵、平移向量和拟合点重投影均方根误差（`fitRmsPx`）。将场地坐标列向量乘以 `rotationWorldToCamera` 再加 `translationM`，得到 OpenCV 相机坐标（X 向右、Y 向下、Z 向前）。`checkPoints` 保留每个检查点的状态，成功时给出重建坐标、三维误差（米）和重投影均方根误差（像素）。单视角或交会角不足 1° 的点保留为缺测。
+
+样例的两台虚拟相机分别位于 `[-20,10,-22]` 米和 `[19,9,-20]` 米，都朝向中圈。每路使用 6 个地面拟合点。预期两个独立地面点和第一个高点均可重建，第二个高点只有 A 路观测。所有可重建点的三维误差应小于 1 毫米。查看 `ground` 和 `elevated` 中的计划点数、可测点数、P95 和最大误差。至少有一个地面检查点且全部可测时，`ground.withinThreshold` 给出 P95 是否满足 0.30 米门槛。
+
+执行 `swift build --package-path edge` 后，运行 `node --test edge/Tests/Integration/calibration.mjs` 可复验双路和四路标定、检查点误差超限及退化机位。
+
 ## 用生成样例联调
 
 样例需要 Node.js 22.13+、FFmpeg（带 `libx264`）和 ffprobe。先在一个终端启动 [Live 网关](../live/server/README.md#启动本地直播接收服务)，再从仓库根目录执行以下命令。
@@ -178,6 +201,6 @@ swift run --package-path edge pitchtrace-edge audit-visibility \
 
 在 `views` 内为有对应原帧的机位填写片段号、PTS，以及显式周期录像的 `mediaEpoch`。能看清指定目标填 `visible: true`，有原帧但目标被挡或无法辨认填 `false`。缺帧时省略该机位，所有机位均缺帧时保留 `"views": {}`。每个计划样本都进入该组的分母。任意两路可见帧的曝光 UTC 相差不超过 `maxSkewUs` 时，该样本计入分子一次。
 
-报告的 `samples` 保留各机位原帧、人工判读、缺帧机位 `missingCameras` 和双视角判定 `dualView`。有两路以上（含两路）看清时，`closestVisibleSkewUs` 给出其中最接近的一对曝光差，便于复核超窗样本。
+报告的 `samples` 保留各机位原帧引用、人工判读、缺帧机位 `missingCameras` 和双视角判定 `dualView`。至少两路看清时，`closestVisibleSkewUs` 给出可见机位之间最小的曝光差，便于复核超窗样本。
 
 设备采集与推理的设计见[边缘计算技术方案](../docs/02-technical-design.md#pitchtrace-edge)。
