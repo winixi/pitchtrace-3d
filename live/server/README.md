@@ -19,6 +19,17 @@ node live/server/server.cjs
 - 默认监听 `127.0.0.1:8766`。在可信局域网中，可通过 `PITCHTRACE_HOST` 指定 Mac 的局域网 IP、通过 `PITCHTRACE_PORT` 指定端口，观众用相应的 IP 和端口打开页面。服务采用本地开发配置，没有身份验证。
 - **内置演示** 回到内置的一分钟时间轴。WebSocket 模式持续显示传入的时间戳，时长由数据源决定。
 
+## 发布 Live
+
+提交 Live Server 和 Live Web 的版本更新后，给该提交打一个 `live-v*` 标签并推送。下方命令以 `0.1.1` 为例。
+
+```sh
+git tag -a live-v0.1.1 -m 'PitchTrace Live 0.1.1'
+git push origin live-v0.1.1
+```
+
+GitHub Actions 会测试和构建两个模块，并将网关与离线观赛页打包为 `pitchtrace-live-v0.1.1.zip`，上传到同名版本。带 `-rc.1` 等后缀的版本会标记为预发布。[Live 发布工作流](../../.github/workflows/live-release.yml)
+
 ## 边缘节点帧格式
 
 下面的命令会发送一帧蓝队 7 号球员及足球的位置。发帧时页面应已订阅「连接数据」。

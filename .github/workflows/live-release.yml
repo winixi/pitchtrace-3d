@@ -1,0 +1,115 @@
+name: 发布 PitchTrace Live
+
+on:
+  push:
+    tags:
+      - 'live-v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: 测试并打包 Live
+    if: ${{ !github.event.deleted }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出标签对应的源码
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: 设置 Node.js
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '22'
+      - name: 测试并构建观赛前端
+        working-directory: live/web
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - name: 测试并构建试播网关
+        working-directory: live/server
+        run: |
+          npm ci
+          npm test
+          npm run build
+          PITCHTRACE_TEST_ENTRY=../server.cjs npm test
+      - name: 打包网关和离线观赛页
+        shell: bash
+        run: |
+          package="pitchtrace-${GITHUB_REF_NAME}"
+          staging="$(mktemp -d "$RUNNER_TEMP/pitchtrace-live.XXXXXX")"
+          bundle="$staging/$package"
+          mkdir -p "$bundle/live/server" "$bundle/live/web/dist"
+          cp LICENSE "$bundle/"
+          cp live/server/server.cjs "$bundle/live/server/"
+          cp live/web/dist/index.html "$bundle/live/web/dist/"
+          cp -R live/web/licenses "$bundle/live/web/"
+          cd "$staging"
+          zip -qr "$RUNNER_TEMP/$package.zip" "$package"
+          unzip -tq "$RUNNER_TEMP/$package.zip"
+      - name: 保存发布包
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: pitchtrace-live-release
+          path: ${{ runner.temp }}/pitchtrace-${{ github.ref_name }}.zip
+          compression-level: 0
+          if-no-files-found: error
+          overwrite: true
+
+  release:
+    name: 发布 GitHub Release
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 下载已测试的发布包
+        uses: actions/download-artifact@v8.0.2
+        with:
+          name: pitchtrace-live-release
+          path: ${{ runner.temp }}/live-release
+      - name: 上传附件并发布
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          asset_name="pitchtrace-${GITHUB_REF_NAME}.zip"
+          asset="$RUNNER_TEMP/live-release/$asset_name"
+          test -f "$asset"
+
+          if is_draft="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft')"; then
+            if [[ "$is_draft" == false ]]; then
+              uploaded="$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[] | select(.state == "uploaded") | .name')"
+              if ! grep -Fxq -- "$asset_name" <<< "$uploaded"; then
+                printf '已发布的 %s 缺少附件 %s\n' "$GITHUB_REF_NAME" "$asset_name" >&2
+                exit 1
+              fi
+              printf '%s 已发布并包含 %s\n' "$GITHUB_REF_NAME" "$asset_name"
+              exit 0
+            fi
+          else
+            notes="$RUNNER_TEMP/live-release-notes.md"
+            cat > "$notes" <<'MARKDOWN'
+          下载并解压发布包。用支持 WebGL 2 的浏览器打开 `live/web/dist/index.html`，即可离线观看内置演示。
+
+          使用 Node.js 22.13 或更新版本时，可从解压目录运行 `node live/server/server.cjs`，再打开 <http://127.0.0.1:8766/>。
+          MARKDOWN
+            gh release create "$GITHUB_REF_NAME" --verify-tag --draft \
+              --title "PitchTrace Live ${GITHUB_REF_NAME#live-}" --notes-file "$notes"
+          fi
+
+          gh release upload "$GITHUB_REF_NAME" "$asset" --clobber
+
+          version="${GITHUB_REF_NAME#live-v}"
+          if [[ "${version%%+*}" == *-* ]]; then
+            gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease
+          else
+            gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease=false --latest
+          fi
