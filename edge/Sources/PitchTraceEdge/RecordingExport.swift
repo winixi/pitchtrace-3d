@@ -66,9 +66,9 @@ private func probeVideo(
     return (MediaTimeBase(numerator: numerator, denominator: denominator), video.frames)
 }
 
-private func mediaBytes(at file: URL) throws -> Data {
+func mediaBytes(at file: URL, maxBytes: Int = maxMediaBytes) throws -> Data {
     let values = try file.resourceValues(forKeys: [.fileSizeKey])
-    guard let count = values.fileSize, (1...maxMediaBytes).contains(count) else {
+    guard let count = values.fileSize, count > 0, count <= maxBytes else {
         throw RecordingError("\(file.path)：媒体文件大小超出 v2 范围")
     }
     let data = try Data(contentsOf: file)
@@ -78,20 +78,22 @@ private func mediaBytes(at file: URL) throws -> Data {
     return data
 }
 
-private func sha256(_ data: Data) -> String {
+func sha256(_ data: Data) -> String {
     SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
 }
 
-private func segmentNumbers(in folder: URL, cameraId: String) throws -> [Int64] {
+func segmentNumbers(
+    in folder: URL, cameraId: String, indexSuffix: String = ".exposure.json"
+) throws -> [Int64] {
     let names = try FileManager.default.contentsOfDirectory(atPath: folder.path)
     var media: Set<Int64> = []
-    var exposure: Set<Int64> = []
+    var indexes: Set<Int64> = []
     for name in names.sorted() {
         let suffix: String
         if name.hasSuffix(".m4s") {
             suffix = ".m4s"
-        } else if name.hasSuffix(".exposure.json") {
-            suffix = ".exposure.json"
+        } else if name.hasSuffix(indexSuffix) {
+            suffix = indexSuffix
         } else {
             continue
         }
@@ -103,13 +105,14 @@ private func segmentNumbers(in folder: URL, cameraId: String) throws -> [Int64] 
         if suffix == ".m4s" {
             media.insert(number)
         } else {
-            exposure.insert(number)
+            indexes.insert(number)
         }
     }
-    if let missing = media.subtracting(exposure).min() {
-        throw RecordingError("机位 \(cameraId)，片段 \(missing)：缺少曝光映射文件")
+    if let missing = media.subtracting(indexes).min() {
+        let kind = indexSuffix == ".exposure.json" ? "曝光映射" : "媒体索引"
+        throw RecordingError("机位 \(cameraId)，片段 \(missing)：缺少\(kind)文件")
     }
-    if let missing = exposure.subtracting(media).min() {
+    if let missing = indexes.subtracting(media).min() {
         throw RecordingError("机位 \(cameraId)，片段 \(missing)：缺少对应媒体文件")
     }
     guard !media.isEmpty else {
@@ -118,22 +121,39 @@ private func segmentNumbers(in folder: URL, cameraId: String) throws -> [Int64] 
     return media.sorted()
 }
 
-private func exportCamera(
-    _ camera: URL, to output: URL, scratch: URL, encoder: JSONEncoder, gaps: inout [String]
-) throws -> [ReplayFrame] {
-    let cameraId = camera.lastPathComponent
-    let inputSegments = camera.appendingPathComponent("segments", isDirectory: true)
-    let outputSegments = output.appendingPathComponent("segments", isDirectory: true)
-    let initialization = try mediaBytes(at: camera.appendingPathComponent("init.mp4"))
-    let initializationSHA = sha256(initialization)
-    let numbers = try segmentNumbers(in: inputSegments, cameraId: cameraId)
-    try FileManager.default.createDirectory(at: outputSegments, withIntermediateDirectories: true)
-    try initialization.write(to: output.appendingPathComponent("init.mp4"))
+private struct CameraExport {
+    private let inputSegments: URL
+    private let outputSegments: URL
+    private let initialization: Data
+    private let initializationSHA: String
+    private var segments: ArraySlice<Int64>
+    private var frames: ArraySlice<ReplayFrame> = []
+    private var timing: CameraTiming
+    private let gapLog: FileHandle
+    private(set) var gapCount = 0
 
-    var timing = CameraTiming(cameraId: cameraId)
-    var frames: [ReplayFrame] = []
-    for number in numbers {
-        let location = "机位 \(cameraId)，片段 \(number)"
+    init(camera: URL, stage: URL, work: URL) throws {
+        let cameraId = camera.lastPathComponent
+        let output = stage.appendingPathComponent(cameraId, isDirectory: true)
+        inputSegments = camera.appendingPathComponent("segments", isDirectory: true)
+        outputSegments = output.appendingPathComponent("segments", isDirectory: true)
+        segments = try segmentNumbers(in: inputSegments, cameraId: cameraId)[...]
+        initialization = try mediaBytes(at: camera.appendingPathComponent("init.mp4"))
+        initializationSHA = sha256(initialization)
+        timing = CameraTiming(cameraId: cameraId)
+        try FileManager.default.createDirectory(at: outputSegments, withIntermediateDirectories: true)
+        try initialization.write(to: output.appendingPathComponent("init.mp4"))
+
+        let gapFile = work.appendingPathComponent("\(cameraId).txt")
+        try Data().write(to: gapFile)
+        gapLog = try FileHandle(forUpdating: gapFile)
+    }
+
+    mutating func nextFrame(scratch: URL, encoder: JSONEncoder) throws -> ReplayFrame? {
+        if let frame = frames.popFirst() { return frame }
+        guard let number = segments.popFirst() else { return nil }
+
+        let location = "机位 \(timing.cameraId)，片段 \(number)"
         let bytes = try mediaBytes(at: inputSegments.appendingPathComponent("\(number).m4s"))
         let (timeBase, videoFrames) = try probeVideo(
             initialization: initialization, segment: bytes, scratch: scratch, location: location
@@ -145,6 +165,7 @@ private func exportCamera(
         } catch {
             throw RecordingError("\(location)：无法读取曝光映射，\(error)")
         }
+        var gaps: [String] = []
         let aligned = try timing.align(
             segment: number, timeBase: timeBase, videoFrames: videoFrames, exposures: exposures, gaps: &gaps
         )
@@ -154,9 +175,56 @@ private func exportCamera(
         )
         try bytes.write(to: outputSegments.appendingPathComponent("\(number).m4s"))
         try encoder.encode(index).write(to: outputSegments.appendingPathComponent("\(number).json"))
-        frames.append(contentsOf: aligned)
+        if !gaps.isEmpty {
+            try gapLog.write(contentsOf: Data((gaps.joined(separator: "\n") + "\n").utf8))
+            gapCount += gaps.count
+        }
+        frames = aligned[...]
+        return frames.popFirst()
     }
-    return frames
+
+    func appendGaps(to report: FileHandle) throws {
+        try gapLog.seek(toOffset: 0)
+        while let chunk = try gapLog.read(upToCount: 64 * 1024), !chunk.isEmpty {
+            try report.write(contentsOf: chunk)
+        }
+        try gapLog.close()
+    }
+}
+
+// 每路已按曝光严格递增，选各路首帧即可按 (曝光 UTC, 机位 ID) 归并。
+func mergeReplayFrames(
+    cameraCount: Int, next: (Int) throws -> ReplayFrame?, write: (ReplayFrame) throws -> Void
+) throws -> Int {
+    var heads = try (0..<cameraCount).map(next)
+    var count = 0
+    while true {
+        var earliest: (index: Int, frame: ReplayFrame)?
+        for (index, head) in heads.enumerated() {
+            guard let head else { continue }
+            if let current = earliest?.frame, (current.utc, current.cameraId) <= (head.utc, head.cameraId) {
+                continue
+            }
+            earliest = (index, head)
+        }
+        guard let earliest else { return count }
+        try write(earliest.frame)
+        count += 1
+        heads[earliest.index] = try next(earliest.index)
+    }
+}
+
+private func writeFile<T>(at path: URL, _ write: (FileHandle) throws -> T) throws -> T {
+    try Data().write(to: path)
+    let file = try FileHandle(forWritingTo: path)
+    do {
+        let result = try write(file)
+        try file.close()
+        return result
+    } catch {
+        try? file.close()
+        throw error
+    }
 }
 
 func exportRecording(from input: URL, to output: URL) throws -> (frames: Int, gaps: Int) {
@@ -168,51 +236,41 @@ func exportRecording(from input: URL, to output: URL) throws -> (frames: Int, ga
         at: input, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]
     ).filter { try $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true }
         .sorted { $0.lastPathComponent < $1.lastPathComponent }
-    guard cameras.count == 2, cameras.allSatisfy({
+    guard (2...4).contains(cameras.count), cameras.allSatisfy({
         isMediaCameraID($0.lastPathComponent)
     }) else {
-        throw RecordingError("录像目录需要恰好两个以 v2 机位 ID 命名的子目录")
+        throw RecordingError("录像目录需要 2–4 个以 v2 机位 ID 命名的子目录")
     }
 
     let stage = output.deletingLastPathComponent().appendingPathComponent(".pitchtrace-\(UUID())")
     try files.createDirectory(at: stage, withIntermediateDirectories: false)
     defer { try? files.removeItem(at: stage) }
-    let scratch = stage.appendingPathComponent(".probe.mp4")
+    let work = stage.appendingPathComponent(".work", isDirectory: true)
+    try files.createDirectory(at: work, withIntermediateDirectories: false)
+    var sources = try cameras.map { try CameraExport(camera: $0, stage: stage, work: work) }
+    let scratch = work.appendingPathComponent("probe.mp4")
     let encoder = JSONEncoder()
     encoder.outputFormatting = .sortedKeys
-    var gaps: [String] = []
-    var frames: [ReplayFrame] = []
-    for camera in cameras {
-        let directory = stage.appendingPathComponent(camera.lastPathComponent, isDirectory: true)
-        frames.append(contentsOf: try exportCamera(
-            camera, to: directory, scratch: scratch, encoder: encoder, gaps: &gaps
-        ))
-    }
-    try files.removeItem(at: scratch)
-
-    // 曝光相同时按机位 ID 排序，便于逐字节复现同一输入。
-    frames.sort { ($0.utc, $0.cameraId) < ($1.utc, $1.cameraId) }
-    let replay = stage.appendingPathComponent("frames.ndjson")
-    try Data().write(to: replay)
-    let writer = try FileHandle(forWritingTo: replay)
-    do {
+    let frameCount = try writeFile(at: stage.appendingPathComponent("frames.ndjson")) { file in
         var buffer = Data()
-        for frame in frames {
+        let count = try mergeReplayFrames(cameraCount: sources.count) { camera in
+            try sources[camera].nextFrame(scratch: scratch, encoder: encoder)
+        } write: { frame in
             buffer.append(try encoder.encode(frame))
             buffer.append(0x0A)
             if buffer.count >= 64 * 1024 {
-                try writer.write(contentsOf: buffer)
+                try file.write(contentsOf: buffer)
                 buffer.removeAll(keepingCapacity: true)
             }
         }
-        try writer.write(contentsOf: buffer)
-        try writer.close()
-    } catch {
-        try? writer.close()
-        throw error
+        try file.write(contentsOf: buffer)
+        return count
     }
-    let report = gaps.isEmpty ? "" : gaps.joined(separator: "\n") + "\n"
-    try Data(report.utf8).write(to: stage.appendingPathComponent("gaps.txt"))
+    // 各机位交错处理时先独立记缺口，最终报告沿用机位、片段、展示帧的顺序。
+    try writeFile(at: stage.appendingPathComponent("gaps.txt")) { report in
+        for source in sources { try source.appendGaps(to: report) }
+    }
+    try files.removeItem(at: work)
     try files.moveItem(at: stage, to: output)
-    return (frames.count, gaps.count)
+    return (frameCount, sources.reduce(0) { $0 + $1.gapCount })
 }

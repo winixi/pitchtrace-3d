@@ -85,7 +85,7 @@ extension ReplayFrame: Decodable {
     }
 }
 
-struct MediaIndex: Encodable {
+struct MediaIndex: Codable {
     let initSha256: String
     let segmentSha256: String
     let segmentBytes: Int

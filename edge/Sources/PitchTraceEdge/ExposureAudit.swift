@@ -26,8 +26,9 @@ private struct FlashAnnotations: Decodable {
     let events: [Event]
 
     func validatedReferences() throws -> Set<CameraFrameReference> {
-        guard cameras.count == 2, cameras[0] != cameras[1], cameras.allSatisfy(isMediaCameraID) else {
-            throw RecordingError("闪光标注需要两个不同的 v2 机位 ID")
+        guard (2...4).contains(cameras.count), Set(cameras).count == cameras.count,
+              cameras.allSatisfy(isMediaCameraID) else {
+            throw RecordingError("闪光标注需要 2 至 4 个不同的 v2 机位 ID")
         }
         var eventIDs: Set<String> = []
         var references: Set<CameraFrameReference> = []
@@ -59,6 +60,7 @@ struct ExposureAuditReport: Encodable {
         let frames: [ReplayFrame]
         let missingCameras: [String]
         let signedSkewUs: Int64?
+        let spanUs: Int64?
     }
 
     let sampleSource: ExposureSampleSource
@@ -117,14 +119,23 @@ func auditExposure(frames: URL, annotations: URL) async throws -> ExposureAuditR
             }
             return frame
         }
+        let missing = marks.cameras.filter { event.frames[$0] == nil }
+        let exposures = observations.map(\.utc)
+        let spanUs: Int64?
+        if missing.isEmpty, let first = exposures.min(), let last = exposures.max() {
+            spanUs = last - first
+        } else {
+            spanUs = nil
+        }
         return ExposureAuditReport.Event(
             id: event.id,
             frames: observations,
-            missingCameras: marks.cameras.filter { event.frames[$0] == nil },
-            signedSkewUs: observations.count == 2 ? observations[1].utc - observations[0].utc : nil
+            missingCameras: missing,
+            signedSkewUs: missing.isEmpty && observations.count == 2 ? observations[1].utc - observations[0].utc : nil,
+            spanUs: spanUs
         )
     }
-    let offsets = events.compactMap { $0.signedSkewUs.map { abs($0) } }.sorted()
+    let offsets = events.compactMap(\.spanUs).sorted()
     // 最近秩的 P95 取第 ceil(0.95 × 样本数) 个值。
     let rank = offsets.count - offsets.count / 20
     let p95 = rank == 0 ? nil : offsets[rank - 1]

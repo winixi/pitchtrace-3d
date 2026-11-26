@@ -33,7 +33,7 @@ Camera calibration, recognition, and 3D measurement belong to Edge. Rendering an
 
 | Component | Implemented now | Planned / not yet implemented |
 | --- | --- | --- |
-| Edge | Dual-camera recording input, exposure-ordered offline replay, and v2 fMP4 media export. | Live camera capture and synchronization, calibration, inference, tracking and 3D fusion, action generation, and uploads. |
+| Edge | Exposure-ordered offline replay and flash timing reports for 2–4 cameras. Export and upload of v2 footage and frame indexes per camera. | Live capture and synchronization, calibration, inference, 3D fusion, action detection, automated publishing and backfill. |
 | Live Server | Serves the Web page, the simulated stream, and v1 forwarding. The local v2 gateway archives and publishes scenes, offers paginated history, and archives fMP4 footage with per-frame exposure indexes. | Device and viewer authentication, public streaming, and operational media retention. |
 | Live Web | Built-in match, six virtual viewpoints, player following, skeleton display, v1/v2 live scenes, local v2 archive replay, and paused footage review by exposure time. v2 supports an empty pitch, a lost ball, and unknown shirt numbers. | Manual review and corrections. |
 

@@ -13,14 +13,16 @@ struct ExposureAuditTests {
         )
     }
 
-    private func audit(_ events: [[String: Any]], rows: [ReplayFrame]) async throws -> ExposureAuditReport {
+    private func audit(
+        _ events: [[String: Any]], rows: [ReplayFrame], cameras: [String] = ["A", "B"]
+    ) async throws -> ExposureAuditReport {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         defer { try? FileManager.default.removeItem(at: directory) }
         let marks = directory.appendingPathComponent("flashes.json")
         let frames = directory.appendingPathComponent("frames.ndjson")
         try JSONSerialization.data(withJSONObject: [
-            "sampleSource": "synthetic", "cameras": ["A", "B"], "events": events,
+            "sampleSource": "synthetic", "cameras": cameras, "events": events,
         ]).write(to: marks)
         let encoder = JSONEncoder()
         var body = Data()
@@ -64,6 +66,7 @@ struct ExposureAuditTests {
         #expect(report.maxAbsUs == 50_000)
         #expect(report.p95WithinThreshold == true)
         #expect(report.events[0].signedSkewUs == -5_000)
+        #expect(report.events[0].spanUs == 5_000)
         #expect(report.events[0].frames.map(\.segment) == [0, 1])
         #expect(report.events[20].missingCameras == ["B"])
         #expect(report.events[20].signedSkewUs == nil)
@@ -81,6 +84,49 @@ struct ExposureAuditTests {
         #expect(report.maxAbsUs == nil)
         #expect(report.p95WithinThreshold == nil)
         #expect(report.events[0].missingCameras == ["A"])
+    }
+
+    @Test(arguments: [["C", "A", "B"], ["C", "A", "B", "D"]])
+    func usesFullExposureRangeForCompleteGroupsOnly(cameras: [String]) async throws {
+        var rows = [
+            replayFrame("A", 0, offset: -3_000), replayFrame("B", 0, offset: 4_000),
+            replayFrame("C", 0),
+        ]
+        if cameras.contains("D") {
+            rows.append(replayFrame("D", 0, offset: 1_000))
+        }
+        let complete = Dictionary(uniqueKeysWithValues: rows.map {
+            ($0.cameraId, ["segment": $0.segment, "pts": $0.frame.pts])
+        })
+        rows.append(contentsOf: [replayFrame("A", 1), replayFrame("B", 1, offset: 70_000)])
+        let report = try await audit([
+            ["id": "complete", "frames": complete],
+            ["id": "partial", "frames": ["A": ["segment": 0, "pts": 1], "B": ["segment": 1, "pts": 2]]],
+            ["id": "none", "frames": [:]],
+        ], rows: rows, cameras: cameras)
+
+        #expect(report.pairedCount == 1)
+        #expect(report.unpairedCount == 2)
+        #expect(report.p95AbsUs == 7_000)
+        #expect(report.maxAbsUs == 7_000)
+        #expect(report.p95WithinThreshold == false)
+        #expect(report.events[0].frames.map(\.cameraId) == cameras)
+        #expect(report.events[0].spanUs == 7_000)
+        #expect(report.events.allSatisfy { $0.signedSkewUs == nil })
+        #expect(report.events[1].missingCameras == cameras.filter { !["A", "B"].contains($0) })
+        #expect(report.events[1].spanUs == nil)
+        #expect(report.events[2].missingCameras == cameras)
+        #expect(report.events[2].spanUs == nil)
+    }
+
+    @Test(arguments: [["A"], ["A", "B", "B"], ["A", "B", "C", "D", "E"]])
+    func rejectsInvalidCameraLists(cameras: [String]) async {
+        do {
+            _ = try await audit([], rows: [], cameras: cameras)
+            Issue.record("应拒绝机位列表 \(cameras)")
+        } catch {
+            #expect(error.localizedDescription.contains("2 至 4 个不同的 v2 机位 ID"))
+        }
     }
 
     @Test func rejectsUnresolvableAndReusedFrameReferences() async throws {
