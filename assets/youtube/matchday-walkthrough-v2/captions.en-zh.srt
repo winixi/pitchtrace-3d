@@ -1,0 +1,269 @@
+1
+00:00:00,640 --> 00:00:02,575
+It’s an hour before kickoff.
+离开球还有一小时。
+
+2
+00:00:03,495 --> 00:00:08,129
+Here’s the matchday workflow we’re building for PitchTrace 3D,
+这是我们正在为场迹设计的比赛日操作流程，
+
+3
+00:00:08,129 --> 00:00:10,840
+starting with the first camera on the touchline.
+从边线旁的第一台相机开始。
+
+4
+00:00:12,400 --> 00:00:16,550
+Secure one camera to each fixed mount and label them A through D.
+每个固定支架各装一台相机，依次标为 A 到 D。
+
+5
+00:00:16,850 --> 00:00:19,970
+Lock the position and aim of each camera.
+锁定每台相机的位置和朝向。
+
+6
+00:00:19,970 --> 00:00:23,716
+Have a player take a ball from halfway to the far penalty area.
+请一名球员从中线带球到远端禁区。
+
+7
+00:00:24,016 --> 00:00:26,628
+Look at two fixed views side by side.
+并排对照两个固定机位的画面。
+
+8
+00:00:26,958 --> 00:00:29,686
+Can you still pick out the ball and the shirt number?
+球和球衣号码还能看清吗？
+
+9
+00:00:30,066 --> 00:00:32,807
+If a player blocks the ball in camera A,
+如果球员在 A 机位的画面中挡住了球，
+
+10
+00:00:32,807 --> 00:00:35,590
+check the same instant in camera B.
+就查看 B 机位在同一时刻的画面。
+
+11
+00:00:35,590 --> 00:00:38,073
+Both cameras stay fixed throughout the match.
+整场比赛，两台相机都固定不动。
+
+12
+00:00:39,480 --> 00:00:44,319
+Next, make sure the cameras expose their frames at the same instant.
+接下来，确认各台相机在同一时刻曝光。
+
+13
+00:00:45,111 --> 00:00:47,904
+In this setup, they share a hardware trigger.
+这套设备共用同一个硬件触发信号。
+
+14
+00:00:48,696 --> 00:00:51,449
+Fire a flash where the cameras can see it,
+在各台相机都能拍到的位置打一次闪光，
+
+15
+00:00:51,449 --> 00:00:54,106
+then mark the flash in each recording.
+再在每路录像中标出闪光出现的那一帧。
+
+16
+00:00:54,898 --> 00:00:57,374
+Here’s the two-camera timing report.
+这是双机位对时报告。
+
+17
+00:00:58,166 --> 00:01:01,277
+It shows how far apart the exposures were,
+报告会列出两路曝光时刻相差多久，
+
+18
+00:01:01,277 --> 00:01:03,808
+and whether either camera missed a flash.
+还会显示有无相机漏拍闪光。
+
+19
+00:01:05,480 --> 00:01:08,706
+Now give every camera the same map of the pitch.
+现在，让所有相机共用一套球场坐标。
+
+20
+00:01:09,626 --> 00:01:13,639
+Start with a calibration board to measure lens distortion.
+先用标定板测量镜头畸变。
+
+21
+00:01:14,559 --> 00:01:16,575
+Then match visible pitch markings
+再把画面上可见的场线标记，
+
+22
+00:01:16,575 --> 00:01:19,132
+to points you’ve measured on the ground.
+与场地上实际测量的点一一对应。
+
+23
+00:01:20,052 --> 00:01:24,069
+A pole of known height gives you a reference above the grass.
+用一根高度已知的标杆作参照，确定离地高度。
+
+24
+00:01:24,989 --> 00:01:27,931
+Finally, check a point you left out of calibration
+最后，选一个没有参与标定的检查点，
+
+25
+00:01:27,931 --> 00:01:31,436
+and see how closely its position lines up.
+看看算出的位置与实测位置相差多少。
+
+26
+00:01:33,420 --> 00:01:36,294
+Before kickoff, assign the match ID,
+开球前，先为这场比赛分配编号，
+
+27
+00:01:36,294 --> 00:01:38,116
+select the pitch and team sheets,
+选择场地和两队的出场名单，
+
+28
+00:01:38,116 --> 00:01:40,585
+and save the calibration for this setup.
+再保存这组机位的标定结果。
+
+29
+00:01:40,885 --> 00:01:44,409
+Check all four recordings and the available disk space.
+检查四路录像和剩余磁盘空间。
+
+30
+00:01:44,709 --> 00:01:46,531
+At the whistle, mark kickoff.
+哨声一响，标记开球时刻。
+
+31
+00:01:46,831 --> 00:01:50,588
+In the planned system, the pitch-side Mac reconstructs the play
+按设计，场边的 Mac 将重建场上动作，
+
+32
+00:01:50,588 --> 00:01:53,363
+and sends match updates to the Live gateway.
+再把比赛数据发往 Live 网关。
+
+33
+00:01:54,500 --> 00:01:56,938
+You can try the broadcast side today.
+现在就能试用直播端。
+
+34
+00:01:57,466 --> 00:02:00,532
+Start the local gateway, open the viewer,
+启动本地网关，打开观赛页面，
+
+35
+00:02:00,532 --> 00:02:03,215
+select Live, and choose Local sample.
+点击「连接直播」，再选「本机试播」。
+
+36
+00:02:03,743 --> 00:02:06,903
+As the first update arrives, the players appear
+第一帧数据一到，球员就会出现在画面上，
+
+37
+00:02:06,903 --> 00:02:09,261
+and the match clock starts moving.
+比赛时钟也开始走动。
+
+38
+00:02:10,400 --> 00:02:13,658
+On the viewer’s screen, the ball is already in play.
+在观众的屏幕上，球已经动起来了。
+
+39
+00:02:14,578 --> 00:02:17,865
+Freeze the action and move the virtual camera around it.
+定格这一刻，再移动虚拟机位，换个角度看。
+
+40
+00:02:18,065 --> 00:02:20,722
+The players stay exactly where they were,
+所有球员都停留在当时的位置，
+
+41
+00:02:20,722 --> 00:02:23,777
+so you can see who was available for the pass.
+这下就看得出，谁能接应这脚传球。
+
+42
+00:02:24,697 --> 00:02:27,760
+Select Resume live to catch up with the match.
+点击「返回直播」，就能跟上当前赛况。
+
+43
+00:02:30,450 --> 00:02:32,790
+Here’s a goal from the built-in match.
+这是内置模拟比赛里的一粒进球。
+
+44
+00:02:33,535 --> 00:02:35,114
+Nine puts it away.
+9 号把球送进了网窝。
+
+45
+00:02:35,859 --> 00:02:39,392
+Now wind back to the tackle and watch from above.
+现在回到那次铲球，从上方再看一遍。
+
+46
+00:02:40,136 --> 00:02:42,989
+Keep your eye on nine, across from the ball.
+注意看，9 号在远离球的那一侧。
+
+47
+00:02:45,363 --> 00:02:49,450
+He starts his run while the defender is still dealing with seven.
+防守队员还在盯着 7 号，9 号已经启动了。
+
+48
+00:02:50,195 --> 00:02:53,926
+Play it at half speed and watch where that run takes him.
+用半速回放，看看他跑到了哪里。
+
+49
+00:02:55,380 --> 00:02:57,576
+Remember the flash test before kickoff?
+还记得开球前的闪光测试吗？
+
+50
+00:02:57,876 --> 00:02:59,708
+Here’s what that timing gives you.
+现在就能看到对时的用处了。
+
+51
+00:03:00,008 --> 00:03:03,618
+In this two-camera test archive, pause at twenty-five seconds.
+打开这场双机位测试的归档回放，在第 25 秒暂停。
+
+52
+00:03:03,918 --> 00:03:07,828
+Open Footage review and switch from camera A to camera B.
+打开「同步原片复核」，从 A 机位切换到 B 机位。
+
+53
+00:03:08,128 --> 00:03:11,007
+You’re looking at the same instant from both positions.
+两个机位呈现的是同一个瞬间。
+
+54
+00:03:11,307 --> 00:03:14,294
+Try the 3D viewer yourself through the link below.
+点击下方链接，亲自试试三维观赛。

@@ -1,0 +1,71 @@
+PitchTrace 3D 比赛日操作指南
+第三版 · 拟定时长 3 分 15 秒 · 待确认
+
+YouTube 英文标题
+PitchTrace 3D Matchday Walkthrough | From Eight Fixed Cameras to 3D Replay
+
+前 2 分 10 秒跟随场边操作员，后 1 分 05 秒进入观众端。场边用一次热身试踢检查系统，观众端用项目内置比赛展示一粒进球。八个固定机位和 Edge 三路并行分析取自本次产品设计，相关动画持续标注 “Planned eight-camera workflow”。本地网关、观赛界面与双机位测试归档用现有软件录屏。
+
+英文为配音稿，中文为对应字幕译稿。制作时按语意和实际语速断句，每个字幕段上方一行英文、下方一行简体中文。
+
+00:00–00:10　边线上的第一台相机
+画面　先听到一脚轻触球声。固定相机前的球滚出画面，切俯视图，四个原有机位和四个角位依次亮起。片名出现。
+EN　Watch this pass from the touchline. Now watch it from the corner. Here’s the eight-camera matchday workflow we’re designing for PitchTrace 3D.
+中　先从边线看这脚传球，再从角旗区看一遍。这就是场迹正在设计的八机位比赛日流程。
+
+00:10–00:35　架设八机位，检查全场覆盖
+画面　保留原有 A–D，在四个角旗外的安全区域分别增加 E–H，镜头朝向场内。八个底座、朝向和视场锥锁定。叠加覆盖网格，用不同纹理表示 0、1、2+ 个有效视角。带球走过两条边线、两端禁区和四角，抽查一次挑球。放大一个格子，并排给出两个固定机位的画面，检查球、脚部、号码能否看清。布设目标是全场无盲区，逐区检查三维测量需要的双视角重叠和夹角；场地覆盖图注明为示意。
+EN　Keep the original four cameras. Mount one more just outside each corner flag, facing into the pitch. All eight stay fixed. Walk a ball along both touchlines, through both penalty areas and into the corners. Check the whole pitch on the coverage map. For a 3D position, two cameras need a clear view of the same target from different angles.
+中　保留原有四台相机，在每面角旗外侧各加一台，朝向场内。八台相机全程固定。带球走过两条边线、两端禁区和四角，在覆盖图上逐区检查。要得到三维位置，至少要有两台相机从不同角度看清同一目标。
+
+00:35–00:55　配置对时，标定固定视角
+画面　操作员配置共同触发源。各机位记录同一闪光，八条曝光时间线对齐。用标定板示意镜头校正，再把实测场线点和已知高度标杆映射到球场；留一个独立点检查误差。固定相机和球场背景保持静止。
+EN　Set the cameras to a common trigger and record a flash to check their timing. Calibrate each lens, then match the pitch markings to points you’ve measured. A pole of known height gives all eight views a reference above the grass.
+中　给相机配置共同触发源，拍下同一次闪光来检查对时。标定每支镜头，再把画面上的场线标记与实测点对应起来。一根高度已知的标杆，为八个视角提供离地高度参考。
+
+00:55–01:14　在 Edge 按曝光时间戳对齐八路画面
+画面　热身试踢开始。A–H 的帧卡先后抵达 Edge，卡片保留机位编号与曝光时间戳。同一曝光时间窗口内的卡片对齐；时间轴再推进两组。三个处理窗口同时收到这串已对齐的帧组。短暂保留八路原片小窗，帮助观众读懂合并方式。
+EN　Back at the pitch-side Mac, camera frames can arrive out of order. PitchTrace Edge groups them by the time they were exposed. Each group holds the views of one instant. The sequence then goes to three analyses running in parallel.
+中　在场边 Mac 上，各机位的帧可能先后到达。PitchTrace Edge 按曝光时间戳把它们合并为帧组，每组保留同一瞬间的不同视角。连续帧组同时送入三路分析。
+
+01:14–01:30　第一路 · 场上人员、球队与号码
+画面　三窗同屏并保持同一比赛时钟。提亮第一窗 “People · Team · Number”。俯视图标出所有在场人员，包括门将与裁判。放大两队同为 9 号的球员，再切回全队站位。号码还看不清时保留人员位置及轨迹标识。
+EN　The first analysis maps everyone on the field. For each player, it also identifies the team and reads the shirt number when visible. Here are both number nines, one on each team, with separate tracks.
+中　第一路分析绘出所有在场人员的位置。对球员，它还识别所属球队，并在号码可见时读号。看，两队各有一名 9 号，各自都有独立的轨迹。
+
+01:30–01:40　第二路 · 人物动作
+画面　另两窗继续更新，提亮 “Player actions”。同一次试踢分三个连续姿态：支撑脚落地、摆腿、随摆。动作时间段与射手的轨迹标识关联。
+EN　The second analysis recognizes actions across frames. Here it picks out a shot as the standing foot plants and the kicking leg swings through.
+中　第二路分析从连续画面中识别人物动作。这里，支撑脚落地，踢球腿摆过，系统识别出一次射门。
+
+01:40–01:54　第三路 · 足球三维轨迹
+画面　提亮 “Ball trajectory”。一台角位相机被球员挡住，另外两台固定机位仍能看见球。沿同一个球心逐点画出离脚、升空和落点；点迹只延伸到当前时刻。
+EN　The third analysis tracks the ball. A defender blocks one camera, but two other views still see the ball leave the foot. Their measurements trace its flight and where it lands.
+中　第三路分析跟踪足球。一名防守球员挡住了一个机位，另两个机位仍能看到球离脚。根据这些观测，可以还原球的飞行轨迹和落点。
+
+01:54–02:10　建赛、开球、开播
+画面　热身检查通过。操作员选择比赛、确认八路录像，把开球哨记作比赛零点。三窗结果按比赛时刻合入同一场景，人物动作保留对应人员的轨迹标识。场景快照从 Edge 发往 Live，观赛页收到首帧。
+EN　With the warm-up check complete, select the match and confirm all eight recordings. At the whistle, start the match clock. Edge brings the positions, actions and ball path together by match time and sends the scene to PitchTrace Live.
+中　热身检查完成后，选择本场比赛并确认八路录像。开球哨响，启动比赛时钟。Edge 按比赛时刻汇合人员位置、人物动作和球的轨迹，把场景发送给 PitchTrace Live。
+
+02:10–02:30　打开现有本机试播，定格与恢复
+画面　切入现有英文界面，标注 “Local gateway · simulated feed”。先在仓库根目录运行 node live/server/server.cjs，再实际操作 Live → Local sample → Freeze。暂停时移动虚拟机位，随后 Resume live。实体相机仍固定在场边。
+EN　You can try the viewer today with the local sample. Start the local gateway, open Live, and choose Local sample. Freeze the play as the pass arrives. Move the virtual camera to see who’s free, then select Resume live to catch up.
+中　现在就能用本地样例体验观赛端。启动本地网关，打开直播，选择本机试播。等传球到达时定格。移动虚拟机位，看看谁在空位，再点“返回直播”跟上比赛。
+
+02:30–02:54　用同一粒进球看出无球跑位
+画面　切入 “Built-in simulated match”。先从球门旁看蓝队 9 号进球，再退回滑铲前，转为战术俯视。短暂圈出 9 号，旁白停两拍让观众自己看他跑。最后半速播放至射门。
+EN　Here’s a goal from the built-in match. Nine scores. Wind back to the tackle and look across the pitch. Seven has drawn the defender in. Watch nine. He’s moving before the ball comes loose. Play it at half speed and follow his run into the finish.
+中　这是内置比赛里的一粒进球。9 号得分。回到铲球前，看看球场另一侧。7 号吸引了防守队员。注意 9 号，球还没脱离争抢，他已经开始跑了。用半速回放，跟着他跑到射门那一刻。
+
+02:54–03:15　回到原片，检查同一瞬间
+画面　标注 “Two-camera test archive”，在 00:25.000 暂停。打开 Footage review，切 A/B，比赛时刻保持不变。片尾显示项目名和在线演示入口。
+EN　Remember how we lined up the camera frames? Open this two-camera test archive and pause at twenty-five seconds. Switch from camera A to camera B. The view changes while the match clock stays still. Try the 3D viewer through the link below.
+中　还记得我们怎样对齐各路画面吗？打开这份双机位测试归档，在第 25 秒暂停。从 A 路切到 B 路，画面换了，比赛时钟仍停在原处。点击下方链接，亲自试试三维观赛。
+
+画面与声音执行约定
+• 机位示意沿用 A–D，用 E–H 表示四个新增角位。体育场内所有摄像机全场固定；视场、场线和地标保持空间关系一致。边线、球门线和四角都纳入覆盖图。
+• 科技感来自能读懂的信息。曝光时间轴吸附对齐，人员用点位和号码、动作用骨架、足球用弧线。三窗有固定文字与图形标识，时间轴同步推进，轮流提亮解说对象。
+• 节奏上，布点和帧组汇合用短切；标定检查、三窗并行和 9 号跑位留足观察时间。统一触发用一次短促的视觉脉冲，音效使用单个轻落点。
+• 全程英文配音，上英下简中双行字幕置于独立底栏。解说期间压低配乐；触球、切换和开球哨错开旁白重音。
+• 成片混音以约 −16 LUFS-I 为目标；AAC 导出后重新解码，复测全片真峰值 ≤ −2 dBTP，检查削波，重点复听开场、开球哨、三路汇合和片尾，另检查窄频播放时的人声清晰度。

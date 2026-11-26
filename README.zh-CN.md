@@ -11,6 +11,8 @@
 
 **[在线体验 3D 演示](https://winixi.github.io/pitchtrace-3d/)**，观看内置的 60 秒比赛和人物展示。
 
+[在 YouTube 观看 3 分钟产品介绍，了解从机位架设到足球比赛三维回放的流程](https://www.youtube.com/watch?v=TOp0HU2Q_LQ)。
+
 [![内置三维比赛在导播机位暂停时的画面，包含机位控件和动作时间轴](assets/pitchtrace-demo.png)](https://winixi.github.io/pitchtrace-3d/)
 
 [直播观赛前端](live/web/) 也支持连接 WebSocket 直播数据和播放外部 HLS 实拍视频。克隆仓库后可直接用浏览器打开[离线观赛页](live/web/dist/index.html)。

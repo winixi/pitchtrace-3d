@@ -1,0 +1,239 @@
+1
+00:00:00,450 --> 00:00:02,617
+One pass. Two fixed views.
+同一脚传球，两个固定视角。
+
+2
+00:00:03,050 --> 00:00:07,006
+Here’s the eight-camera workflow we’re designing for match day.
+这就是我们正在设计的八机位比赛日流程。
+
+3
+00:00:08,350 --> 00:00:10,488
+Keep the original four cameras.
+保留原有四台相机。
+
+4
+00:00:10,800 --> 00:00:14,979
+Mount one more outside each corner flag, facing into the pitch.
+在每面角旗外侧各加一台，朝向场内。
+
+5
+00:00:15,150 --> 00:00:17,483
+All eight stay fixed throughout the match.
+八台相机在比赛中始终固定。
+
+6
+00:00:18,020 --> 00:00:20,331
+Walk a ball along both touchlines,
+带球沿两条边线走一遍，
+
+7
+00:00:20,331 --> 00:00:23,553
+through both penalty areas and into the corners.
+经过两端禁区，再走到四个角落。
+
+8
+00:00:24,080 --> 00:00:25,780
+Check the coverage map.
+逐区查看覆盖图。
+
+9
+00:00:26,550 --> 00:00:30,520
+For a 3D position, two cameras need to see the same target
+要测出三维位置，两台相机需要看清同一目标，
+
+10
+00:00:30,520 --> 00:00:31,929
+from different angles.
+并从不同角度观测。
+
+11
+00:00:33,380 --> 00:00:37,244
+Use a common trigger and record a flash to check the timing.
+用共同触发源让相机同时曝光，再拍一次闪光检查对时。
+
+12
+00:00:38,100 --> 00:00:39,840
+Calibrate each lens,
+标定每支镜头，
+
+13
+00:00:39,840 --> 00:00:42,651
+then match the pitch markings to points you’ve measured.
+再将画面里的场线标记与场上实测点对应。
+
+14
+00:00:43,650 --> 00:00:47,446
+A pole of known height gives you a reference above the grass.
+一根已知高度的标杆提供离地高度参考。
+
+15
+00:00:49,400 --> 00:00:52,437
+Frames can reach the pitch-side Mac out of order.
+各机位的画面可能先后抵达场边 Mac。
+
+16
+00:00:53,280 --> 00:00:56,705
+PitchTrace Edge groups them by exposure timestamp.
+PitchTrace Edge 按曝光时间戳将画面分组。
+
+17
+00:00:57,550 --> 00:01:00,262
+Each group contains views of one instant.
+每组都保留同一瞬间的多个视角。
+
+18
+00:01:02,050 --> 00:01:06,478
+The same sequence of groups feeds all three analyses in parallel.
+这串相同的帧组序列同时送入三路并行分析。
+
+19
+00:01:08,400 --> 00:01:11,678
+The first analysis maps everyone on the field.
+第一路分析绘出所有在场人员的位置。
+
+20
+00:01:12,120 --> 00:01:14,630
+For players, it identifies the team
+对球员，它还识别所属球队，
+
+21
+00:01:14,630 --> 00:01:17,091
+and reads the shirt number when visible.
+并在号码清晰时读号。
+
+22
+00:01:17,750 --> 00:01:21,682
+Both number nines keep separate tracks, one for each team.
+两队各有一名 9 号，各自保有独立的轨迹。
+
+23
+00:01:23,350 --> 00:01:27,147
+The second analysis recognizes actions across frames.
+第二路分析从连续画面中识别人物动作。
+
+24
+00:01:27,300 --> 00:01:31,163
+Here, the standing foot plants and the kicking leg swings through.
+看，支撑脚落地，踢球腿摆过。
+
+25
+00:01:31,320 --> 00:01:32,541
+That’s a shot.
+这是一次射门。
+
+26
+00:01:33,400 --> 00:01:36,295
+The third analysis tracks the ball in 3D.
+第三路分析跟踪足球的三维轨迹。
+
+27
+00:01:37,150 --> 00:01:39,295
+A defender blocks one camera.
+一名防守球员挡住了一个机位。
+
+28
+00:01:40,360 --> 00:01:42,629
+Two others still see the ball leave the foot
+另外两个机位仍能看到球离脚，
+
+29
+00:01:42,629 --> 00:01:44,887
+and trace its flight to the ground.
+并追踪球在空中的轨迹，直到落地。
+
+30
+00:01:46,350 --> 00:01:49,674
+Select the match and confirm all eight recordings.
+选择本场比赛，确认八路录像。
+
+31
+00:01:49,980 --> 00:01:52,311
+At the whistle, start the match clock.
+开球哨响，启动比赛时钟。
+
+32
+00:01:52,800 --> 00:01:56,940
+Edge combines positions, actions and ball flight by match time
+Edge 按比赛时刻汇合人员位置、动作和球的轨迹，
+
+33
+00:01:56,940 --> 00:01:59,582
+and sends the scene to PitchTrace Live.
+把场景发送给 PitchTrace Live。
+
+34
+00:02:00,380 --> 00:02:02,285
+You can try the viewer today.
+现在就能试用观赛端。
+
+35
+00:02:03,000 --> 00:02:07,335
+Start the local gateway, open Live, and choose Local sample.
+启动本地网关，打开“直播”，选择“本机试播”。
+
+36
+00:02:07,600 --> 00:02:09,909
+Freeze the play as the pass arrives.
+传球到达时，点“定格”。
+
+37
+00:02:11,550 --> 00:02:14,194
+Move the virtual camera to see who’s free,
+移动虚拟机位，看看谁在空位，
+
+38
+00:02:14,194 --> 00:02:16,759
+then select Resume live to catch up.
+再点“返回直播”跟上比赛。
+
+39
+00:02:19,350 --> 00:02:22,726
+Here’s a goal from the built-in match. Nine scores.
+这是内置比赛里的一粒进球。9 号得分。
+
+40
+00:02:23,500 --> 00:02:26,779
+Wind back to the tackle and look across the pitch.
+回到铲球前，看看球场另一侧。
+
+41
+00:02:27,470 --> 00:02:30,658
+Seven has drawn the defender in. Watch nine.
+7 号吸引了防守队员。注意看 9 号。
+
+42
+00:02:32,170 --> 00:02:34,692
+He’s moving before the ball comes loose.
+球还没脱离争抢，他已经开始跑了。
+
+43
+00:02:36,200 --> 00:02:39,784
+Play it at half speed and follow his run into the finish.
+用半速回放，跟着他跑到射门那一刻。
+
+44
+00:02:41,380 --> 00:02:43,647
+Remember how we lined up the frames?
+还记得我们怎样对齐各路画面吗？
+
+45
+00:02:44,320 --> 00:02:48,795
+Open the two-camera test archive and pause at twenty-five seconds.
+打开双机位测试归档，在第 25 秒暂停。
+
+46
+00:02:49,150 --> 00:02:51,528
+Switch from camera A to camera B.
+从 A 路切到 B 路。
+
+47
+00:02:52,000 --> 00:02:55,097
+The view changes. The match clock stays still.
+画面换了，比赛时钟仍停在原处。
+
+48
+00:02:55,800 --> 00:02:58,576
+Try the 3D viewer through the link below.
+点击下方链接，亲自试试三维观赛。

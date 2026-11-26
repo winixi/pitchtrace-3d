@@ -1,0 +1,215 @@
+1
+00:00:00,640 --> 00:00:02,575
+It’s an hour before kickoff.
+
+2
+00:00:03,495 --> 00:00:08,129
+Here’s the matchday workflow we’re building for PitchTrace 3D,
+
+3
+00:00:08,129 --> 00:00:10,840
+starting with the first camera on the touchline.
+
+4
+00:00:12,400 --> 00:00:16,550
+Secure one camera to each fixed mount and label them A through D.
+
+5
+00:00:16,850 --> 00:00:19,970
+Lock the position and aim of each camera.
+
+6
+00:00:19,970 --> 00:00:23,716
+Have a player take a ball from halfway to the far penalty area.
+
+7
+00:00:24,016 --> 00:00:26,628
+Look at two fixed views side by side.
+
+8
+00:00:26,958 --> 00:00:29,686
+Can you still pick out the ball and the shirt number?
+
+9
+00:00:30,066 --> 00:00:32,807
+If a player blocks the ball in camera A,
+
+10
+00:00:32,807 --> 00:00:35,590
+check the same instant in camera B.
+
+11
+00:00:35,590 --> 00:00:38,073
+Both cameras stay fixed throughout the match.
+
+12
+00:00:39,480 --> 00:00:44,319
+Next, make sure the cameras expose their frames at the same instant.
+
+13
+00:00:45,111 --> 00:00:47,904
+In this setup, they share a hardware trigger.
+
+14
+00:00:48,696 --> 00:00:51,449
+Fire a flash where the cameras can see it,
+
+15
+00:00:51,449 --> 00:00:54,106
+then mark the flash in each recording.
+
+16
+00:00:54,898 --> 00:00:57,374
+Here’s the two-camera timing report.
+
+17
+00:00:58,166 --> 00:01:01,277
+It shows how far apart the exposures were,
+
+18
+00:01:01,277 --> 00:01:03,808
+and whether either camera missed a flash.
+
+19
+00:01:05,480 --> 00:01:08,706
+Now give every camera the same map of the pitch.
+
+20
+00:01:09,626 --> 00:01:13,639
+Start with a calibration board to measure lens distortion.
+
+21
+00:01:14,559 --> 00:01:16,575
+Then match visible pitch markings
+
+22
+00:01:16,575 --> 00:01:19,132
+to points you’ve measured on the ground.
+
+23
+00:01:20,052 --> 00:01:24,069
+A pole of known height gives you a reference above the grass.
+
+24
+00:01:24,989 --> 00:01:27,931
+Finally, check a point you left out of calibration
+
+25
+00:01:27,931 --> 00:01:31,436
+and see how closely its position lines up.
+
+26
+00:01:33,420 --> 00:01:36,294
+Before kickoff, assign the match ID,
+
+27
+00:01:36,294 --> 00:01:38,116
+select the pitch and team sheets,
+
+28
+00:01:38,116 --> 00:01:40,585
+and save the calibration for this setup.
+
+29
+00:01:40,885 --> 00:01:44,409
+Check all four recordings and the available disk space.
+
+30
+00:01:44,709 --> 00:01:46,531
+At the whistle, mark kickoff.
+
+31
+00:01:46,831 --> 00:01:50,588
+In the planned system, the pitch-side Mac reconstructs the play
+
+32
+00:01:50,588 --> 00:01:53,363
+and sends match updates to the Live gateway.
+
+33
+00:01:54,500 --> 00:01:56,938
+You can try the broadcast side today.
+
+34
+00:01:57,466 --> 00:02:00,532
+Start the local gateway, open the viewer,
+
+35
+00:02:00,532 --> 00:02:03,215
+select Live, and choose Local sample.
+
+36
+00:02:03,743 --> 00:02:06,903
+As the first update arrives, the players appear
+
+37
+00:02:06,903 --> 00:02:09,261
+and the match clock starts moving.
+
+38
+00:02:10,400 --> 00:02:13,658
+On the viewer’s screen, the ball is already in play.
+
+39
+00:02:14,578 --> 00:02:17,865
+Freeze the action and move the virtual camera around it.
+
+40
+00:02:18,065 --> 00:02:20,722
+The players stay exactly where they were,
+
+41
+00:02:20,722 --> 00:02:23,777
+so you can see who was available for the pass.
+
+42
+00:02:24,697 --> 00:02:27,760
+Select Resume live to catch up with the match.
+
+43
+00:02:30,450 --> 00:02:32,790
+Here’s a goal from the built-in match.
+
+44
+00:02:33,535 --> 00:02:35,114
+Nine puts it away.
+
+45
+00:02:35,859 --> 00:02:39,392
+Now wind back to the tackle and watch from above.
+
+46
+00:02:40,136 --> 00:02:42,989
+Keep your eye on nine, across from the ball.
+
+47
+00:02:45,363 --> 00:02:49,450
+He starts his run while the defender is still dealing with seven.
+
+48
+00:02:50,195 --> 00:02:53,926
+Play it at half speed and watch where that run takes him.
+
+49
+00:02:55,380 --> 00:02:57,576
+Remember the flash test before kickoff?
+
+50
+00:02:57,876 --> 00:02:59,708
+Here’s what that timing gives you.
+
+51
+00:03:00,008 --> 00:03:03,618
+In this two-camera test archive, pause at twenty-five seconds.
+
+52
+00:03:03,918 --> 00:03:07,828
+Open Footage review and switch from camera A to camera B.
+
+53
+00:03:08,128 --> 00:03:11,007
+You’re looking at the same instant from both positions.
+
+54
+00:03:11,307 --> 00:03:14,294
+Try the 3D viewer yourself through the link below.

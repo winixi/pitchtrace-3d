@@ -1,0 +1,31 @@
+TITLE
+PitchTrace 3D Matchday Walkthrough | From Camera Setup to 3D Replay
+
+DESCRIPTION
+What does it take to turn a football match into a 3D replay you can explore? Follow the pitch-side crew from the first camera on its stand to the opening whistle. Then take the viewer’s seat, freeze the play and follow number nine as he runs onto the ball.
+
+Try the browser demo
+https://winixi.github.io/pitchtrace-3d/
+
+Project and local setup
+https://github.com/winixi/pitchtrace-3d
+
+The field diagrams show the planned four-camera workflow. The screen recordings show the working local gateway, the built-in simulated match and a two-camera test archive. The timing report and footage review use generated test recordings.
+
+CHAPTERS
+0:00 Matchday setup
+0:12 Position the cameras
+0:39 Synchronize exposures
+1:05 Calibrate the cameras to the pitch
+1:33 Prepare the match and mark kickoff
+1:54 Start a local broadcast
+2:10 Freeze and resume live play
+2:30 Follow number nine
+2:55 Check the same instant in both recordings
+
+CREDITS
+Player, pitch, goal and animation assets adapted through soccerviewer from GameplayFootball by Bastiaan Konings Schuiling and Google Research Football. Head, hair, eyes and neck adapted from the Innerscene / MakeHuman athlete. The viewer uses Three.js.
+https://github.com/winixi/pitchtrace-3d/blob/main/live/web/licenses/CREDITS.txt
+
+English narration synthesized with Kokoro-82M by hexgrad. Original instrumental score and field diagrams created for this walkthrough.
+https://huggingface.co/hexgrad/Kokoro-82M

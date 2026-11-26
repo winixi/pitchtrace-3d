@@ -1,0 +1,191 @@
+1
+00:00:00,450 --> 00:00:02,617
+One pass. Two fixed views.
+
+2
+00:00:03,050 --> 00:00:07,006
+Here’s the eight-camera workflow we’re designing for match day.
+
+3
+00:00:08,350 --> 00:00:10,488
+Keep the original four cameras.
+
+4
+00:00:10,800 --> 00:00:14,979
+Mount one more outside each corner flag, facing into the pitch.
+
+5
+00:00:15,150 --> 00:00:17,483
+All eight stay fixed throughout the match.
+
+6
+00:00:18,020 --> 00:00:20,331
+Walk a ball along both touchlines,
+
+7
+00:00:20,331 --> 00:00:23,553
+through both penalty areas and into the corners.
+
+8
+00:00:24,080 --> 00:00:25,780
+Check the coverage map.
+
+9
+00:00:26,550 --> 00:00:30,520
+For a 3D position, two cameras need to see the same target
+
+10
+00:00:30,520 --> 00:00:31,929
+from different angles.
+
+11
+00:00:33,380 --> 00:00:37,244
+Use a common trigger and record a flash to check the timing.
+
+12
+00:00:38,100 --> 00:00:39,840
+Calibrate each lens,
+
+13
+00:00:39,840 --> 00:00:42,651
+then match the pitch markings to points you’ve measured.
+
+14
+00:00:43,650 --> 00:00:47,446
+A pole of known height gives you a reference above the grass.
+
+15
+00:00:49,400 --> 00:00:52,437
+Frames can reach the pitch-side Mac out of order.
+
+16
+00:00:53,280 --> 00:00:56,705
+PitchTrace Edge groups them by exposure timestamp.
+
+17
+00:00:57,550 --> 00:01:00,262
+Each group contains views of one instant.
+
+18
+00:01:02,050 --> 00:01:06,478
+The same sequence of groups feeds all three analyses in parallel.
+
+19
+00:01:08,400 --> 00:01:11,678
+The first analysis maps everyone on the field.
+
+20
+00:01:12,120 --> 00:01:14,630
+For players, it identifies the team
+
+21
+00:01:14,630 --> 00:01:17,091
+and reads the shirt number when visible.
+
+22
+00:01:17,750 --> 00:01:21,682
+Both number nines keep separate tracks, one for each team.
+
+23
+00:01:23,350 --> 00:01:27,147
+The second analysis recognizes actions across frames.
+
+24
+00:01:27,300 --> 00:01:31,163
+Here, the standing foot plants and the kicking leg swings through.
+
+25
+00:01:31,320 --> 00:01:32,541
+That’s a shot.
+
+26
+00:01:33,400 --> 00:01:36,295
+The third analysis tracks the ball in 3D.
+
+27
+00:01:37,150 --> 00:01:39,295
+A defender blocks one camera.
+
+28
+00:01:40,360 --> 00:01:42,629
+Two others still see the ball leave the foot
+
+29
+00:01:42,629 --> 00:01:44,887
+and trace its flight to the ground.
+
+30
+00:01:46,350 --> 00:01:49,674
+Select the match and confirm all eight recordings.
+
+31
+00:01:49,980 --> 00:01:52,311
+At the whistle, start the match clock.
+
+32
+00:01:52,800 --> 00:01:56,940
+Edge combines positions, actions and ball flight by match time
+
+33
+00:01:56,940 --> 00:01:59,582
+and sends the scene to PitchTrace Live.
+
+34
+00:02:00,380 --> 00:02:02,285
+You can try the viewer today.
+
+35
+00:02:03,000 --> 00:02:07,335
+Start the local gateway, open Live, and choose Local sample.
+
+36
+00:02:07,600 --> 00:02:09,909
+Freeze the play as the pass arrives.
+
+37
+00:02:11,550 --> 00:02:14,194
+Move the virtual camera to see who’s free,
+
+38
+00:02:14,194 --> 00:02:16,759
+then select Resume live to catch up.
+
+39
+00:02:19,350 --> 00:02:22,726
+Here’s a goal from the built-in match. Nine scores.
+
+40
+00:02:23,500 --> 00:02:26,779
+Wind back to the tackle and look across the pitch.
+
+41
+00:02:27,470 --> 00:02:30,658
+Seven has drawn the defender in. Watch nine.
+
+42
+00:02:32,170 --> 00:02:34,692
+He’s moving before the ball comes loose.
+
+43
+00:02:36,200 --> 00:02:39,784
+Play it at half speed and follow his run into the finish.
+
+44
+00:02:41,380 --> 00:02:43,647
+Remember how we lined up the frames?
+
+45
+00:02:44,320 --> 00:02:48,795
+Open the two-camera test archive and pause at twenty-five seconds.
+
+46
+00:02:49,150 --> 00:02:51,528
+Switch from camera A to camera B.
+
+47
+00:02:52,000 --> 00:02:55,097
+The view changes. The match clock stays still.
+
+48
+00:02:55,800 --> 00:02:58,576
+Try the 3D viewer through the link below.

@@ -1,0 +1,35 @@
+TITLE
+PitchTrace 3D | From Camera Setup to 3D Football Replay
+
+DESCRIPTION
+How do eight fixed views of the pitch become one football replay? Follow the crew as they check the pitch from touchline to touchline, synchronize the cameras and align frames by exposure time on PitchTrace Edge. Watch three parallel analyses turn the same sequence into player positions and identities, player actions, and the ball’s 3D path.
+
+Then try the working browser viewer. Freeze the play, follow number nine from above, and switch archived camera recordings at the same match time.
+
+Try the interactive demo
+https://winixi.github.io/pitchtrace-3d/
+
+Project and local setup
+https://github.com/winixi/pitchtrace-3d
+
+The eight-camera coverage and Edge processing sequences illustrate the planned design. The final minute shows the working local gateway, a built-in simulated match and a two-camera test archive. The video has English narration and on-screen English and Simplified Chinese subtitles.
+
+CHAPTERS
+0:00 From Setup to Replay
+0:10 Eight Fixed Cameras
+0:33 Synchronize and calibrate
+0:49 Align frames by exposure timestamp
+1:08 Parallel analysis: people and identity
+1:23 Parallel analysis: player actions
+1:33 Parallel analysis: ball trajectory
+1:46 Kick off and publish the scene
+2:00 Open the local live viewer
+2:19 Replay the goal
+2:41 Compare archived camera views
+
+CREDITS
+Player, pitch, goal and animation assets adapted through soccerviewer from GameplayFootball by Bastiaan Konings Schuiling and Google Research Football. Head, hair, eyes and neck adapted from the Innerscene / MakeHuman athlete. The viewer uses Three.js.
+https://github.com/winixi/pitchtrace-3d/blob/main/live/web/licenses/CREDITS.txt
+
+English narration synthesized with Kokoro-82M by hexgrad. Original instrumental score and field diagrams created for this walkthrough.
+https://huggingface.co/hexgrad/Kokoro-82M
