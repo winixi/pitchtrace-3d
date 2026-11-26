@@ -110,6 +110,7 @@ flowchart LR
 | [详细需求说明](docs/01-requirements.md) | 确定比赛流程、功能范围及现场验收标准。 |
 | [技术实现方案](docs/02-technical-design.md) | 设计四路采集、Mac mini 三维重建、数据分发及复核链路。 |
 | [落地开发计划](docs/03-development-plan.md) | 安排场勘、开发、实拍验收与发布，明确各阶段负责人和放行条件。 |
+| [Edge 需求与开发计划](docs/07-edge-development-plan.md) | 划分场边模块，列出双机位实拍、四路开发和独立比赛验收的逐周任务。 |
 | [MVP 硬件选型](docs/05-hardware-selection.md) | 选择 Mac mini、统一内存和可换录像盘，估算四路相机的带宽与存储。 |
 | [实时三维还原方案评估](docs/06-real-time-reconstruction-assessment.md) | 评估五层技术方案、两路样机实拍和 100～200 ms 延迟目标。 |
 

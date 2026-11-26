@@ -110,6 +110,7 @@ The local gateway defaults to `127.0.0.1` and supports v2 archival, idempotency,
 | [Detailed requirements](docs/01-requirements.md) | Defines the match flow, feature scope, and on-site acceptance criteria. |
 | [Technical design](docs/02-technical-design.md) | Designs the four-channel capture, Mac mini 3D reconstruction, data distribution, and review pipeline. |
 | [Development plan](docs/03-development-plan.md) | Schedules site surveys, development, live-shoot acceptance, and release; names owners and release conditions per stage. |
+| [Edge requirements and development plan](docs/07-edge-development-plan.md) | Defines Edge module responsibilities and weekly deliverables from the two-camera field test through four-camera match acceptance. |
 | [MVP hardware selection](docs/05-hardware-selection.md) | Compares Mac mini configurations and sizes the network and removable storage for four cameras. |
 | [Real-time reconstruction assessment](docs/06-real-time-reconstruction-assessment.md) | Evaluates the five-layer proposal, the two-camera field trial, and the 100–200 ms latency target. |
 

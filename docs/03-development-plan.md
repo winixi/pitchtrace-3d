@@ -17,6 +17,8 @@
 
 现场线先用两机位样片测对时和可见率（G1），再验证四路采集（G2）。软件线已用固定样例打通本地 v2 场景通路。两线将在实拍传球中串起人球重建、v2 观赛和按曝光时刻定位原片（G3）。
 
+Edge 的模块输入输出、各周负责人和首轮双机位取证任务见 [Edge 需求与开发计划](07-edge-development-plan.md)。
+
 沿用 10 Hz 场景发布基线。现有估算中，22 人、每人 13 关节的 JSON 有效载荷约 1.35 Mbps。当前离线 HTML 约 12.1 MB，在线演示的一次 HTTP 下载约 5.86 MB，按 1 Mbps 仅传输响应体就约需 47 秒。公网版需分别测稳态上行、稳态下载和冷启动。首期仍按曝光到首次绘制 300 秒验收，100～200 ms 留作后续局域网实验目标。[在线演示](https://winixi.github.io/pitchtrace-3d/) · [网络性能要求](04-performance-requirements.md) · [实时还原评估](06-real-time-reconstruction-assessment.md)
 
 ## 1. 排期假设与关键路径
