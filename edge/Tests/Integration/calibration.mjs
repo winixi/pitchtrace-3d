@@ -15,14 +15,43 @@ async function sample() {
   return JSON.parse(await readFile(fixture, "utf8"));
 }
 
-async function calibrate(t, input) {
+async function calibrate(t, input, lens) {
   const dir = await mkdtemp(join(tmpdir(), "pitchtrace-calibration-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const path = join(dir, "geometry.json");
   await writeFile(path, JSON.stringify(input));
+  if (lens) await writeFile(join(dir, "lens.json"), JSON.stringify(lens));
   const { stdout } = await run(edge, ["calibrate", path]);
   return JSON.parse(stdout);
 }
+
+test("引用内参报告时核对机位、版本、分辨率、来源及参数", async (t) => {
+  const input = await sample();
+  const lens = {
+    ...input.cameras.A, cameraId: "A", intrinsicsId: "lens-a-v1", sampleSource: input.sampleSource,
+  };
+  const reference = { imageSize: lens.imageSize, intrinsicsId: lens.intrinsicsId, intrinsicsFile: "lens.json" };
+  const original = await calibrate(t, input);
+  input.cameras.A = reference;
+  const report = await calibrate(t, input, lens);
+  assert.deepEqual(report.cameras.A, { ...original.cameras.A, intrinsicsId: lens.intrinsicsId });
+  assert.deepEqual(report.checkPoints, original.checkPoints);
+
+  for (const invalid of [
+    { cameraId: "B" }, { intrinsicsId: "lens-a-v2" }, { imageSize: [960, 540] },
+    { sampleSource: "field" }, { distortion: [] },
+  ]) {
+    await assert.rejects(calibrate(t, input, { ...lens, ...invalid }), (error) => {
+      assert.equal(error.code, 1);
+      assert.equal(error.stdout, "");
+      assert.match(error.stderr, /机位 A/);
+      return true;
+    });
+  }
+  await assert.rejects(calibrate(t, input), /无法读取内参文件/);
+  input.cameras.A = { ...reference, intrinsics: lens.intrinsics };
+  await assert.rejects(calibrate(t, input, lens), /同时指定/);
+});
 
 function near(actual, expected, tolerance) {
   assert.ok(Math.abs(actual - expected) < tolerance, `实际 ${actual}，预期 ${expected}（容差 ${tolerance}）`);

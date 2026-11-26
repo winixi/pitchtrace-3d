@@ -4,6 +4,7 @@ import json
 import math
 import re
 import sys
+from pathlib import Path
 
 
 def unique_object(pairs):
@@ -27,15 +28,43 @@ def is_identifier(value):
     return isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value) is not None
 
 
-def validate_cameras(cameras):
+def image_size(camera, name):
+    size = vector(camera.get("imageSize"), 2, f"机位 {name} 的图像尺寸")
+    if not all(type(n) is int and n > 0 for n in size):
+        raise ValueError(f"机位 {name} 的图像宽高必须是正整数")
+    return size
+
+
+def read_lens(camera, name, source, directory):
+    path = camera["intrinsicsFile"]
+    if not isinstance(path, str) or not path.strip() or not is_identifier(camera.get("intrinsicsId")):
+        raise ValueError(f"机位 {name} 需指定内参文件及有效的 intrinsicsId")
+    if "intrinsics" in camera or "distortion" in camera:
+        raise ValueError(f"机位 {name} 同时指定了内参文件和内联参数")
+    try:
+        with (directory / path).open(encoding="utf-8") as lens_file:
+            lens = json.load(lens_file, object_pairs_hook=unique_object)
+    except (OSError, ValueError) as error:
+        raise ValueError(f"机位 {name} 无法读取内参文件 {path}：{error}") from error
+    if not isinstance(lens, dict) or lens.get("cameraId") != name:
+        raise ValueError(f"内参文件 {path} 的 cameraId 与机位 {name} 不符")
+    if lens.get("intrinsicsId") != camera["intrinsicsId"] or lens.get("sampleSource") != source:
+        raise ValueError(f"机位 {name} 的内参版本或样本来源不符")
+    if image_size(lens, name) != camera["imageSize"]:
+        raise ValueError(f"机位 {name} 的内参分辨率与场地标注不符")
+    return {**camera, "intrinsics": lens.get("intrinsics"), "distortion": lens.get("distortion")}
+
+
+def load_cameras(cameras, source, directory):
     if not isinstance(cameras, dict) or not 2 <= len(cameras) <= 4:
         raise ValueError("需要 2 至 4 个机位")
+    loaded = {}
     for name, camera in cameras.items():
         if not is_identifier(name) or not isinstance(camera, dict):
             raise ValueError(f"机位配置无效：{name}")
-        size = vector(camera.get("imageSize"), 2, f"机位 {name} 的图像尺寸")
-        if not all(type(n) is int and n > 0 for n in size):
-            raise ValueError(f"机位 {name} 的图像宽高必须是正整数")
+        image_size(camera, name)
+        if "intrinsicsFile" in camera:
+            camera = read_lens(camera, name, source, directory)
         intrinsics = camera.get("intrinsics")
         if not isinstance(intrinsics, dict):
             raise ValueError(f"机位 {name} 缺少相机内参")
@@ -43,6 +72,8 @@ def validate_cameras(cameras):
         if min(fx, fy) <= 0:
             raise ValueError(f"机位 {name} 的焦距必须为正")
         vector(camera.get("distortion"), 5, f"机位 {name} 的畸变系数")
+        loaded[name] = camera
+    return loaded
 
 
 def validate_points(data, cameras):
@@ -86,15 +117,14 @@ def summarize(points):
     return summary
 
 
-def calibrate(data):
+def calibrate(data, directory=Path(".")):
     from camera_geometry import fit_camera, triangulate
 
     if not isinstance(data, dict) or not is_identifier(data.get("calibrationId")):
         raise ValueError("calibrationId 必须是有效的 v2 标识")
     if data.get("sampleSource") not in ("synthetic", "field"):
         raise ValueError("sampleSource 必须是 synthetic 或 field")
-    cameras = data.get("cameras")
-    validate_cameras(cameras)
+    cameras = load_cameras(data.get("cameras"), data["sampleSource"], directory)
     validate_points(data, cameras)
 
     poses = {}
@@ -113,6 +143,8 @@ def calibrate(data):
             "distortion": camera["distortion"], "rotationWorldToCamera": rotation.tolist(),
             "translationM": translation.tolist(), "fitCount": len(points), "fitRmsPx": rms,
         }
+        if "intrinsicsFile" in camera:
+            calibrated[name]["intrinsicsId"] = camera["intrinsicsId"]
 
     min_ray_angle_deg = 1.0
     checks = []
@@ -137,7 +169,7 @@ def calibrate(data):
 if __name__ == "__main__":
     try:
         with open(sys.argv[1], encoding="utf-8") as source:
-            report = calibrate(json.load(source, object_pairs_hook=unique_object))
+            report = calibrate(json.load(source, object_pairs_hook=unique_object), Path(source.name).parent)
         print(json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False))
     except ModuleNotFoundError as error:
         sys.exit(f"离线标定缺少 Python 模块 {error.name}，请确认当前 python3 可以导入 cv2 和 numpy")

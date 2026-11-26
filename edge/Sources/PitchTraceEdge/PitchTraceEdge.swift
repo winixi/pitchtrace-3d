@@ -9,6 +9,7 @@ enum PitchTraceEdge {
           pitchtrace-edge replay <2–4 机位录像目录> <新输出目录> [--metrics]
           pitchtrace-edge audit-sync <frames.ndjson> <闪光标注.json>
           pitchtrace-edge audit-visibility <frames.ndjson> <可见性标注.json>
+          pitchtrace-edge calibrate-intrinsics <棋盘格照片清单.json>
           pitchtrace-edge calibrate <场地标定.json>
           pitchtrace-edge publish-media <网关地址> <比赛 ID> <含 epochs 的机位目录>
           pitchtrace-edge publish-media <网关地址> <比赛 ID> <媒体周期> <平铺机位目录>
@@ -53,10 +54,12 @@ enum PitchTraceEdge {
                 let annotations = URL(fileURLWithPath: arguments[2])
                 let report = try await auditVisibility(frames: frames, annotations: annotations)
                 try writeJSON(report)
-            case ("calibrate", 2):
-                operation = "离线场地标定"
+            case ("calibrate", 2), ("calibrate-intrinsics", 2):
+                let isLensCalibration = arguments[0] == "calibrate-intrinsics"
+                operation = isLensCalibration ? "镜头内参标定" : "离线场地标定"
+                let scriptName = isLensCalibration ? "intrinsics" : "calibrate"
                 guard let script = Bundle.module.url(
-                    forResource: "calibrate", withExtension: "py", subdirectory: "Geometry"
+                    forResource: scriptName, withExtension: "py", subdirectory: "Geometry"
                 ) else {
                     throw RecordingError("缺少随 Edge 分发的离线标定脚本")
                 }

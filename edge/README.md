@@ -47,7 +47,43 @@ swift run --package-path edge pitchtrace-edge replay "./录像目录" "./新输�
 
 ## 离线几何标定
 
-`calibrate` 使用已知镜头内参、畸变参数和场地点的像素标注，为 2–4 台相机估计世界坐标到相机坐标的外参，再从多个视角重建独立检查点。该命令需要 PATH 中的 `python3` 能导入 OpenCV 4.5 或更新版本（`cv2`）和 NumPy（`numpy`）。从仓库根目录运行双机位合成样例。[标定样例](samples/calibration.json)
+两个标定命令均需要 PATH 中的 `python3` 能导入 OpenCV 4.5 或更新版本（`cv2`）和 NumPy（`numpy`）。
+
+### 用棋盘格照片标定单机位镜头
+
+保持比赛时使用的镜头、焦距和原始分辨率，让平整的棋盘格向不同方向倾斜，分别拍到画面中央和靠近边缘的位置。每台相机至少需要 3 张能检全内角点且姿态提供独立约束的照片。连续拍同一姿态会使求解退化。
+
+每台相机单独准备一份清单。下面以 A 机位的实拍清单 `lens.json` 为例，`columns`、`rows` 填内角点的列数和行数，均至少为 3。10 列、7 行方格对应 9 列、6 行内角点。`squareSizeM` 填实测的单格边长，单位为米。`images` 内的相对路径从清单所在目录解析。全部照片使用同一原始宽高，程序按编码像素方向读图。
+
+```json
+{
+  "cameraId": "A",
+  "intrinsicsId": "a-lens-v1",
+  "sampleSource": "field",
+  "board": {"columns": 9, "rows": 6, "squareSizeM": 0.025},
+  "images": ["A/01.png", "A/02.png", "A/03.png", "A/04.png", "A/05.png", "A/06.png"]
+}
+```
+
+从仓库根目录运行，保存该机位的内参报告。
+
+```sh
+swift run --package-path edge pitchtrace-edge calibrate-intrinsics lens.json > a-lens.json
+```
+
+报告保留 `cameraId`、`intrinsicsId` 和 `sampleSource`。`imageSize` 给出原图宽高，`intrinsics` 给出像素单位的焦距 `fx, fy` 和主点 `cx, cy`，`distortion` 按 OpenCV 顺序保存五个系数 `[k1, k2, p1, p2, k3]`。`fitRmsPx` 是参与拟合的全部角点的重投影均方根误差（像素）。`views` 按照片路径 `image` 列出检测结果。`status` 为 `used` 的照片另有本张的 `rmsPx`，角点未检全的照片记为 `notDetected`。场地定位精度另用独立检查点按米验收。
+
+也可在临时目录生成合成样例并复跑内参标定。样例分辨率为 960×540，包含 8 张棋盘格和 1 张无棋盘格图像。可将报告与生成器的镜头真值 `fx=620, fy=660, cx=451, cy=293` 对照。
+
+```sh
+trial_dir=$(mktemp -d)
+python3 edge/Tests/Integration/generate-chessboards.py "$trial_dir"
+swift run --package-path edge pitchtrace-edge calibrate-intrinsics "$trial_dir/lens.json" > "$trial_dir/a-lens.json"
+```
+
+### 用场地点标定多机位外参
+
+`calibrate` 使用各机位的镜头参数和场地点的像素标注，为 2–4 台相机估计世界坐标到相机坐标的外参，再从多个视角重建独立检查点。从仓库根目录运行双机位合成样例。[标定样例](samples/calibration.json)
 
 ```sh
 swift run --package-path edge pitchtrace-edge calibrate edge/samples/calibration.json > calibration-report.json
@@ -58,15 +94,21 @@ swift run --package-path edge pitchtrace-edge calibrate edge/samples/calibration
 | 字段 | 填写方法 |
 | --- | --- |
 | `calibrationId`、`sampleSource` | 为这组机位、镜头和分辨率指定标定版本。合成数据填 `synthetic`，实测数据填 `field`。 |
-| `cameras` | 每个机位填写 `imageSize: [宽, 高]`、以像素为单位的 `fx, fy, cx, cy` 和 OpenCV 畸变系数 `[k1, k2, p1, p2, k3]`。标注使用这组内参对应的原始分辨率，像素原点在左上角，`u` 向右、`v` 向下。 |
+| `cameras` | 每个机位填写 `imageSize: [宽, 高]`，并提供 `intrinsicsId` 和 `intrinsicsFile` 以引用报告，也可像合成样例那样直接填写 `intrinsics` 和 `distortion`。标注使用这组内参对应的原始分辨率，像素原点在左上角，`u` 向右、`v` 向下。 |
 | `fitPoints` | 每点填写唯一 `id`、场地坐标 `worldM: [X,Y,Z]` 和看得到该点的各机位 `pixels: {机位: [u,v]}`。以中圈地面为原点，X 沿长边，Y 向上，Z 沿短边，单位米。每机位至少需要 4 个分散的共面点，或 6 个非共面的点。 |
 | `checkPoints` | 用相同格式填写预留地面点和已知高度的点，每个点使用独立测量的坐标。某机位缺测时省略该机位。 |
 
-报告的 `cameras` 给出各机位的旋转矩阵、平移向量和拟合点重投影均方根误差（`fitRmsPx`）。将场地坐标列向量乘以 `rotationWorldToCamera` 再加 `translationM`，得到 OpenCV 相机坐标（X 向右、Y 向下、Z 向前）。`checkPoints` 保留每个检查点的状态，成功时给出重建坐标、三维误差（米）和重投影均方根误差（像素）。单视角或交会角不足 1° 的点保留为缺测。
+例如，A 机位实拍分辨率为 1920×1080 时，可在外参输入的 `cameras.A` 填写以下对象。`intrinsicsFile` 相对于外参输入文件解析。命令会核对报告中的机位、内参版本、图像尺寸和数据来源，任一不符都会报错。更换镜头、焦距或分辨率后，重新标定并引用新的 `intrinsicsId`。
+
+```json
+{"imageSize": [1920, 1080], "intrinsicsId": "a-lens-v1", "intrinsicsFile": "a-lens.json"}
+```
+
+报告的 `cameras` 给出各机位的旋转矩阵、平移向量和拟合点重投影均方根误差（`fitRmsPx`）。通过文件引用内参的机位另有 `intrinsicsId`，便于追溯镜头版本。将场地坐标列向量乘以 `rotationWorldToCamera` 再加 `translationM`，得到 OpenCV 相机坐标（X 向右、Y 向下、Z 向前）。`checkPoints` 保留每个检查点的状态，成功时给出重建坐标、三维误差（米）和重投影均方根误差（像素）。单视角或交会角不足 1° 的点保留为缺测。
 
 样例的两台虚拟相机分别位于 `[-20,10,-22]` 米和 `[19,9,-20]` 米，都朝向中圈。每路使用 6 个地面拟合点。预期两个独立地面点和第一个高点均可重建，第二个高点只有 A 路观测。所有可重建点的三维误差应小于 1 毫米。查看 `ground` 和 `elevated` 中的计划点数、可测点数、P95 和最大误差。至少有一个地面检查点且全部可测时，`ground.withinThreshold` 给出 P95 是否满足 0.30 米门槛。
 
-执行 `swift build --package-path edge` 后，运行 `node --test edge/Tests/Integration/calibration.mjs` 可复验双路和四路标定、检查点误差超限及退化机位。
+执行 `swift build --package-path edge` 后，运行 `node --test edge/Tests/Integration/intrinsics.mjs edge/Tests/Integration/calibration.mjs` 可复验合成棋盘格的内参恢复、双路和四路外参标定、检查点误差超限及退化机位。
 
 ## 用生成样例联调
 
