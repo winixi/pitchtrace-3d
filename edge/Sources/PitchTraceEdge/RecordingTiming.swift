@@ -20,6 +20,10 @@ func isMediaCameraID(_ cameraID: String) -> Bool {
     cameraID.range(of: #"^[A-Za-z0-9_-]{1,64}\z"#, options: .regularExpression) != nil
 }
 
+func recordingLocation(cameraId: String, mediaEpoch: String?) -> String {
+    "机位 \(cameraId)" + (mediaEpoch.map { "，媒体周期 \($0)" } ?? "")
+}
+
 struct MediaTimeBase: Codable, Equatable {
     let numerator: Int32
     let denominator: Int32
@@ -43,6 +47,7 @@ struct MediaFrame: Codable, Equatable {
 
 struct ReplayFrame: Encodable {
     let cameraId: String
+    var mediaEpoch: String? = nil
     let segment: Int64
     let timeBase: MediaTimeBase
     let frameNumber: Int64?
@@ -50,12 +55,13 @@ struct ReplayFrame: Encodable {
     let utc: Int64
 
     private enum CodingKeys: String, CodingKey {
-        case cameraId, segment, timeBase, frameNumber, pts, durationPts, captureUtcUs
+        case cameraId, mediaEpoch, segment, timeBase, frameNumber, pts, durationPts, captureUtcUs
     }
 
     func encode(to encoder: Encoder) throws {
         var values = encoder.container(keyedBy: CodingKeys.self)
         try values.encode(cameraId, forKey: .cameraId)
+        try values.encodeIfPresent(mediaEpoch, forKey: .mediaEpoch)
         try values.encode(segment, forKey: .segment)
         try values.encode(timeBase, forKey: .timeBase)
         try values.encodeIfPresent(frameNumber, forKey: .frameNumber)
@@ -69,6 +75,10 @@ extension ReplayFrame: Decodable {
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         cameraId = try values.decode(String.self, forKey: .cameraId)
+        mediaEpoch = try values.decodeIfPresent(String.self, forKey: .mediaEpoch)
+        if let mediaEpoch, !isMediaCameraID(mediaEpoch) {
+            throw RecordingError("媒体周期标识无效")
+        }
         segment = try values.decode(Int64.self, forKey: .segment)
         timeBase = try values.decode(MediaTimeBase.self, forKey: .timeBase)
         frameNumber = try values.decodeIfPresent(Int64.self, forKey: .frameNumber)
@@ -108,10 +118,12 @@ struct VideoFrame: Decodable {
 
 struct CameraTiming {
     let cameraId: String
+    var mediaEpoch: String?
     private var previous: ReplayFrame?
 
-    init(cameraId: String) {
+    init(cameraId: String, mediaEpoch: String? = nil) {
         self.cameraId = cameraId
+        self.mediaEpoch = mediaEpoch
     }
 
     mutating func align(
@@ -121,7 +133,7 @@ struct CameraTiming {
         exposures: [ExposureMapping],
         gaps: inout [String]
     ) throws -> [ReplayFrame] {
-        let location = "机位 \(cameraId)，片段 \(segment)"
+        let location = "\(recordingLocation(cameraId: cameraId, mediaEpoch: mediaEpoch))，片段 \(segment)"
         guard timeBase.numerator > 0, timeBase.denominator > 0,
               (1...4096).contains(videoFrames.count) else {
             throw RecordingError("\(location)：时基或帧数超出 v2 范围")
@@ -136,10 +148,10 @@ struct CameraTiming {
         guard let first = presentation.first, let firstPTS = first.pts, first.keyFrame == 1 else {
             throw RecordingError("\(location)：首个展示帧缺少 PTS 或关键帧标记")
         }
-        if let previous, previous.timeBase != timeBase {
+        if let previous, previous.mediaEpoch == mediaEpoch, previous.timeBase != timeBase {
             throw RecordingError("\(location)：媒体时基改变，请按媒体周期拆分录像")
         }
-        if let previous, segment - previous.segment > 1 {
+        if let previous, previous.mediaEpoch == mediaEpoch, segment - previous.segment > 1 {
             gaps.append("\(location)：缺少片段 \(previous.segment + 1)…\(segment - 1)")
         }
 
@@ -162,10 +174,13 @@ struct CameraTiming {
             if let number = exposure.frameNumber, number < 0 {
                 throw RecordingError("\(position)：原始帧号无效")
             }
-            if let previous {
-                guard utc > previous.utc else {
-                    throw RecordingError("\(position)：曝光 UTC 未严格递增")
+            if let previous, utc <= previous.utc {
+                if let priorEpoch = previous.mediaEpoch, priorEpoch != mediaEpoch {
+                    throw RecordingError("\(position)：曝光 UTC \(utc) 与前一媒体周期 \(priorEpoch) 的末帧 \(previous.utc) 重叠")
                 }
+                throw RecordingError("\(position)：曝光 UTC 未严格递增")
+            }
+            if let previous, previous.mediaEpoch == mediaEpoch {
                 let previousEnd = previous.frame.pts + previous.frame.durationPts
                 guard pts >= previousEnd else {
                     throw RecordingError("\(position)：展示区间重叠或 PTS 倒退")
@@ -183,7 +198,7 @@ struct CameraTiming {
                 }
             }
             let frame = ReplayFrame(
-                cameraId: cameraId, segment: segment, timeBase: timeBase,
+                cameraId: cameraId, mediaEpoch: mediaEpoch, segment: segment, timeBase: timeBase,
                 frameNumber: exposure.frameNumber,
                 frame: MediaFrame(pts: pts, durationPts: duration, captureUtcUs: timestamp),
                 utc: utc

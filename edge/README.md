@@ -13,7 +13,7 @@ swift test --package-path edge --disable-xctest
 
 ## 离线录像输入
 
-运行时需要 PATH 中的 `ffprobe`，用于读取 H.264/fMP4 中实际解出的展示帧、PTS、时基及帧时长。输入目录包含 2–4 个以机位 ID 命名的子目录，每个机位在一次运行中使用一个媒体周期。以下为双机位样例布局。
+运行时需要 PATH 中的 `ffprobe`，用于读取 H.264/fMP4 中实际解出的展示帧、PTS、时基及帧时长。输入目录包含 2–4 个以机位 ID 命名的子目录。每路可独立使用多个媒体周期，只有一个周期的旧录像可沿用以下平铺布局。
 
 ```text
 recordings/
@@ -29,7 +29,9 @@ recordings/
         └── 0.exposure.json
 ```
 
-曝光文件每帧记录和录像同一时基下的 `pts`、UTC Unix 微秒十进制字符串 `captureUtcUs`，以及可选的相机原始帧号 `frameNumber`。例如 `{"frames":[{"pts":0,"captureUtcUs":"1795494597700000","frameNumber":42}]}`。实际输入须覆盖对应媒体段的每个展示帧。媒体时钟重置时按媒体周期拆分录像。
+曝光文件每帧记录和录像同一时基下的 `pts`、UTC Unix 微秒十进制字符串 `captureUtcUs`，以及可选的相机原始帧号 `frameNumber`。例如 `{"frames":[{"pts":0,"captureUtcUs":"1795494597700000","frameNumber":42}]}`。实际输入须覆盖对应媒体段的每个展示帧。
+
+当 A 的媒体时钟重置时，将它的原片分别放入 `A/epochs/before/` 和 `A/epochs/after/`，各含自己的 `init.mp4` 和 `segments/`。B 可以继续使用平铺布局。同一机位选择一种布局。周期目录名使用 v2 标识，先后顺序取决于曝光 UTC。切换周期后，PTS、片段号和原始帧号可重新计数，时基也可改变。同一机位各周期的曝光时间范围必须互不重叠，曝光 UTC 应已映射到共同物理时钟。
 
 在已有父目录下指定一个新的输出目录。
 
@@ -38,6 +40,8 @@ swift run --package-path edge pitchtrace-edge replay "./录像目录" "./新输�
 ```
 
 结果按机位保存原始 `init.mp4`、`segments/{n}.m4s` 及符合 [v2 契约](../schemas/v2/media-index.schema.json)的 `segments/{n}.json`。导出时每路只保留当前段的帧记录，按曝光 UTC 归并成 `frames.ndjson`，同曝光时按机位 ID 排序。每行保留机位、片段、PTS、时基、时长及可用的原始帧号。`gaps.txt` 按机位记录片段号、展示时间或原始帧号的缺口。缺曝光映射和时间倒退会使命令失败，成功后才发布整个输出目录。
+
+导出保留各机位的输入布局。使用 `epochs/` 的机位在每条帧记录中增加 `mediaEpoch`，通过机位、周期、片段号、PTS 可取回唯一原帧。平铺录像继续使用原帧记录格式。
 
 ## 用生成样例联调
 
@@ -71,9 +75,36 @@ node live/server/tools/review-sample.mjs http://127.0.0.1:8766 review-edge-01 --
 
 打开 [review-edge-01](http://127.0.0.1:8766/?match=review-edge-01)，进入「归档回放」，在 `00:25.000` 暂停并切换两路同步原片。两路分别使用 30 fps 和 25 fps，预期命中同一预设曝光 UTC。`00:01.200` 可验证缺片提示。
 
+### 模拟 A 路时钟重置
+
+以下命令生成一场新的双路样例。A 的第二个媒体周期从片段 0、PTS 0 开始，B 的媒体时钟连续。对有 `epochs/` 的导出目录，`publish-media` 从目录读取各周期名，对平铺的 B 仍指定周期名。
+
+```sh
+reset_dir=$(mktemp -d)
+node live/server/tools/review-sample.mjs --recordings "$reset_dir/recordings" --reset-camera A
+swift run --package-path edge pitchtrace-edge replay "$reset_dir/recordings" "$reset_dir/media"
+swift run --package-path edge pitchtrace-edge publish-media http://127.0.0.1:8766 review-reset "$reset_dir/media/A"
+swift run --package-path edge pitchtrace-edge publish-media http://127.0.0.1:8766 review-reset sample "$reset_dir/media/B"
+```
+
+按 `captureUtcUs` 查询 A，重置前后可各命中一次片段 0 的 PTS 0。单段播放列表指向各自的初始化文件和原片。样例时间可直接用于网关的 `/v2/matches/review-reset/cameras/A/locate?captureUtcUs=…`。
+
+| 曝光 UTC（µs） | A 路预期命中 |
+| --- | --- |
+| `1795494597700000` | `before`，片段 0，PTS 0 |
+| `1795494599700000` | `after`，片段 0，PTS 0 |
+| `1795494600000000` | 比赛 `00:25.000`，`after`，片段 0，PTS 4608 |
+
+在仓库根目录运行以下回归，可自动生成样例、启动独立的本地网关并核对帧序、重复上传、曝光定位和原片内容。
+
+```sh
+swift build --package-path edge
+node --test edge/Tests/Integration/media-epoch-replay.mjs
+```
+
 ## G1 双机位曝光对时
 
-先用 `replay` 导出两路录像的 `frames.ndjson`。现场拍摄两路都能看到的共同闪光，由复核人员按同一选帧口径标注每次闪光对应的机位、片段号和 PTS。记录所有计划测量的闪光。某机位没拍到或无法确认时省略该机位，两路均缺测时保留空的 `frames`。报告使用帧清单里的曝光 UTC，现场采集需要记录时间戳来源和统一时钟的方式。
+先用 `replay` 导出两路录像的 `frames.ndjson`。现场拍摄两路都能看到的共同闪光，由复核人员按同一选帧口径标注每次闪光对应的机位、片段号和 PTS。显式分周期的机位也要填写帧记录中的 `mediaEpoch`，例如 `"A": {"mediaEpoch":"after","segment":0,"pts":0}`。记录所有计划测量的闪光。某机位没拍到或无法确认时省略该机位，两路均缺测时保留空的 `frames`。报告使用帧清单里的曝光 UTC，现场采集需要记录时间戳来源和统一时钟的方式。
 
 将下例保存为 `flashes.json`。样例只需要执行上一节的录像生成和 `replay` 命令。现场实拍标注的 `sampleSource` 填 `field`，生成样例填 `synthetic`。
 

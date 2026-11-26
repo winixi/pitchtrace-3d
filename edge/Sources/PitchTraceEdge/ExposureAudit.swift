@@ -6,6 +6,7 @@ enum ExposureSampleSource: String, Codable {
 }
 
 private struct FrameReference: Decodable, Hashable {
+    let mediaEpoch: String?
     let segment: Int64
     let pts: Int64
 }
@@ -45,9 +46,10 @@ private struct FlashAnnotations: Decodable {
                       (-maxSafeMediaInteger...maxSafeMediaInteger).contains(frame.pts) else {
                     throw RecordingError("闪光 \(event.id)，机位 \(camera)：片段或 PTS 无效")
                 }
-                guard references.insert(CameraFrameReference(cameraId: camera, frame: frame)).inserted else {
-                    throw RecordingError("闪光 \(event.id)，机位 \(camera)：同一录像帧已用于其他闪光")
+                if let epoch = frame.mediaEpoch, !isMediaCameraID(epoch) {
+                    throw RecordingError("闪光 \(event.id)，机位 \(camera)：媒体周期 ID 无效")
                 }
+                references.insert(CameraFrameReference(cameraId: camera, frame: frame))
             }
         }
         return references
@@ -83,9 +85,10 @@ func auditExposure(frames: URL, annotations: URL) async throws -> ExposureAuditR
     } catch {
         throw RecordingError("无法读取闪光标注 \(annotations.lastPathComponent)：\(error)")
     }
-    let references = try marks.validatedReferences()
+    var references = try marks.validatedReferences()
     var selected: [CameraFrameReference: ReplayFrame] = [:]
     var seenCameras: Set<String> = []
+    var camerasWithEpochs: Set<String> = []
     var lineNumber = 0
     for try await line in frames.lines {
         lineNumber += 1
@@ -100,8 +103,10 @@ func auditExposure(frames: URL, annotations: URL) async throws -> ExposureAuditR
             throw RecordingError("\(frames.lastPathComponent) 第 \(lineNumber) 行：未知机位 \(frame.cameraId)")
         }
         seenCameras.insert(frame.cameraId)
+        if frame.mediaEpoch != nil { camerasWithEpochs.insert(frame.cameraId) }
         let reference = CameraFrameReference(
-            cameraId: frame.cameraId, frame: FrameReference(segment: frame.segment, pts: frame.frame.pts)
+            cameraId: frame.cameraId,
+            frame: FrameReference(mediaEpoch: frame.mediaEpoch, segment: frame.segment, pts: frame.frame.pts)
         )
         if references.contains(reference), selected.updateValue(frame, forKey: reference) != nil {
             throw RecordingError("\(frames.lastPathComponent) 第 \(lineNumber) 行：标注引用了重复的录像帧键")
@@ -114,8 +119,16 @@ func auditExposure(frames: URL, annotations: URL) async throws -> ExposureAuditR
     let events = try marks.events.map { event in
         let observations = try marks.cameras.compactMap { camera -> ReplayFrame? in
             guard let reference = event.frames[camera] else { return nil }
-            guard let frame = selected[CameraFrameReference(cameraId: camera, frame: reference)] else {
-                throw RecordingError("闪光 \(event.id)，机位 \(camera)，片段 \(reference.segment)，PTS \(reference.pts)：录像帧不存在")
+            if reference.mediaEpoch == nil, camerasWithEpochs.contains(camera) {
+                throw RecordingError("闪光 \(event.id)，机位 \(camera)：请在帧引用中填写 mediaEpoch")
+            }
+            let key = CameraFrameReference(cameraId: camera, frame: reference)
+            guard let frame = selected[key] else {
+                let location = recordingLocation(cameraId: camera, mediaEpoch: reference.mediaEpoch)
+                throw RecordingError("闪光 \(event.id)，\(location)，片段 \(reference.segment)，PTS \(reference.pts)：录像帧不存在")
+            }
+            guard references.remove(key) != nil else {
+                throw RecordingError("闪光 \(event.id)，机位 \(camera)：同一录像帧已用于其他闪光")
             }
             return frame
         }

@@ -8,7 +8,8 @@ enum PitchTraceEdge {
         用法：
           pitchtrace-edge replay <2–4 机位录像目录> <新输出目录>
           pitchtrace-edge audit-sync <frames.ndjson> <闪光标注.json>
-          pitchtrace-edge publish-media <网关地址> <比赛 ID> <媒体周期> <导出的机位目录>
+          pitchtrace-edge publish-media <网关地址> <比赛 ID> <含 epochs 的机位目录>
+          pitchtrace-edge publish-media <网关地址> <比赛 ID> <媒体周期> <平铺机位目录>
         """
         let arguments = Array(CommandLine.arguments.dropFirst())
         if arguments.isEmpty || arguments == ["--help"] {
@@ -34,17 +35,18 @@ enum PitchTraceEdge {
                 var json = try encoder.encode(report)
                 json.append(0x0A)
                 try FileHandle.standardOutput.write(contentsOf: json)
-            case ("publish-media", 5):
+            case ("publish-media", 4), ("publish-media", 5):
                 operation = "原片提交"
                 guard let gateway = URL(string: arguments[1]) else {
                     throw RecordingError("网关地址无效")
                 }
-                let directory = URL(fileURLWithPath: arguments[4], isDirectory: true).standardizedFileURL
+                let mediaEpoch = arguments.count == 5 ? arguments[3] : nil
+                let directory = URL(fileURLWithPath: arguments[arguments.count - 1], isDirectory: true).standardizedFileURL
                 let session = URLSession(configuration: .ephemeral)
                 defer { session.finishTasksAndInvalidate() }
                 let count = try await publishCameraMedia(
                     from: directory, gateway: gateway, matchID: arguments[2],
-                    mediaEpoch: arguments[3], session: session
+                    mediaEpoch: mediaEpoch, session: session
                 )
                 print("已确认机位 \(directory.lastPathComponent) 的 \(count) 个片段。")
             default:

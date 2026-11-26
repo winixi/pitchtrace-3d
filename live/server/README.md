@@ -119,7 +119,7 @@ node live/server/tools/review-sample.mjs http://127.0.0.1:8766
 
 打开 [review-01](http://127.0.0.1:8766/?match=review-01)，点击「归档回放」，拖到 `00:25.000` 后展开「同步原片复核」。A 路是红色标记、30 fps，B 路是蓝色标记、25 fps。两路使用不同的媒体 PTS，同一三维时刻均命中曝光差 0 ms。切换 A、B 后三维仍停在 `00:25.000`。拖到 `00:01.200` 可检查原片缺口提示。再次导入不同编码版本时，可给样例命令追加新的比赛 ID。
 
-样例脚本也可用 `--recordings` 导出录像与曝光映射，并用 `--media-dir` 导入 Edge 生成的两路样例媒体和索引。[Edge 联调步骤](../../edge/README.md#用生成样例联调)
+样例脚本也可用 `--recordings` 导出录像与曝光映射，并用 `--media-dir` 导入 Edge 生成的两路样例媒体和索引。生成时加 `--reset-camera A` 或 `--reset-camera B` 可让指定机位在第二段重置媒体时钟，导入时将保留该机位的两个媒体周期。[Edge 联调步骤](../../edge/README.md#用生成样例联调) · [时钟重置与曝光定位](../../edge/README.md#模拟-a-路时钟重置)
 
 媒体接口以 `/v2/matches/{matchId}/cameras` 为前缀。
 

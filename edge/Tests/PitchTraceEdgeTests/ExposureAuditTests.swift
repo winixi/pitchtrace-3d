@@ -3,11 +3,13 @@ import Testing
 @testable import PitchTraceEdge
 
 struct ExposureAuditTests {
-    private func replayFrame(_ camera: String, _ index: Int, offset: Int64 = 0) -> ReplayFrame {
+    private func replayFrame(
+        _ camera: String, _ index: Int, offset: Int64 = 0, mediaEpoch: String? = nil
+    ) -> ReplayFrame {
         let utc = 1_795_494_600_000_000 + Int64(index) * 100_000 + offset
         let pts = Int64(camera == "A" ? index : 2 * index)
         return ReplayFrame(
-            cameraId: camera, segment: camera == "A" ? 0 : 1,
+            cameraId: camera, mediaEpoch: mediaEpoch, segment: camera == "A" ? 0 : 1,
             timeBase: MediaTimeBase(numerator: 1, denominator: 1_000), frameNumber: Int64(index),
             frame: MediaFrame(pts: pts, durationPts: 40, captureUtcUs: String(utc)), utc: utc
         )
@@ -84,6 +86,43 @@ struct ExposureAuditTests {
         #expect(report.maxAbsUs == nil)
         #expect(report.p95WithinThreshold == nil)
         #expect(report.events[0].missingCameras == ["A"])
+    }
+
+    @Test func resolvesReusedSegmentAndPTSAcrossOneCameraReset() async throws {
+        let rows = [
+            replayFrame("A", 0, mediaEpoch: "before"), replayFrame("B", 0, offset: 2_000),
+            replayFrame("B", 1), replayFrame("A", 0, offset: 101_000, mediaEpoch: "after"),
+        ]
+        let report = try await audit([
+            ["id": "first", "frames": [
+                "A": ["mediaEpoch": "before", "segment": 0, "pts": 0], "B": ["segment": 1, "pts": 0],
+            ]],
+            ["id": "second", "frames": [
+                "A": ["mediaEpoch": "after", "segment": 0, "pts": 0], "B": ["segment": 1, "pts": 2],
+            ]],
+        ], rows: rows)
+
+        #expect(report.events.map(\.signedSkewUs) == [2_000, -1_000])
+        #expect(report.events[0].frames.map(\.mediaEpoch) == ["before", nil])
+        #expect(report.events[1].frames.map(\.mediaEpoch) == ["after", nil])
+    }
+
+    @Test func rejectsMissingOrIncorrectMediaEpochInFlashAnnotation() async {
+        let rows = [replayFrame("A", 0, mediaEpoch: "before"), replayFrame("B", 0)]
+        for (epoch, reason) in [
+            (nil, "填写 mediaEpoch"),
+            ("after", "媒体周期 after，片段 0，PTS 0：录像帧不存在"),
+            ("bad/id", "媒体周期 ID 无效"),
+        ] as [(String?, String)] {
+            var reference: [String: Any] = ["segment": 0, "pts": 0]
+            if let epoch { reference["mediaEpoch"] = epoch }
+            do {
+                _ = try await audit([["id": "flash", "frames": ["A": reference]]], rows: rows)
+                Issue.record("应拒绝无效媒体周期引用")
+            } catch {
+                #expect(error.localizedDescription.contains(reason))
+            }
+        }
     }
 
     @Test(arguments: [["C", "A", "B"], ["C", "A", "B", "D"]])

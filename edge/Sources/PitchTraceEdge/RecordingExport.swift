@@ -83,8 +83,9 @@ func sha256(_ data: Data) -> String {
 }
 
 func segmentNumbers(
-    in folder: URL, cameraId: String, indexSuffix: String = ".exposure.json"
+    in folder: URL, cameraId: String, indexSuffix: String = ".exposure.json", mediaEpoch: String? = nil
 ) throws -> [Int64] {
+    let location = recordingLocation(cameraId: cameraId, mediaEpoch: mediaEpoch)
     let names = try FileManager.default.contentsOfDirectory(atPath: folder.path)
     var media: Set<Int64> = []
     var indexes: Set<Int64> = []
@@ -100,7 +101,7 @@ func segmentNumbers(
         let stem = name.dropLast(suffix.count)
         guard let number = Int64(stem), (0...maxSafeMediaInteger).contains(number),
               String(number) == stem else {
-            throw RecordingError("机位 \(cameraId)：片段文件名无效，\(name)")
+            throw RecordingError("\(location)：片段文件名无效，\(name)")
         }
         if suffix == ".m4s" {
             media.insert(number)
@@ -110,23 +111,105 @@ func segmentNumbers(
     }
     if let missing = media.subtracting(indexes).min() {
         let kind = indexSuffix == ".exposure.json" ? "曝光映射" : "媒体索引"
-        throw RecordingError("机位 \(cameraId)，片段 \(missing)：缺少\(kind)文件")
+        throw RecordingError("\(location)，片段 \(missing)：缺少\(kind)文件")
     }
     if let missing = indexes.subtracting(media).min() {
-        throw RecordingError("机位 \(cameraId)，片段 \(missing)：缺少对应媒体文件")
+        throw RecordingError("\(location)，片段 \(missing)：缺少对应媒体文件")
     }
     guard !media.isEmpty else {
-        throw RecordingError("机位 \(cameraId)：没有可重放的片段")
+        throw RecordingError("\(location)：没有可重放的片段")
     }
     return media.sorted()
 }
 
+private struct PeriodInput {
+    let id: String?
+    let directory: URL
+    let numbers: [Int64]
+
+    var segments: URL { directory.appending(path: "segments") }
+
+    func exposures(for number: Int64, location: String) throws -> [ExposureMapping] {
+        let mapping = segments.appending(path: "\(number).exposure.json")
+        do {
+            return try JSONDecoder().decode(ExposureFile.self, from: Data(contentsOf: mapping)).frames
+        } catch {
+            throw RecordingError("\(location)：无法读取曝光映射，\(error)")
+        }
+    }
+
+    static func inExposureOrder(camera: URL) throws -> [PeriodInput] {
+        let cameraId = camera.lastPathComponent
+        let periods = try cameraMediaPeriods(in: camera).map { period in
+            let numbers = try segmentNumbers(
+                in: period.directory.appending(path: "segments"), cameraId: cameraId, mediaEpoch: period.id
+            )
+            return PeriodInput(id: period.id, directory: period.directory, numbers: numbers)
+        }
+        guard periods.count > 1 else { return periods }
+        // 曝光映射可以乱序，最小 PTS 对应首个展示帧。各周期仅保留排序键和片段号。
+        let starts = try periods.map { period in
+            let number = period.numbers[0]
+            let location = "\(recordingLocation(cameraId: cameraId, mediaEpoch: period.id))，片段 \(number)"
+            let exposures = try period.exposures(for: number, location: location)
+            guard let first = exposures.min(by: { $0.pts < $1.pts }),
+                  let utc = first.captureUtcUs.flatMap(exposureMicroseconds) else {
+                throw RecordingError("\(location)：无法确定首帧曝光 UTC")
+            }
+            return (utc: utc, period: period)
+        }
+        return starts.sorted { $0.utc < $1.utc }.map(\.period)
+    }
+}
+
+private struct PeriodExport {
+    let input: PeriodInput
+    let outputSegments: URL
+    let initialization: Data
+    let initializationSHA: String
+    var remaining: ArraySlice<Int64>
+
+    init(input: PeriodInput, cameraOutput: URL) throws {
+        self.input = input
+        remaining = input.numbers[...]
+        let output = input.id.map { cameraOutput.appending(path: "epochs").appending(path: $0) } ?? cameraOutput
+        outputSegments = output.appending(path: "segments")
+        // 跨卷导出时，两个大小写不同的周期名可能指向目标盘的同一目录。
+        if let id = input.id, FileManager.default.fileExists(atPath: output.path) {
+            throw RecordingError("机位 \(cameraOutput.lastPathComponent)：媒体周期 \(id) 在目标盘发生目录名冲突")
+        }
+        initialization = try mediaBytes(at: input.directory.appending(path: "init.mp4"))
+        initializationSHA = sha256(initialization)
+        try FileManager.default.createDirectory(at: outputSegments, withIntermediateDirectories: true)
+        try initialization.write(to: output.appending(path: "init.mp4"))
+    }
+
+    func export(
+        segment number: Int64, timing: inout CameraTiming, scratch: URL, encoder: JSONEncoder, gaps: inout [String]
+    ) throws -> [ReplayFrame] {
+        let location = "\(recordingLocation(cameraId: timing.cameraId, mediaEpoch: input.id))，片段 \(number)"
+        let bytes = try mediaBytes(at: input.segments.appending(path: "\(number).m4s"))
+        let (timeBase, videoFrames) = try probeVideo(
+            initialization: initialization, segment: bytes, scratch: scratch, location: location
+        )
+        let aligned = try timing.align(
+            segment: number, timeBase: timeBase, videoFrames: videoFrames,
+            exposures: input.exposures(for: number, location: location), gaps: &gaps
+        )
+        let index = MediaIndex(
+            initSha256: initializationSHA, segmentSha256: sha256(bytes), segmentBytes: bytes.count,
+            timeBase: timeBase, frames: aligned.map(\.frame)
+        )
+        try bytes.write(to: outputSegments.appending(path: "\(number).m4s"))
+        try encoder.encode(index).write(to: outputSegments.appending(path: "\(number).json"))
+        return aligned
+    }
+}
+
 private struct CameraExport {
-    private let inputSegments: URL
-    private let outputSegments: URL
-    private let initialization: Data
-    private let initializationSHA: String
-    private var segments: ArraySlice<Int64>
+    private let output: URL
+    private var periods: ArraySlice<PeriodInput>
+    private var active: PeriodExport
     private var frames: ArraySlice<ReplayFrame> = []
     private var timing: CameraTiming
     private let gapLog: FileHandle
@@ -134,15 +217,15 @@ private struct CameraExport {
 
     init(camera: URL, stage: URL, work: URL) throws {
         let cameraId = camera.lastPathComponent
-        let output = stage.appendingPathComponent(cameraId, isDirectory: true)
-        inputSegments = camera.appendingPathComponent("segments", isDirectory: true)
-        outputSegments = output.appendingPathComponent("segments", isDirectory: true)
-        segments = try segmentNumbers(in: inputSegments, cameraId: cameraId)[...]
-        initialization = try mediaBytes(at: camera.appendingPathComponent("init.mp4"))
-        initializationSHA = sha256(initialization)
-        timing = CameraTiming(cameraId: cameraId)
-        try FileManager.default.createDirectory(at: outputSegments, withIntermediateDirectories: true)
-        try initialization.write(to: output.appendingPathComponent("init.mp4"))
+        output = stage.appendingPathComponent(cameraId, isDirectory: true)
+        guard !FileManager.default.fileExists(atPath: output.path) else {
+            throw RecordingError("机位 \(cameraId) 在目标盘发生目录名冲突")
+        }
+        let ordered = try PeriodInput.inExposureOrder(camera: camera)
+        guard let first = ordered.first else { throw RecordingError("机位 \(cameraId)：没有媒体周期") }
+        periods = ordered.dropFirst()
+        active = try PeriodExport(input: first, cameraOutput: output)
+        timing = CameraTiming(cameraId: cameraId, mediaEpoch: first.id)
 
         let gapFile = work.appendingPathComponent("\(cameraId).txt")
         try Data().write(to: gapFile)
@@ -151,30 +234,15 @@ private struct CameraExport {
 
     mutating func nextFrame(scratch: URL, encoder: JSONEncoder) throws -> ReplayFrame? {
         if let frame = frames.popFirst() { return frame }
-        guard let number = segments.popFirst() else { return nil }
-
-        let location = "机位 \(timing.cameraId)，片段 \(number)"
-        let bytes = try mediaBytes(at: inputSegments.appendingPathComponent("\(number).m4s"))
-        let (timeBase, videoFrames) = try probeVideo(
-            initialization: initialization, segment: bytes, scratch: scratch, location: location
-        )
-        let mapping = inputSegments.appendingPathComponent("\(number).exposure.json")
-        let exposures: [ExposureMapping]
-        do {
-            exposures = try JSONDecoder().decode(ExposureFile.self, from: Data(contentsOf: mapping)).frames
-        } catch {
-            throw RecordingError("\(location)：无法读取曝光映射，\(error)")
+        if active.remaining.isEmpty {
+            guard let next = periods.popFirst() else { return nil }
+            active = try PeriodExport(input: next, cameraOutput: output)
+            timing.mediaEpoch = next.id
         }
+
+        let number = active.remaining.removeFirst()
         var gaps: [String] = []
-        let aligned = try timing.align(
-            segment: number, timeBase: timeBase, videoFrames: videoFrames, exposures: exposures, gaps: &gaps
-        )
-        let index = MediaIndex(
-            initSha256: initializationSHA, segmentSha256: sha256(bytes), segmentBytes: bytes.count,
-            timeBase: timeBase, frames: aligned.map(\.frame)
-        )
-        try bytes.write(to: outputSegments.appendingPathComponent("\(number).m4s"))
-        try encoder.encode(index).write(to: outputSegments.appendingPathComponent("\(number).json"))
+        let aligned = try active.export(segment: number, timing: &timing, scratch: scratch, encoder: encoder, gaps: &gaps)
         if !gaps.isEmpty {
             try gapLog.write(contentsOf: Data((gaps.joined(separator: "\n") + "\n").utf8))
             gapCount += gaps.count
