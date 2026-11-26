@@ -1,6 +1,6 @@
 # PitchTrace Edge
 
-场迹的场边计算子项目。第一阶段 MVP 计划在 M6 Mac mini 上接入四路单摄，每个机位一台相机，以同步画面重建人球轨迹。当前可用 2–4 个机位的离线录像按曝光时刻重放、核对共同闪光，并按机位将原片和索引提交给本地 v2 网关。
+场迹的场边计算子项目。第一阶段 MVP 计划在 M6 Mac mini 上接入四路单摄，每个机位一台相机，以同步画面重建人球轨迹。当前可用 2–4 个机位的离线录像按曝光时刻重放、核对共同闪光、统计球和脚踝的双视角可见率，并按机位将原片和索引提交给本地 v2 网关。
 
 从双机位实拍到四路试点的模块分工、逐周交付物和验收门槛见 [Edge 需求与开发计划](../docs/07-edge-development-plan.md)。
 
@@ -10,6 +10,8 @@
 swift build --package-path edge
 swift test --package-path edge --disable-xctest
 ```
+
+在仅安装 Command Line Tools 的 Swift 6.4.2 环境，若测试提示 `plugin for module 'TestingMacros' not found`，可在上面的 `swift test` 命令末尾追加 `-Xswiftc -plugin-path -Xswiftc /Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing`。
 
 ## 离线录像输入
 
@@ -154,5 +156,28 @@ swift run --package-path edge pitchtrace-edge audit-sync "$trial_dir/media/frame
 同一命令支持 2–4 路，`cameras` 列出本次重放的所有机位。各事件保留原帧引用、曝光 UTC 和 `missingCameras`。全部机位都拍到时，`spanUs` 为最晚与最早曝光之差。双机位完整事件还保留有符号的 `signedSkewUs`（第二机位减第一机位）。报告用完整组的跨度计算最大值和最近秩 P95，`pairedCount` 计完整组，`unpairedCount` 计缺测组。没有完整组时省略偏差统计与阈值判定。P95 超过 5,000 µs 时仍正常输出报告。无效帧引用或重复使用同一帧会报错。
 
 生成样例预期为 2 次标注，其中 1 次配对、1 次未配对，P95 和最大值均为 0 µs。现场评审还要核对实拍证据、样本量、未配对数、双视角可见率和独立检查点。[G1 放行条件](../docs/03-development-plan.md#3-按周实施与放行条件)
+
+## G1 分区双视角可见率
+
+`audit-visibility` 根据人工标注，统计各场区有多少次能从至少两个机位同时看清同一目标。先按「用生成样例联调」生成双路平铺录像并执行 `replay`，在同一终端从仓库根目录运行以下命令。测试图案的可见性和区域均为预设值。[样例标注](samples/visibility.json)
+
+```sh
+swift run --package-path edge pitchtrace-edge audit-visibility \
+  "$trial_dir/media/frames.ndjson" edge/samples/visibility.json > "$trial_dir/visibility-report.json"
+```
+
+样例的 4 个计划样本应有 1 个满足双视角条件。`groups` 按区域与目标给出分子 `dualViewCount`、分母 `sampleCount` 和二者之比 `dualViewRate`。
+
+| 场区 | 目标 | 双视角可见 / 计划样本 | 对应原帧 |
+| --- | --- | --- | --- |
+| 中圈 | 地滚球 | 1/2 | 一次两路同曝光，另一次两路均缺帧。 |
+| 中圈 | 脚踝 | 0/1 | 两路同曝光，仅 A 能看清左脚踝。 |
+| 远端禁区 | 高球 | 0/1 | 两路都能看清球，曝光相差 6,667 µs，超出样例的 5,000 µs 上限。 |
+
+制作现场标注时，先约定场区名称、取样时刻和允许的最大曝光差 `maxSkewUs`（微秒），列出所有计划样本。`sampleSource` 填 `field`，`cameras` 填重放清单内全部 2–4 个机位。每个 `id` 唯一标识一次取样的一个目标，`region` 填场区，`target` 取 `groundBall`（地滚球）、`highBall`（高球）或 `ankle`（脚踝）。标脚踝时，各机位应看同一球员的同侧脚踝，可在 ID 中记下球员和左右侧。球与脚踝可以分别引用同一原帧。需单列拼抢或特定光照时，可按场景分别准备标注文件、生成报告。
+
+在 `views` 内为有对应原帧的机位填写片段号、PTS，以及显式周期录像的 `mediaEpoch`。能看清指定目标填 `visible: true`，有原帧但目标被挡或无法辨认填 `false`。缺帧时省略该机位，所有机位均缺帧时保留 `"views": {}`。每个计划样本都进入该组的分母。任意两路可见帧的曝光 UTC 相差不超过 `maxSkewUs` 时，该样本计入分子一次。
+
+报告的 `samples` 保留各机位原帧、人工判读、缺帧机位 `missingCameras` 和双视角判定 `dualView`。有两路以上（含两路）看清时，`closestVisibleSkewUs` 给出其中最接近的一对曝光差，便于复核超窗样本。
 
 设备采集与推理的设计见[边缘计算技术方案](../docs/02-technical-design.md#pitchtrace-edge)。

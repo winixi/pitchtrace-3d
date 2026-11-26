@@ -1,0 +1,40 @@
+{
+  "sampleSource": "synthetic",
+  "cameras": ["A", "B"],
+  "maxSkewUs": 5000,
+  "samples": [
+    {
+      "id": "pass-01-ball",
+      "region": "中圈",
+      "target": "groundBall",
+      "views": {
+        "A": { "visible": true, "frame": { "segment": 1, "pts": 35328 } },
+        "B": { "visible": true, "frame": { "segment": 1, "pts": 32256 } }
+      }
+    },
+    {
+      "id": "pass-01-player7-left-ankle",
+      "region": "中圈",
+      "target": "ankle",
+      "views": {
+        "A": { "visible": true, "frame": { "segment": 1, "pts": 35328 } },
+        "B": { "visible": false, "frame": { "segment": 1, "pts": 32256 } }
+      }
+    },
+    {
+      "id": "cross-01-ball",
+      "region": "远端禁区",
+      "target": "highBall",
+      "views": {
+        "A": { "visible": true, "frame": { "segment": 1, "pts": 35840 } },
+        "B": { "visible": true, "frame": { "segment": 1, "pts": 32768 } }
+      }
+    },
+    {
+      "id": "pass-02-ball",
+      "region": "中圈",
+      "target": "groundBall",
+      "views": {}
+    }
+  ]
+}

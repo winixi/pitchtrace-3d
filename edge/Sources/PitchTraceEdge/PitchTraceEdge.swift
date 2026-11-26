@@ -8,6 +8,7 @@ enum PitchTraceEdge {
         用法：
           pitchtrace-edge replay <2–4 机位录像目录> <新输出目录> [--metrics]
           pitchtrace-edge audit-sync <frames.ndjson> <闪光标注.json>
+          pitchtrace-edge audit-visibility <frames.ndjson> <可见性标注.json>
           pitchtrace-edge publish-media <网关地址> <比赛 ID> <含 epochs 的机位目录>
           pitchtrace-edge publish-media <网关地址> <比赛 ID> <媒体周期> <平铺机位目录>
         """
@@ -44,6 +45,12 @@ enum PitchTraceEdge {
                 let frames = URL(fileURLWithPath: arguments[1])
                 let annotations = URL(fileURLWithPath: arguments[2])
                 let report = try await auditExposure(frames: frames, annotations: annotations)
+                try writeJSON(report)
+            case ("audit-visibility", 3):
+                operation = "分区双视角可见率检查"
+                let frames = URL(fileURLWithPath: arguments[1])
+                let annotations = URL(fileURLWithPath: arguments[2])
+                let report = try await auditVisibility(frames: frames, annotations: annotations)
                 try writeJSON(report)
             case ("publish-media", 4), ("publish-media", 5):
                 operation = "原片提交"
