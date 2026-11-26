@@ -3,7 +3,7 @@
 # <sup><img src="assets/pitchtrace-logo.png" width="28" height="28" align="middle" alt=""></sup> 场迹 · PitchTrace 3D
 
 [![CI](https://img.shields.io/github/actions/workflow/status/winixi/pitchtrace-3d/pages.yml?branch=main&label=CI&logo=github)](https://github.com/winixi/pitchtrace-3d/actions/workflows/pages.yml)
-[![Release](https://badgen.net/github/release/winixi/pitchtrace-3d)](https://github.com/winixi/pitchtrace-3d/releases)
+[![Release](https://img.shields.io/github/v/release/winixi/pitchtrace-3d?display_name=tag)](https://github.com/winixi/pitchtrace-3d/releases/latest)
 [![Stars](https://img.shields.io/github/stars/winixi/pitchtrace-3d?style=flat&color=blue)](https://github.com/winixi/pitchtrace-3d/stargazers)
 [![License](https://img.shields.io/github/license/winixi/pitchtrace-3d?color=blue)](LICENSE)
 
