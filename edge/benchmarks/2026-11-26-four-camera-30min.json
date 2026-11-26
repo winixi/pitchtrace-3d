@@ -1,0 +1,101 @@
+{
+  "date": "2026-11-26",
+  "environment": {
+    "hostModel": "MacBookPro18,1",
+    "chip": "Apple M1 Pro",
+    "logicalCpus": 10,
+    "memoryGiB": 32,
+    "os": "macOS 27.2.1 (26B131), arm64",
+    "swift": "6.4.2",
+    "ffmpeg": "8.1.2",
+    "ffprobe": "8.1.2",
+    "node": "22.15.0",
+    "build": "release",
+    "baseCommit": "121670dd8cacbcc7ba512288a32b8febec95d3f0",
+    "measuredBinarySha256": "d865de13c6fd7a98532faa3230d6980f3efc4de54427375546fd352e31cea073"
+  },
+  "fixture": {
+    "source": "live/server/tools/review-sample.mjs",
+    "codec": "H.264/fMP4",
+    "width": 320,
+    "height": 180,
+    "secondsPerCamera": 1800,
+    "secondsPerSegment": 2,
+    "fpsByCamera": {
+      "A": 30,
+      "B": 25,
+      "C": 30,
+      "D": 25
+    },
+    "reset": {
+      "camera": "A",
+      "afterSeconds": 900
+    }
+  },
+  "method": "样例生成后单次运行 Release replay --metrics。单调时钟从调用重放到导出目录就绪。RSS 使用 Darwin getrusage，分别记录 Edge 与已回收子进程中的最高值。外部 time -l 另计进程启动和退出。",
+  "replay": {
+    "childPeakRssBytes": 15302656,
+    "edgePeakRssBytes": 61521920,
+    "elapsedSeconds": 411.158406208,
+    "frames": 198000,
+    "framesPerSecond": 481.56622121896794,
+    "gaps": 0
+  },
+  "externalTime": {
+    "wallSeconds": 411.62,
+    "maximumResidentSetBytes": 61685760
+  },
+  "timesRealTime": 4.3778747383542544,
+  "verification": {
+    "totalFrames": 198000,
+    "indexedFrames": 198000,
+    "framesByCamera": {
+      "A": 54000,
+      "B": 45000,
+      "C": 54000,
+      "D": 45000
+    },
+    "segmentsByCamera": {
+      "A": 900,
+      "B": 900,
+      "C": 900,
+      "D": 900
+    },
+    "gapBytes": 0,
+    "resetEpochFrames": {
+      "before": 27000,
+      "after": 27000
+    },
+    "resetBoundary": {
+      "lastBefore": {
+        "cameraId": "A",
+        "captureUtcUs": "1795495497666667",
+        "durationPts": 512,
+        "frameNumber": 26999,
+        "mediaEpoch": "before",
+        "pts": 13823488,
+        "segment": 449,
+        "timeBase": {
+          "denominator": 15360,
+          "numerator": 1
+        }
+      },
+      "firstAfter": {
+        "cameraId": "A",
+        "captureUtcUs": "1795495497700000",
+        "durationPts": 512,
+        "frameNumber": 0,
+        "mediaEpoch": "after",
+        "pts": 0,
+        "segment": 0,
+        "timeBase": {
+          "denominator": 15360,
+          "numerator": 1
+        }
+      }
+    },
+    "equalUtcAdjacentPairs": 107999,
+    "tiedUtcGroups": 90001,
+    "fourCameraUtcGroups": 8999
+  }
+}

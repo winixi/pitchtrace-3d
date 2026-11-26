@@ -167,6 +167,8 @@ node live/server/server.cjs
 
 [两路测试视频](live/server/README.md#v2-原片归档与同步复核)提供生成、导入和暂停切换实拍机位的步骤。
 
+两段短样片可直接播放，也可一条命令生成四路各 30 分钟的 MP4 和配套 Edge 重放输入。[Edge 测试录像](edge/samples/README.md)
+
 ## 许可证
 
 原创代码采用 [MIT 许可证](LICENSE)。演示使用的第三方模型、动画和依赖保留各自许可，详见[素材署名与许可](live/web/licenses/)。

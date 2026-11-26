@@ -167,6 +167,8 @@ Open [trial-01](http://127.0.0.1:8766/?match=trial-01) to subscribe to the local
 
 The [two-camera sample](live/server/README.md#v2-原片归档与同步复核) generates footage and verifies switching cameras while the 3D replay is paused.
 
+Open the short sample videos or generate four 30-minute MP4 files and the corresponding Edge replay input. [Edge video samples](edge/samples/README.md)
+
 ## License
 
 Original code is released under the [MIT License](LICENSE). Third-party models, animations, and dependencies used by the demo retain their own licenses; see [asset attribution & licenses](live/web/licenses/).

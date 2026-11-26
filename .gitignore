@@ -6,4 +6,6 @@ node_modules/
 !.env.example
 /edge/.build/
 /edge/.swiftpm/
+/edge/benchmarks/runs/
+/edge/samples/four-camera-30min/
 /live/server/data/

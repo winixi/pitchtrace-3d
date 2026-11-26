@@ -102,11 +102,30 @@ swift build --package-path edge
 node --test edge/Tests/Integration/media-epoch-replay.mjs
 ```
 
+## 四路 30 分钟录像重放基准
+
+两段 4 秒样片可直接打开。要看完整录像，从仓库根目录运行 `node edge/samples/prepare-videos.mjs`，再打开 `edge/samples/four-camera-30min/` 下的四个 MP4。同目录的 `recordings/` 可直接交给 Edge 重放。[测试录像与使用方法](samples/README.md)
+
+以下命令从仓库根目录运行。生成器循环现有双机位样例的压缩画面，保留其 320×180 分辨率和两路曝光起点，重新封装为每段 2 秒的 H.264/fMP4。A、C 为 30 fps，B、D 为 25 fps，每路各 900 段。A 在本机位第 15 分钟重置媒体时钟，前后各 450 段，B、C、D 连续。
+
+```sh
+swift build --package-path edge -c release
+mkdir -p edge/benchmarks/runs
+run_dir=$(mktemp -d "$PWD/edge/benchmarks/runs/long-replay.XXXXXXXX")
+node edge/Tests/Integration/generate-long-recordings.mjs "$run_dir/recordings"
+edge/.build/release/pitchtrace-edge replay "$run_dir/recordings" "$run_dir/media" --metrics > "$run_dir/replay-metrics.json"
+node edge/Tests/Integration/verify-long-replay.mjs "$run_dir/media" > "$run_dir/verification.json"
+```
+
+`--metrics` 将本次重放的计量结果以 JSON 写到标准输出。单调时钟覆盖读取、ffprobe 逐段解析、曝光校验、归并、原片与索引写盘，直到输出目录就绪。帧率按四路实际导出总帧数除以耗时计算。内存采用 macOS 内核记录的最高驻留集大小（RSS，单位字节），分别记录 Edge 主进程和各次 ffprobe 调用中的最大值。样例生成与导出后的逐帧核验分别运行。
+
+2026-11-26 在 M1 Pro（32 GiB）上单次运行耗时 411.16 秒，四路合计 481.57 帧/秒，相当于实时的 4.38 倍。Edge 峰值 RSS 为 58.67 MiB，单个 ffprobe 子进程最高为 14.59 MiB。逐帧核对清单与 3,600 个片段索引，均为 198,000 帧，录像缺口为零。A 重置前后两帧的曝光时间相隔 33,333 µs；四路全程按曝光 UTC 排序，同一 UTC 按机位 ID 排序。[完整实测记录](benchmarks/2026-11-26-four-camera-30min.json)
+
 ## G1 双机位曝光对时
 
 先用 `replay` 导出两路录像的 `frames.ndjson`。现场拍摄两路都能看到的共同闪光，由复核人员按同一选帧口径标注每次闪光对应的机位、片段号和 PTS。显式分周期的机位也要填写帧记录中的 `mediaEpoch`，例如 `"A": {"mediaEpoch":"after","segment":0,"pts":0}`。记录所有计划测量的闪光。某机位没拍到或无法确认时省略该机位，两路均缺测时保留空的 `frames`。报告使用帧清单里的曝光 UTC，现场采集需要记录时间戳来源和统一时钟的方式。
 
-将下例保存为 `flashes.json`。样例只需要执行上一节的录像生成和 `replay` 命令。现场实拍标注的 `sampleSource` 填 `field`，生成样例填 `synthetic`。
+将下例保存为 `flashes.json`。样例只需要执行[用生成样例联调](#用生成样例联调)中的双路录像生成和 `replay` 命令。现场实拍标注的 `sampleSource` 填 `field`，生成样例填 `synthetic`。
 
 ```json
 {

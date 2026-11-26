@@ -6,7 +6,7 @@ enum PitchTraceEdge {
     static func main() async {
         let usage = """
         用法：
-          pitchtrace-edge replay <2–4 机位录像目录> <新输出目录>
+          pitchtrace-edge replay <2–4 机位录像目录> <新输出目录> [--metrics]
           pitchtrace-edge audit-sync <frames.ndjson> <闪光标注.json>
           pitchtrace-edge publish-media <网关地址> <比赛 ID> <含 epochs 的机位目录>
           pitchtrace-edge publish-media <网关地址> <比赛 ID> <媒体周期> <平铺机位目录>
@@ -19,22 +19,32 @@ enum PitchTraceEdge {
         let operation: String
         do {
             switch (arguments[0], arguments.count) {
-            case ("replay", 3):
+            case ("replay", 3),
+                 ("replay", 4) where arguments[3] == "--metrics":
                 operation = "录像重放"
                 let input = URL(fileURLWithPath: arguments[1], isDirectory: true)
                 let output = URL(fileURLWithPath: arguments[2], isDirectory: true)
+                let start = ContinuousClock.now
                 let summary = try exportRecording(from: input, to: output)
-                print("已导出 \(summary.frames) 帧，记录 \(summary.gaps) 条缺口。")
+                if arguments.count == 4 {
+                    let elapsed = start.duration(to: .now).components
+                    let seconds = Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
+                    let metrics = try ReplayMetrics(
+                        frames: summary.frames, gaps: summary.gaps, elapsedSeconds: seconds,
+                        framesPerSecond: Double(summary.frames) / seconds,
+                        edgePeakRssBytes: peakRssBytes(RUSAGE_SELF),
+                        childPeakRssBytes: peakRssBytes(RUSAGE_CHILDREN)
+                    )
+                    try writeJSON(metrics)
+                } else {
+                    print("已导出 \(summary.frames) 帧，记录 \(summary.gaps) 条缺口。")
+                }
             case ("audit-sync", 3):
                 operation = "曝光对时检查"
                 let frames = URL(fileURLWithPath: arguments[1])
                 let annotations = URL(fileURLWithPath: arguments[2])
                 let report = try await auditExposure(frames: frames, annotations: annotations)
-                let encoder = JSONEncoder()
-                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-                var json = try encoder.encode(report)
-                json.append(0x0A)
-                try FileHandle.standardOutput.write(contentsOf: json)
+                try writeJSON(report)
             case ("publish-media", 4), ("publish-media", 5):
                 operation = "原片提交"
                 guard let gateway = URL(string: arguments[1]) else {
@@ -59,4 +69,30 @@ enum PitchTraceEdge {
             exit(1)
         }
     }
+}
+
+private func writeJSON(_ value: some Encodable) throws {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    var json = try encoder.encode(value)
+    json.append(0x0A)
+    try FileHandle.standardOutput.write(contentsOf: json)
+}
+
+private struct ReplayMetrics: Encodable {
+    let frames: Int
+    let gaps: Int
+    let elapsedSeconds: Double
+    let framesPerSecond: Double
+    let edgePeakRssBytes: Int
+    let childPeakRssBytes: Int
+}
+
+// Darwin 以字节报告最高驻留内存，子进程项取已回收子进程中的最大值。
+private func peakRssBytes(_ who: Int32) throws -> Int {
+    var usage = rusage()
+    guard getrusage(who, &usage) == 0 else {
+        throw RecordingError("无法读取重放内存计量：\(String(cString: strerror(errno)))")
+    }
+    return usage.ru_maxrss
 }

@@ -89,10 +89,15 @@ test("一路媒体时钟重置后可以按曝光重放、重传并定位原片",
   const recordings = join(temporary, "recordings");
   const output = join(temporary, "export");
   await run(process.execPath, [sample, "--recordings", recordings, "--reset-camera", "A"]);
-  await run(edge, ["replay", recordings, output]);
+  const { stdout } = await run(edge, ["replay", recordings, output, "--metrics"]);
+  const metrics = JSON.parse(stdout);
   const frames = (await readFile(join(output, "frames.ndjson"), "utf8"))
     .trimEnd().split("\n").map((line) => JSON.parse(line));
   checkReplay(frames);
+  assert.equal(metrics.frames, frames.length);
+  assert.equal(metrics.gaps, 0);
+  assert.ok(metrics.elapsedSeconds > 0 && metrics.edgePeakRssBytes > 0 && metrics.childPeakRssBytes > 0);
+  assert.equal(metrics.framesPerSecond, frames.length / metrics.elapsedSeconds);
 
   for (let attempt = 0; attempt < 2; attempt++) {
     await run(edge, ["publish-media", gateway, match, join(output, "A")]);
