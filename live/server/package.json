@@ -7,7 +7,7 @@
     "ws": "^8.23.0"
   },
   "name": "@pitchtrace/live-server",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
