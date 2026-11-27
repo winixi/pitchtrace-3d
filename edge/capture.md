@@ -2,6 +2,8 @@
 
 `capture` 为每台相机启动独立的 FFmpeg 进程。可从文件、RTSP 或 macOS AVFoundation 输入采集 1–4 路视频。默认以 H.264 编码，保留展示帧时序，以关键帧开始新的 fMP4 片段。对于关键帧间隔合适的 H.264 源可设置 `"videoMode": "copy"` 直接封装。采集需要 PATH 中的 `ffmpeg`，曝光核对还需要 `ffprobe`。默认编码使用 `libx264`。
 
+现场相机暂定海康机器人 **MV-CS050-10GC-PRO**。计划新增 MVS 采集适配，将设备帧号、曝光 UTC 和编码后的 PTS 写入下述逐帧映射。当前 `capture` 尚未接入 MVS。首轮双机采集模式、带宽和对时验收见[相机开发基线](../docs/05-hardware-selection.md#相机开发基线)。
+
 ## 开始、预览与停止
 
 从仓库根目录运行以下文件源样例。
