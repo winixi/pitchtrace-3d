@@ -62,3 +62,27 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: bash .github/scripts/publish-edge-preview.sh "$RUNNER_TEMP/edge-release"
+
+  update-readmes:
+    name: 更新 main 上的中英文 README
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 检出本次发布的更新脚本
+        uses: actions/checkout@v7.0.1
+        with:
+          path: edge-release-source
+          persist-credentials: false
+      - name: 检出 main
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: refs/heads/main
+          path: main-source
+      - name: 核对预发布附件并提交两份 README
+        working-directory: main-source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python3 ../edge-release-source/.github/scripts/update-edge-readmes.py "$GITHUB_REF_NAME"
