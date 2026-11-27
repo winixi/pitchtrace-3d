@@ -8,13 +8,13 @@ let package = Package(
         .executable(name: "pitchtrace-edge", targets: ["PitchTraceEdge"])
     ],
     dependencies: [
-        .package(url: "https://github.com/vapor/vapor.git", from: "4.99.0")
+        .package(url: "https://github.com/httpswift/swifter.git", from: "1.5.0")
     ],
     targets: [
         .executableTarget(
             name: "PitchTraceEdge",
             dependencies: [
-                .product(name: "Vapor", package: "vapor")
+                .product(name: "Swifter", package: "swifter")
             ],
             resources: [.copy("Geometry"), .copy("WebUI/Resources")]
         ),

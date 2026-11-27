@@ -6,6 +6,7 @@ enum PitchTraceEdge {
     static func main() async {
         let usage = """
         用法：
+          pitchtrace-edge web-ui [--bind 地址:端口] [--match-dir 目录]
           pitchtrace-edge replay <2–4 机位录像目录> <新输出目录> [--metrics]
           pitchtrace-edge audit-sync <frames.ndjson> <闪光标注.json>
           pitchtrace-edge audit-visibility <frames.ndjson> <可见性标注.json>
@@ -37,6 +38,19 @@ enum PitchTraceEdge {
         let operation: String
         do {
             switch (arguments[0], arguments.count) {
+            case ("web-ui", _):
+                operation = "Web UI 监控界面"
+                do {
+                    let command = try WebUICommand.parse(arguments: Array(arguments.dropFirst()))
+                    try await command.run()
+                } catch is ExitSuccess {
+                    return
+                } catch let error as ValidationError {
+                    print("错误: \(error.message)")
+                    print("")
+                    WebUICommand.printHelp()
+                    Darwin.exit(1)
+                }
             case ("replay", 3),
                  ("replay", 4) where arguments[3] == "--metrics":
                 operation = "录像重放"
