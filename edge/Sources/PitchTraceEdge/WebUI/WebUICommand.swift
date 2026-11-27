@@ -1,5 +1,5 @@
 import Foundation
-import Swifter
+@preconcurrency import Swifter
 
 /// Web UI 监控界面命令
 ///
@@ -57,6 +57,10 @@ struct WebUICommand {
             throw ValidationError("Invalid bind address format. Expected host:port")
         }
         
+        // 配置系统监控器
+        let matchDirURL = matchDir.map { URL(fileURLWithPath: $0, isDirectory: true) }
+        await SystemMonitor.shared.configure(matchDirectory: matchDirURL)
+        
         // 创建 HTTP 服务器
         let server = HttpServer()
         
@@ -66,6 +70,13 @@ struct WebUICommand {
         }
         
         server["/api/status"] = { [self] request in
+            // 阶段 2: SystemMonitor 集成
+            // 当前使用模拟数据，因为 Swifter (同步) 与 SystemMonitor (async actor) 的桥接
+            // 在 Swift 6 严格并发检查下存在技术挑战。
+            // TODO: 考虑以下方案之一：
+            // 1. 升级到支持 async 的 HTTP 框架（如 AsyncHTTPServer）
+            // 2. 使用 @preconcurrency 包装并接受潜在风险
+            // 3. 预先启动后台任务定期更新缓存的状态
             let status = self.getMockStatus()
             return .ok(.json(status.toJSON()))
         }
@@ -90,6 +101,11 @@ struct WebUICommand {
             
             print("✓ Server is running")
             print("  → Open http://\(hostname):\(port) in your browser")
+            if matchDirURL != nil {
+                print("  → Monitoring: \(matchDir!)")
+            } else {
+                print("  → No match directory specified (using demo data)")
+            }
             
             // 保持服务器运行
             try await Task.sleep(for: .seconds(365 * 24 * 3600)) // 1 year
@@ -266,7 +282,7 @@ struct CameraStatus: Codable {
     let exposureDriftMs: Double?
     let droppedFrames: Int
     let queueDepth: Int
-    let calibrationId: String
+    let calibrationId: String?
     let calibrationValid: Bool
 }
 
