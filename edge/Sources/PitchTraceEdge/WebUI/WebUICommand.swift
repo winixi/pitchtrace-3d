@@ -1,153 +1,42 @@
 import Foundation
 @preconcurrency import Swifter
 
-/// Web UI 监控界面命令
-///
-/// 启动嵌入式 HTTP 服务器，提供设备状态监控、采集控制和告警面板。
-/// 默认监听 127.0.0.1:8765，支持局域网访问（需显式指定 --bind 0.0.0.0:8765）。
-struct WebUICommand {
-    let bindAddress: String
-    let matchDir: String?
+/// 线程安全的状态缓存
+/// 由后台任务定期更新，HTTP 路由同步读取
+final class StatusCache: @unchecked Sendable {
+    static let shared = StatusCache()
     
-    /// 解析命令行参数
-    static func parse(arguments: [String]) throws -> WebUICommand {
-        var bindAddress = "127.0.0.1:8765"
-        var matchDir: String?
-        
-        var i = 0
-        while i < arguments.count {
-            let arg = arguments[i]
-            switch arg {
-            case "--bind":
-                guard i + 1 < arguments.count else {
-                    throw ValidationError("--bind requires an address:port argument")
-                }
-                bindAddress = arguments[i + 1]
-                i += 2
-            case "--match-dir":
-                guard i + 1 < arguments.count else {
-                    throw ValidationError("--match-dir requires a directory path")
-                }
-                matchDir = arguments[i + 1]
-                i += 2
-            case "--help", "-h":
-                printHelp()
-                throw ExitSuccess()
-            default:
-                throw ValidationError("Unknown argument: \(arg)")
-            }
-        }
-        
-        return WebUICommand(bindAddress: bindAddress, matchDir: matchDir)
+    private var _current: SystemStatus
+    private var _lastUpdate: Date
+    private let lock = NSLock()
+    
+    var current: SystemStatus {
+        lock.lock()
+        defer { lock.unlock() }
+        return _current
     }
     
-    /// 执行命令，启动 Web UI 服务器
-    func run() async throws {
-        print("Starting PitchTrace Edge Web UI...")
-        print("Bind address: \(bindAddress)")
-        if let dir = matchDir {
-            print("Match directory: \(dir)")
-        }
-        
-        // 解析地址和端口
-        let components = bindAddress.split(separator: ":")
-        guard components.count == 2,
-              let hostname = components.first.map(String.init),
-              let port = Int(components.last!) else {
-            throw ValidationError("Invalid bind address format. Expected host:port")
-        }
-        
-        // 配置系统监控器
-        let matchDirURL = matchDir.map { URL(fileURLWithPath: $0, isDirectory: true) }
-        await SystemMonitor.shared.configure(matchDirectory: matchDirURL)
-        
-        // 创建 HTTP 服务器
-        let server = HttpServer()
-        
-        // 注册路由
-        server["/"] = { [self] request in
-            return self.serveIndexHTML()
-        }
-        
-        server["/api/status"] = { [self] request in
-            // 阶段 2: SystemMonitor 集成
-            // 当前使用模拟数据，因为 Swifter (同步) 与 SystemMonitor (async actor) 的桥接
-            // 在 Swift 6 严格并发检查下存在技术挑战。
-            // TODO: 考虑以下方案之一：
-            // 1. 升级到支持 async 的 HTTP 框架（如 AsyncHTTPServer）
-            // 2. 使用 @preconcurrency 包装并接受潜在风险
-            // 3. 预先启动后台任务定期更新缓存的状态
-            let status = self.getMockStatus()
-            return .ok(.json(status.toJSON()))
-        }
-        
-        server["/api/health"] = { request in
-            return .ok(.text("OK"))
-        }
-        
-        // 启动服务器
-        print("")
-        print("✓ Web UI starting...")
-        print("  → Binding to http://\(hostname):\(port)")
-        print("  → Press Ctrl+C to stop")
-        print("")
-        
-        do {
-            if hostname == "0.0.0.0" {
-                try server.start(in_port_t(port))
-            } else {
-                try server.start(in_port_t(port), forceIPv4: true, priority: .default)
-            }
-            
-            print("✓ Server is running")
-            print("  → Open http://\(hostname):\(port) in your browser")
-            if matchDirURL != nil {
-                print("  → Monitoring: \(matchDir!)")
-            } else {
-                print("  → No match directory specified (using demo data)")
-            }
-            
-            // 保持服务器运行
-            try await Task.sleep(for: .seconds(365 * 24 * 3600)) // 1 year
-        } catch {
-            throw ValidationError("Failed to start server: \(error.localizedDescription)")
-        }
+    var lastUpdate: Date {
+        lock.lock()
+        defer { lock.unlock() }
+        return _lastUpdate
     }
     
-    /// 返回首页 HTML
-    private func serveIndexHTML() -> HttpResponse {
-        // 尝试多个可能的资源路径（SwiftPM 的 .copy() 会保留目录结构）
-        let possiblePaths = [
-            "Resources/index",  // Resources/index.html
-            "index"             // index.html（如果直接在根目录）
-        ]
-        
-        for path in possiblePaths {
-            if let resourceURL = Bundle.module.url(
-                forResource: path,
-                withExtension: "html"
-            ), let html = try? String(contentsOf: resourceURL, encoding: .utf8) {
-                return .ok(.html(html))
-            }
-        }
-        
-        // 如果找不到，返回调试信息
-        let debugInfo = """
-        <!DOCTYPE html>
-        <html>
-        <head><title>Resource Not Found</title></head>
-        <body>
-        <h1>Resource Loading Debug</h1>
-        <p>Bundle path: \(Bundle.module.bundlePath)</p>
-        <p>Tried paths: \(possiblePaths.joined(separator: ", "))</p>
-        </body>
-        </html>
-        """
-        return .ok(.html(debugInfo))
+    private init() {
+        // 初始值使用模拟数据
+        self._current = StatusCache.createMockStatus()
+        self._lastUpdate = Date()
     }
     
-    /// 获取模拟状态数据（阶段 1 使用）
-    private func getMockStatus() -> SystemStatus {
+    func update(_ status: SystemStatus) {
+        lock.lock()
+        defer { lock.unlock() }
+        self._current = status
+        self._lastUpdate = Date()
+    }
+    
+    /// 创建模拟状态数据
+    private static func createMockStatus() -> SystemStatus {
         SystemStatus(
             timestamp: ISO8601DateFormatter().string(from: Date()),
             matchId: "mock-match-2025-01-20",
@@ -224,6 +113,175 @@ struct WebUICommand {
                 estimatedHoursRemaining: 107.6
             )
         )
+    }
+}
+
+/// Web UI 监控界面命令
+///
+/// 启动嵌入式 HTTP 服务器，提供设备状态监控、采集控制和告警面板。
+/// 默认监听 127.0.0.1:8765，支持局域网访问（需显式指定 --bind 0.0.0.0:8765）。
+struct WebUICommand {
+    let bindAddress: String
+    let matchDir: String?
+    
+    /// 解析命令行参数
+    static func parse(arguments: [String]) throws -> WebUICommand {
+        var bindAddress = "127.0.0.1:8765"
+        var matchDir: String?
+        
+        var i = 0
+        while i < arguments.count {
+            let arg = arguments[i]
+            switch arg {
+            case "--bind":
+                guard i + 1 < arguments.count else {
+                    throw ValidationError("--bind requires an address:port argument")
+                }
+                bindAddress = arguments[i + 1]
+                i += 2
+            case "--match-dir":
+                guard i + 1 < arguments.count else {
+                    throw ValidationError("--match-dir requires a directory path")
+                }
+                matchDir = arguments[i + 1]
+                i += 2
+            case "--help", "-h":
+                printHelp()
+                throw ExitSuccess()
+            default:
+                throw ValidationError("Unknown argument: \(arg)")
+            }
+        }
+        
+        return WebUICommand(bindAddress: bindAddress, matchDir: matchDir)
+    }
+    
+    /// 执行命令，启动 Web UI 服务器
+    func run() async throws {
+        print("Starting PitchTrace Edge Web UI...")
+        print("Bind address: \(bindAddress)")
+        if let dir = matchDir {
+            print("Match directory: \(dir)")
+        }
+        
+        // 解析地址和端口
+        let components = bindAddress.split(separator: ":")
+        guard components.count == 2,
+              let hostname = components.first.map(String.init),
+              let port = Int(components.last!) else {
+            throw ValidationError("Invalid bind address format. Expected host:port")
+        }
+        
+        // 配置系统监控器
+        let matchDirURL = matchDir.map { URL(fileURLWithPath: $0, isDirectory: true) }
+        await SystemMonitor.shared.configure(matchDirectory: matchDirURL)
+        
+        // 启动后台任务：定期更新状态缓存
+        // 使用后台 Task 避免阻塞 HTTP 服务器主线程
+        let updateTask = Task.detached {
+            while !Task.isCancelled {
+                do {
+                    // 从 SystemMonitor 获取最新状态
+                    let status = try await SystemMonitor.shared.currentStatus()
+                    // 更新线程安全的缓存
+                    StatusCache.shared.update(status)
+                } catch {
+                    // 如果获取失败，保持使用上一次的状态
+                    print("Warning: Failed to update status: \(error)")
+                }
+                
+                // 每 2 秒更新一次
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+        
+        // 创建 HTTP 服务器
+        let server = HttpServer()
+        
+        // 注册路由
+        server["/"] = { [self] request in
+            return self.serveIndexHTML()
+        }
+        
+        server["/api/status"] = { request in
+            // 从缓存读取当前状态（同步操作，无需 await）
+            let status = self.getCurrentStatus()
+            return .ok(.json(status.toJSON()))
+        }
+        
+        server["/api/health"] = { request in
+            return .ok(.text("OK"))
+        }
+        
+        // 启动服务器
+        print("")
+        print("✓ Web UI starting...")
+        print("  → Binding to http://\(hostname):\(port)")
+        print("  → Press Ctrl+C to stop")
+        print("")
+        
+        do {
+            if hostname == "0.0.0.0" {
+                try server.start(in_port_t(port))
+            } else {
+                try server.start(in_port_t(port), forceIPv4: true, priority: .default)
+            }
+            
+            print("✓ Server is running")
+            print("  → Open http://\(hostname):\(port) in your browser")
+            if matchDirURL != nil {
+                print("  → Monitoring: \(matchDir!)")
+            } else {
+                print("  → No match directory specified (using demo data)")
+            }
+            
+            // 保持服务器运行
+            defer {
+                updateTask.cancel()
+            }
+            try await Task.sleep(for: .seconds(365 * 24 * 3600)) // 1 year
+        } catch {
+            updateTask.cancel()
+            throw ValidationError("Failed to start server: \(error.localizedDescription)")
+        }
+    }
+    
+    /// 返回首页 HTML
+    private func serveIndexHTML() -> HttpResponse {
+        // 尝试多个可能的资源路径（SwiftPM 的 .copy() 会保留目录结构）
+        let possiblePaths = [
+            "Resources/index",  // Resources/index.html
+            "index"             // index.html（如果直接在根目录）
+        ]
+        
+        for path in possiblePaths {
+            if let resourceURL = Bundle.module.url(
+                forResource: path,
+                withExtension: "html"
+            ), let html = try? String(contentsOf: resourceURL, encoding: .utf8) {
+                return .ok(.html(html))
+            }
+        }
+        
+        // 如果找不到，返回调试信息
+        let debugInfo = """
+        <!DOCTYPE html>
+        <html>
+        <head><title>Resource Not Found</title></head>
+        <body>
+        <h1>Resource Loading Debug</h1>
+        <p>Bundle path: \(Bundle.module.bundlePath)</p>
+        <p>Tried paths: \(possiblePaths.joined(separator: ", "))</p>
+        </body>
+        </html>
+        """
+        return .ok(.html(debugInfo))
+    }
+    
+    /// 从缓存获取当前状态（同步读取，用于 HTTP 路由）
+    private nonisolated func getCurrentStatus() -> SystemStatus {
+        // 直接从线程安全的缓存读取
+        return StatusCache.shared.current
     }
     
     static func printHelp() {
