@@ -36,6 +36,12 @@ python3 -B samples/generate-match.py "$trial_dir/input"
 
 Expect 40 camera frames in total, zero recording gaps, and 20 scene snapshots in `$trial_dir/run/scenes.sqlite`. The last command shows the source frames for scene 5.
 
+## Development with Kiro AI
+
+This project was built using [Kiro](https://kiro.dev), an AI-powered development environment. See [**KIRO_DEVELOPMENT.md**](docs/KIRO_DEVELOPMENT.md) for a detailed case study showing how Kiro's steering files, hooks, specialized agents, and skills enabled efficient development of this ~15,000-line codebase with minimal rework. Quick reference: [KIRO_QUICK_REFERENCE.md](docs/KIRO_QUICK_REFERENCE.md).
+
+The `.kiro/` configuration directory contains reusable patterns for multi-language projects with independent subsystems.
+
 ## Subprojects and responsibilities
 
 **Edge produces match data; Live Server receives, archives, and distributes it; Live Web presents it to viewers.** There are two independently built and released products: PitchTrace Edge (`edge/`) and PitchTrace Live (`live/`). Live includes a server and a browser frontend. The table below describes responsibilities in the complete system, including planned features; implementation status follows separately.

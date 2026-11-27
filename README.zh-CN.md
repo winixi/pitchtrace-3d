@@ -36,6 +36,12 @@ python3 -B samples/generate-match.py "$trial_dir/input"
 
 预期两路合计导出 40 帧，录像缺口为 0，并在 `$trial_dir/run/scenes.sqlite` 中生成 20 个场景快照。最后一条命令列出场景序号 5 对应的原始机位帧。
 
+## 使用 Kiro AI 开发
+
+本项目使用 [Kiro](https://kiro.dev) AI 开发环境构建。详见 [**KIRO_DEVELOPMENT.zh-CN.md**](docs/KIRO_DEVELOPMENT.zh-CN.md) 案例研究，了解 Kiro 的转向文件、钩子、专用代理和技能如何支撑约 15,000 行代码库的高效开发，大幅减少返工。快速参考：[KIRO_QUICK_REFERENCE.md](docs/KIRO_QUICK_REFERENCE.md)（英文）。
+
+`.kiro/` 配置目录包含可复用的多语言、独立子系统项目模式。
+
 ## 子项目与职责分工
 
 **Edge 生产比赛数据，Live Server 接收、归档和分发，Live Web 向观众呈现。** 项目包含两个独立构建和发布的产品：PitchTrace Edge（`edge/`）和 PitchTrace Live（`live/`）。Live 内含服务端和浏览器前端。下表说明完整系统中的职责，包含规划功能；实际实现状态在后文单独列出。
