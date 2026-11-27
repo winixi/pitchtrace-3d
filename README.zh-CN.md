@@ -19,14 +19,14 @@
 
 ## Edge CLI 预览版 · 离线快速开始
 
-在运行 macOS 14 或更高版本的 Apple Silicon Mac 上，可以离线处理一段两秒的双机位比赛样例。预览包内含已编译的 CLI、配套资源包和生成录像的脚本。[下载 v0.1.0-alpha.1（arm64 ZIP）](https://github.com/winixi/pitchtrace-3d/releases/download/edge-v0.1.0-alpha.1/pitchtrace-edge-v0.1.0-alpha.1-macos-arm64.zip) · [SHA-256 校验文件](https://github.com/winixi/pitchtrace-3d/releases/download/edge-v0.1.0-alpha.1/pitchtrace-edge-v0.1.0-alpha.1-macos-arm64.zip.sha256) · [发布说明与已知限制](https://github.com/winixi/pitchtrace-3d/releases/tag/edge-v0.1.0-alpha.1)
+在运行 macOS 14 或更高版本的 Apple Silicon Mac 上，可以离线处理一段两秒的双机位比赛样例。预览包内含已编译的 CLI、配套资源包和生成录像的脚本。[下载 v0.1.0-alpha.2（arm64 ZIP）](https://github.com/winixi/pitchtrace-3d/releases/download/edge-v0.1.0-alpha.2/pitchtrace-edge-v0.1.0-alpha.2-macos-arm64.zip) · [SHA-256 校验文件](https://github.com/winixi/pitchtrace-3d/releases/download/edge-v0.1.0-alpha.2/pitchtrace-edge-v0.1.0-alpha.2-macos-arm64.zip.sha256) · [发布说明与已知限制](https://github.com/winixi/pitchtrace-3d/releases/tag/edge-v0.1.0-alpha.2)
 
 样例需要 Python 3.10+、NumPy 和带 FFmpeg 后端的 OpenCV，`PATH` 中需有 `ffmpeg`（含 `libx264` 编码器）和 `ffprobe`。将 ZIP 和校验文件下载到同一目录，在该目录执行以下命令。
 
 ```sh
-shasum -a 256 -c pitchtrace-edge-v0.1.0-alpha.1-macos-arm64.zip.sha256
-unzip -q pitchtrace-edge-v0.1.0-alpha.1-macos-arm64.zip
-cd pitchtrace-edge-v0.1.0-alpha.1-macos-arm64
+shasum -a 256 -c pitchtrace-edge-v0.1.0-alpha.2-macos-arm64.zip.sha256
+unzip -q pitchtrace-edge-v0.1.0-alpha.2-macos-arm64.zip
+cd pitchtrace-edge-v0.1.0-alpha.2-macos-arm64
 
 trial_dir=$(mktemp -d)
 python3 -B samples/generate-match.py "$trial_dir/input"

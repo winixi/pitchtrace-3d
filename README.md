@@ -19,14 +19,14 @@ The [live viewing frontend](live/web/) can also connect to a WebSocket live data
 
 ## Edge CLI preview · offline quick start
 
-Run a two-second, two-camera match on an Apple Silicon Mac with macOS 14 or later. The preview includes a prebuilt CLI, its resource bundle, and a script that generates the footage. [Download v0.1.0-alpha.1 (arm64 ZIP)](https://github.com/winixi/pitchtrace-3d/releases/download/edge-v0.1.0-alpha.1/pitchtrace-edge-v0.1.0-alpha.1-macos-arm64.zip) · [SHA-256 checksum](https://github.com/winixi/pitchtrace-3d/releases/download/edge-v0.1.0-alpha.1/pitchtrace-edge-v0.1.0-alpha.1-macos-arm64.zip.sha256) · [Release notes and known limitations](https://github.com/winixi/pitchtrace-3d/releases/tag/edge-v0.1.0-alpha.1)
+Run a two-second, two-camera match on an Apple Silicon Mac with macOS 14 or later. The preview includes a prebuilt CLI, its resource bundle, and a script that generates the footage. [Download v0.1.0-alpha.2 (arm64 ZIP)](https://github.com/winixi/pitchtrace-3d/releases/download/edge-v0.1.0-alpha.2/pitchtrace-edge-v0.1.0-alpha.2-macos-arm64.zip) · [SHA-256 checksum](https://github.com/winixi/pitchtrace-3d/releases/download/edge-v0.1.0-alpha.2/pitchtrace-edge-v0.1.0-alpha.2-macos-arm64.zip.sha256) · [Release notes and known limitations](https://github.com/winixi/pitchtrace-3d/releases/tag/edge-v0.1.0-alpha.2)
 
 The sample needs Python 3.10+ with NumPy and an FFmpeg-enabled OpenCV build, plus `ffmpeg` (with `libx264`) and `ffprobe` on your `PATH`. Save the ZIP and checksum in the same directory, then run these commands there.
 
 ```sh
-shasum -a 256 -c pitchtrace-edge-v0.1.0-alpha.1-macos-arm64.zip.sha256
-unzip -q pitchtrace-edge-v0.1.0-alpha.1-macos-arm64.zip
-cd pitchtrace-edge-v0.1.0-alpha.1-macos-arm64
+shasum -a 256 -c pitchtrace-edge-v0.1.0-alpha.2-macos-arm64.zip.sha256
+unzip -q pitchtrace-edge-v0.1.0-alpha.2-macos-arm64.zip
+cd pitchtrace-edge-v0.1.0-alpha.2-macos-arm64
 
 trial_dir=$(mktemp -d)
 python3 -B samples/generate-match.py "$trial_dir/input"
