@@ -1,0 +1,219 @@
+{
+  "dateUtc": "2026-11-27T04:39:05.619579+00:00",
+  "chip": "Apple M1 Pro",
+  "memoryBytes": 34359738368,
+  "macOS": "27.2.1",
+  "python": "3.14.6",
+  "openCV": "5.0.0",
+  "binarySha256": "a1cd0a70bf9515441852e6f80f186d7111be2a8deed5c83b78a38e8c8191c157",
+  "modelManifest": {
+    "format": "pitchtrace-vision-model-v1",
+    "model": "yolo11n.mlpackage",
+    "task": "person-and-ball",
+    "version": "YOLO11n COCO, Ultralytics 8.3.139, INT8 NMS",
+    "source": "https://github.com/ultralytics/yolo-ios-app/releases/download/v8.3.0/yolo11n.mlpackage.zip",
+    "license": "AGPL-3.0",
+    "preprocessing": "vision-scale-fit"
+  },
+  "modelManifestSha256": "bbbe874d8f253b62e08f83435d24943cc9ee8261675aad7ecd9fed487ccbb519",
+  "modelSha256": {
+    "Data/com.apple.CoreML/model.mlmodel": "a50cc291e2d59900e01006ce4dfd7ce13d5d50bd598e594666e59a15808c35ae",
+    "Data/com.apple.CoreML/weights/weight.bin": "b7a1ff0299c22d5524e4eac7fa17db7822d6bb3d7447c1d1db39b08a5478057a",
+    "Manifest.json": "7b14b31edf25e60527330c99edc595ba8f5b6de5a563e99300b66bb9e5b2da40"
+  },
+  "settings": {
+    "sampleHzPerCamera": 25,
+    "cameraCount": 4,
+    "inputSeconds": 5,
+    "ballSearch": true,
+    "warmupSamples": 0
+  },
+  "runs": [
+    {
+      "selectedFrames": 500,
+      "completedFrames": 500,
+      "elapsedSeconds": 43.6722,
+      "firstResultSeconds": 1.5928,
+      "aggregateFramesPerSecond": 11.449,
+      "processingOverRequiredRate": 0.1145,
+      "fpsAfterFirstSecondOfCompletedSamples": 11.578,
+      "endOfInputOutstanding": 461,
+      "peakOutstandingIncludesInflight": 461,
+      "peakConcurrentFrameProcessing": 4,
+      "drainSeconds": 38.6722,
+      "exposureToResultP95Seconds": 34.3449,
+      "exposureToResultMaxSeconds": 38.7122,
+      "byCamera": {
+        "A": {
+          "samples": 125,
+          "decodedSourceFrames": 125,
+          "fpsOverEntireRun": 2.862,
+          "fpsUntilCameraFinished": 3.514,
+          "fpsAfterFirstSecondOfCameraSamples": 3.624,
+          "completedByInputEnd": 13,
+          "firstResultSeconds": 1.5928,
+          "lastResultSeconds": 35.571,
+          "meanPlayers": 7.06,
+          "roiOffered": 0,
+          "roiSearches": 0,
+          "fullBallHits": 0,
+          "roiBallHits": 0
+        },
+        "B": {
+          "samples": 125,
+          "decodedSourceFrames": 125,
+          "fpsOverEntireRun": 2.862,
+          "fpsUntilCameraFinished": 3.058,
+          "fpsAfterFirstSecondOfCameraSamples": 3.684,
+          "completedByInputEnd": 2,
+          "firstResultSeconds": 4.1745,
+          "lastResultSeconds": 40.8733,
+          "meanPlayers": 8.51,
+          "roiOffered": 0,
+          "roiSearches": 0,
+          "fullBallHits": 0,
+          "roiBallHits": 0
+        },
+        "C": {
+          "samples": 125,
+          "decodedSourceFrames": 125,
+          "fpsOverEntireRun": 2.862,
+          "fpsUntilCameraFinished": 5.276,
+          "fpsAfterFirstSecondOfCameraSamples": 6.035,
+          "completedByInputEnd": 14,
+          "firstResultSeconds": 2.9315,
+          "lastResultSeconds": 23.6909,
+          "meanPlayers": 3.96,
+          "roiOffered": 0,
+          "roiSearches": 0,
+          "fullBallHits": 0,
+          "roiBallHits": 0
+        },
+        "D": {
+          "samples": 125,
+          "decodedSourceFrames": 125,
+          "fpsOverEntireRun": 2.862,
+          "fpsUntilCameraFinished": 2.862,
+          "fpsAfterFirstSecondOfCameraSamples": 2.939,
+          "completedByInputEnd": 10,
+          "firstResultSeconds": 2.3514,
+          "lastResultSeconds": 43.6722,
+          "meanPlayers": 9.35,
+          "roiOffered": 18,
+          "roiSearches": 18,
+          "fullBallHits": 1,
+          "roiBallHits": 10
+        }
+      },
+      "duringInput": [
+        {
+          "second": 1,
+          "due": 100,
+          "completed": 0,
+          "outstanding": 100
+        },
+        {
+          "second": 2,
+          "due": 200,
+          "completed": 2,
+          "outstanding": 198
+        },
+        {
+          "second": 3,
+          "due": 300,
+          "completed": 10,
+          "outstanding": 290
+        },
+        {
+          "second": 4,
+          "due": 400,
+          "completed": 24,
+          "outstanding": 376
+        },
+        {
+          "second": 5,
+          "due": 500,
+          "completed": 39,
+          "outstanding": 461
+        }
+      ],
+      "workers": 4,
+      "maxReleaseJitterSeconds": 0.0242,
+      "startedAtUtc": "2026-11-27T04:39:05.725817+00:00",
+      "finishedAtUtc": "2026-11-27T04:39:49.941575+00:00",
+      "traceFile": "2026-11-27-issia-traces/25hz-4-workers.ndjson.gz",
+      "traceSha256": "befac4e138d6f8c5af8e4837b3bcee7a40d8f4c7eea09f2e9e4296b2680f46f9"
+    }
+  ],
+  "inferenceCodeSha256": {
+    "observations.py": "8bc1f97675cf16cf9545d49079a965a9efed3bddb38ecb8a596cac5671dca087",
+    "observation_quality.py": "15c6774ab236b05f9262b8e10317d06269bbec9dfcc54fdc9715b951da6fa206",
+    "vision_model.py": "7fe82c24be7fed74bfbb509dcb8d028b95f22f292b5ce47e3333332a77169745",
+    "ball_search.py": "45be5a855fee2f7b5cfef99617c27565fa2424c36d535bdabffb0964fbd134f2",
+    "tracking.py": "b5b031c6e156099a92ec07b260ec758d7decf9a06bd0402e1e80e1af7594773c"
+  },
+  "sources": [
+    {
+      "cameraId": "A",
+      "file": "cam3.avi",
+      "startFrameZeroBased": 400,
+      "fps": 25.0,
+      "imageSize": [
+        1920,
+        1080
+      ],
+      "framesInFile": 3002,
+      "sha256": "b2d75f42d12c51a19be354e2ae428a55a767a03c048f6778d70ef221e33a380b"
+    },
+    {
+      "cameraId": "B",
+      "file": "cam4.avi",
+      "startFrameZeroBased": 400,
+      "fps": 25.0,
+      "imageSize": [
+        1920,
+        1080
+      ],
+      "framesInFile": 3002,
+      "sha256": "92b111f70c581f610c3b7604d93c8c59c760cc461eb978b5946923985fa8dc30"
+    },
+    {
+      "cameraId": "C",
+      "file": "cam5.avi",
+      "startFrameZeroBased": 400,
+      "fps": 25.0,
+      "imageSize": [
+        1920,
+        1080
+      ],
+      "framesInFile": 3002,
+      "sha256": "c59d2298b6baf61734c4fecc6c129d320a55c5cd49faf14d8db1bda8709b2e76"
+    },
+    {
+      "cameraId": "D",
+      "file": "cam6.avi",
+      "startFrameZeroBased": 400,
+      "fps": 25.0,
+      "imageSize": [
+        1920,
+        1080
+      ],
+      "framesInFile": 3002,
+      "sha256": "8f08fa9b4cbed1cb019b37373eea7eca0c9a9110436b7ce9ffb46a31e7df161d"
+    }
+  ],
+  "experiment": {
+    "dataset": "ISSIA Soccer Dataset",
+    "sourceUrl": "https://pspagnolo.jimdofree.com/download/",
+    "cameraMap": {
+      "A": "cam3",
+      "B": "cam4",
+      "C": "cam5",
+      "D": "cam6"
+    },
+    "sourceCodec": "MPEG-4 Part 2 (AVI)",
+    "build": "SwiftPM release",
+    "measurement": "原速投放原帧索引，按需解码、JPEG 重编码、Core ML、姿态/OCR、观测质量与裁片历史，含每组工作进程启动至最后一帧结果。不计已下载录像的初次开文件与定位、标定、融合、归档和网络。",
+    "workloadNote": "四进程组使用新的工作进程，系统模型缓存未重置。此组完成前没有同时运行召回率测试或盲审解码。"
+  }
+}

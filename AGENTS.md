@@ -125,7 +125,7 @@ node live/server/server.cjs   # 需先在 live/web 执行过 npm run build
 | 本地 v1 试播网关 | ✅ 已实现 | `POST /frame`、`/live`、`/demo`，复用前端校验器。 |
 | Edge 离线录像输入与原片提交 | ✅ 已实现 | 2–8 路 H.264/fMP4 按曝光归并，导出缺口和 v2 索引，标注共同闪光生成对时报告。`publish-media` 按机位将已导出的原片和索引提交到网关。 |
 | Edge 采集与对时 | 文件源回归通过 | FFmpeg 分路接入文件、RTSP、AVFoundation，曝光清单逐帧核验与独立媒体周期，设备曝光来源需由采集端提供。 |
-| Edge 几何与视觉 | 已有软件实现 | 棋盘格内参、多机位外参、移机巡检、版本切换、Vision 人体与 OCR、可选 Core ML 球检测或受控球色检测。 |
+| Edge 几何与视觉 | 已有软件实现 | 棋盘格内参、多机位外参、移机巡检、版本切换、Core ML 人球联合检测与原图小球精搜、Vision 姿态与 OCR。支持足球专用模型和受控球色检测。 |
 | Edge 重建与动作 | 已有软件实现 | 足点投影、跨视角轨迹、球与关节三角化、局部骨骼、名单关联和五类规则候选，实拍精度待测。 |
 | Edge 整场运行 | 可离线与连续运行 | `run-match`、`stream-match`、SQLite 证据、独立上行、重试、复算比较和真值评估。入口与测试见 [Edge README](edge/README.md)。 |
 | 本地 v2 场景网关 | ✅ 已实现 | JSON Schema 校验、SQLite 归档、按比赛 WebSocket 订阅、重启恢复及分页历史查询。 |

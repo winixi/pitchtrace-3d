@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 from calibrate import is_identifier
 from capture import load_config as read_capture_config, write_json
 from match_config import MatchConfig, read_object
-from process_match import digest
+from vision_model import digest, load_vision_model
 
 
 def now():
@@ -47,15 +47,10 @@ def inference_inputs(data, base, executable):
               "reports": {entry["calibrationId"]: digest(base / entry["report"]) for entry in data["calibrations"]},
               "worker": digest(executable),
               "modules": {p.name: digest(p) for p in Path(__file__).parent.glob("*.py")}}
-    detector = data.get("detector", {})
-    if not isinstance(detector, dict):
-        raise ValueError("detector 必须是配置对象")
-    if "model" in detector:
-        model = detector["model"]
-        if not isinstance(model, str) or not model.strip():
-            raise ValueError("检测器模型需要文件或目录路径")
-        inputs["model"] = file_signature(base / model)
-    return signature(inputs)
+    model = load_vision_model(data.get("detector", {}), base)
+    if model is not None:
+        inputs.update(model.provenance)
+    return signature(inputs), model
 
 
 def recording_inputs(data, base, root):
@@ -181,7 +176,8 @@ class Run:
         self.save("processing")
         if "sceneSha256" not in self.state:
             self.command("process-match", path, media, db)
-            if file_signature(media) != media_hash or inference_inputs(read_object(path), path.parent, self.executable) != inference_hash:
+            current_hash, _ = inference_inputs(read_object(path), path.parent, self.executable)
+            if file_signature(media) != media_hash or current_hash != inference_hash:
                 self.state["invalidated"] = True
                 raise ValueError("输入在重建期间发生变化，请使用新运行目录")
         scene_hash = archive_signature(db, config.match_id, config.stream_epoch)
@@ -245,7 +241,7 @@ def run_match(path, root, executable):
     if days is not None and (type(days) is not int or days <= 0):
         raise ValueError("retentionDays 必须是正整数")
     source, capture, source_hash = recording_inputs(data, path.parent, root)
-    inference_hash = inference_inputs(data, path.parent, executable)
+    inference_hash, _ = inference_inputs(data, path.parent, executable)
     identity = signature({"configDirectory": str(path.parent), "input": source_hash, "inference": inference_hash})
     root.mkdir(parents=True, exist_ok=True)
     with (root / "run.lock").open("a+b") as lock:

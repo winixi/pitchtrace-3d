@@ -1,0 +1,51 @@
+{
+  "runMatchSmoke": {
+    "source": "ISSIA camera 3–6, 16.0–18.0s, AVI MPEG-4 Part 2 to H.264/fMP4; cam6 hflip aligns upstream calibration",
+    "clock": "relative 25fps replay timestamps; no device UTC",
+    "calibration": "four published calibrations; axis conversion verified by a reference 3D reprojection for each camera",
+    "workers": 4,
+    "model": "YOLO11n INT8 NMS",
+    "releaseSha256": "ab3c801cd78b479b6949f84f6b46c4b71d2b00fc3c61da46dc6144f53b573191",
+    "inputCameraFrames": 200,
+    "scenes": 20,
+    "viewObservations": 80,
+    "detectedPlayers": 542,
+    "joints": 471,
+    "ballCandidates": 3,
+    "scenesWithPlayers": 20,
+    "sceneBallStates": {
+      "unobserved": 17,
+      "lost": 3
+    },
+    "idempotentDirectProcessAndRun": true,
+    "sceneSha256": "86b98c0997c0c8932e08d9984f3106a1a6e50c6e27c49a66997742db7d7671fd",
+    "mediaSha256": "f448b89e01f84c44619c9be53a6922839dd26013c2992e6fd782ef1e9af76fc0"
+  },
+  "reconstructMatchBallOnly": {
+    "source": "60 s paired ON ball detections only; no players, field 3–6; normalized 25fps replay clock; cam6 pixel x mirrored back to calibration",
+    "traceSha256": "0bf904c1df9892d27ca44de41f94784f2689c4f7c982dd78f9ac888dbdf29fec",
+    "cameraFrames": 2400,
+    "scenes": 600,
+    "simultaneousDetectionsPerExposure": {
+      "0": 345,
+      "1": 160,
+      "2": 83,
+      "3": 12
+    },
+    "exposuresWithAtLeastTwoCorrect2DDetections": 67,
+    "states": {
+      "unobserved": 16,
+      "lost": 518,
+      "measured": 40,
+      "predicted": 26
+    },
+    "distanceToPublishedTriangulation": {
+      "count": 36,
+      "medianM": 0.0365,
+      "maxM": 0.1438
+    },
+    "measuredWithIndependent2DHitsInAllSupportingViews": 36,
+    "measuredWithoutAnnotationsInBothSupportingViews": 4,
+    "referenceNote": "发布三角化与本次结果共用相机标定，三维坐标差仅用于复核实现。"
+  }
+}

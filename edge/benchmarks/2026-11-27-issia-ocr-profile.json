@@ -1,0 +1,87 @@
+{
+  "workload": "ISSIA 原片机位 3–6，第 400、900、1400 帧开始分别取 6 个 10 Hz 时隙，但不携带期间缺失观测。一次预热后逐帧处理。不使用足球标注。",
+  "processor": "Apple M1 Pro",
+  "samplingHzPerCamera": 10,
+  "confidenceThreshold": 0.35,
+  "binarySha256": "ab3c801cd78b479b6949f84f6b46c4b71d2b00fc3c61da46dc6144f53b573191",
+  "ballSearchCodeSha256": "833dc5ba47e96a4befcd5e3b3a492dfecf3a0b3b530cb0f27896f83670d4639d",
+  "modelManifestSha256": "bbbe874d8f253b62e08f83435d24943cc9ee8261675aad7ecd9fed487ccbb519",
+  "individual": {
+    "frames": 72,
+    "meanMsPerCameraFrame": {
+      "detection": 20.5004,
+      "ocr": 159.169,
+      "ocrSheet": 0.0,
+      "pose": 63.4842,
+      "proposal": 2.8573,
+      "elapsed": 253.5008
+    },
+    "counts": {
+      "detectionRequests": 144,
+      "ocrRequests": 427,
+      "poseRequests": 458,
+      "people": 458,
+      "joints": 433,
+      "feet": 3,
+      "numbers": 1
+    },
+    "localRecords": "runs/2026-11-27-issia-profile/final-individual.ndjson",
+    "localRecordsSha256": "1cec9934cce122ddeed606f2936f1c5a731d586197a38142749a37ce0889c12c"
+  },
+  "batch": {
+    "frames": 72,
+    "meanMsPerCameraFrame": {
+      "detection": 20.6408,
+      "ocr": 64.3581,
+      "ocrSheet": 0.8642,
+      "pose": 59.939,
+      "proposal": 2.7327,
+      "elapsed": 156.0544
+    },
+    "counts": {
+      "detectionRequests": 144,
+      "ocrRequests": 166,
+      "poseRequests": 458,
+      "people": 458,
+      "joints": 433,
+      "feet": 3,
+      "numbers": 1
+    },
+    "localRecords": "runs/2026-11-27-issia-profile/final-batch.ndjson",
+    "localRecordsSha256": "9fc2df4988479b73a67ed42360fa47ff5d39260676383211656e49fa3ad54eae"
+  },
+  "modelPartsSha256": {
+    "Data/com.apple.CoreML/model.mlmodel": "a50cc291e2d59900e01006ce4dfd7ce13d5d50bd598e594666e59a15808c35ae",
+    "Data/com.apple.CoreML/weights/weight.bin": "b7a1ff0299c22d5524e4eac7fa17db7822d6bb3d7447c1d1db39b08a5478057a",
+    "Manifest.json": "7b14b31edf25e60527330c99edc595ba8f5b6de5a563e99300b66bb9e5b2da40"
+  },
+  "profileScriptSha256": "1909ccba19ec7b36f6f4553c2dd581471a2c2a2d75071cccd2b067029cd8d2df",
+  "sourceFilesSha256": {
+    "cam3.avi": "b2d75f42d12c51a19be354e2ae428a55a767a03c048f6778d70ef221e33a380b",
+    "cam4.avi": "92b111f70c581f610c3b7604d93c8c59c760cc461eb978b5946923985fa8dc30",
+    "cam5.avi": "c59d2298b6baf61734c4fecc6c129d320a55c5cd49faf14d8db1bda8709b2e76",
+    "cam6.avi": "8f08fa9b4cbed1cb019b37373eea7eca0c9a9110436b7ce9ffb46a31e7df161d"
+  },
+  "opencvVersion": "5.0.0",
+  "macOSVersion": "27.2.1",
+  "differences": {},
+  "qualityCheck": {
+    "renderedNumbers": [
+      4,
+      27,
+      91,
+      10,
+      8,
+      32
+    ],
+    "assignedByBatchedVisionOCR": [
+      4,
+      27,
+      91,
+      10,
+      8,
+      32
+    ],
+    "note": "同一两行拼版的已知字图独立核对归属。比赛背号没有独立真值。"
+  }
+}

@@ -20,8 +20,9 @@ import numpy as np
 
 from capture import load_config, lock, write_json
 from match_config import MatchConfig, read_object
-from process_match import analyze_rows, digest
+from process_match import analyze_rows
 from run_match import inference_inputs
+from vision_model import digest
 from scene_archive import SceneArchive, ScenePublishError
 from stream_capture import follow_rows
 
@@ -240,9 +241,12 @@ def stream_match(path, capture, run, executable):
                 raise ValueError("首次直播运行需要新的或空的输出目录")
             write_json(marker, identity)
         processing = {k: v for k, v in settings.items() if k not in ("gateway", "backfillBytesPerSecond")}
+        versions, model = inference_inputs(processing, path.parent, Path(executable))
         provenance = dict(identity, command="stream-match", sampleSource=config.sample_source,
-                          configuration=processing, versions=inference_inputs(processing, path.parent, Path(executable)),
+                          configuration=processing, versions=versions,
                           python=platform.python_version(), opencv=cv2.__version__, numpy=np.__version__)
+        if model is not None:
+            provenance.update(model.provenance)
         with SceneArchive(db) as archive:
             archive.register_run(config.match_id, config.stream_epoch, provenance)
             media_queue = MediaQueue(archive.db)
@@ -293,7 +297,7 @@ def stream_match(path, capture, run, executable):
                     uploads = {name: pool.submit(publish, name) for name in ("场景", "原片")} if gateway else {}
                     try:
                         for frame in analyze_rows(config, journal.rows(), archive, media, settings.get("detector", {}),
-                                                  path.parent, executable, resume=True):
+                                                  model, executable, resume=True):
                             state.update(frames=frame["seq"] + 1, lastSceneUtcUs=frame["captureUtcUs"])
                         producer.result()
                     finally:

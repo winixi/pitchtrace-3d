@@ -110,6 +110,28 @@ class RunMatchTests(unittest.TestCase):
             self.submit()
         self.assertEqual(self.calls, [])
 
+    def test_manifest_or_weights_change_requires_new_run(self):
+        models = self.base / "models"
+        models.mkdir()
+        weights = models / "detector.mlmodel"
+        weights.write_bytes(b"test weights")
+        manifest = models / "model.json"
+        manifest.write_text(json.dumps({
+            "format": "pitchtrace-vision-model-v1", "model": weights.name, "version": "test",
+            "task": "ball", "preprocessing": "vision-scale-fit", "source": "测试夹具", "license": "MIT",
+        }))
+        self.config["detector"] = {"modelManifest": "models/model.json"}
+        self.submit()
+        self.calls.clear()
+        for path in (manifest, weights):
+            original = path.read_bytes()
+            path.write_bytes(original + b" ")
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, "已变化"):
+                self.submit()
+            path.write_bytes(original)
+        self.submit()
+        self.assertEqual(self.calls, [])
+
     def test_capture_is_reused_on_restart(self):
         del self.config["recordings"]
         self.config["captureConfig"] = "capture.json"

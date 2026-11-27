@@ -26,7 +26,7 @@ enum PitchTraceEdge {
           pitchtrace-edge compare-scenes <场景库.sqlite> <比赛 ID> <旧周期> <新周期>
           pitchtrace-edge scene-evidence <场景库.sqlite> <比赛 ID> <场景周期> <seq>
           pitchtrace-edge match-info <场景库.sqlite> <比赛 ID> <场景周期>
-          pitchtrace-edge vision-worker [Core ML 检测模型]
+          pitchtrace-edge vision-worker [Core ML 检测模型 [--person-and-ball] [--ball-search]]
           pitchtrace-edge publish-media <网关地址> <比赛 ID> <含 epochs 的机位目录>
           pitchtrace-edge publish-media <网关地址> <比赛 ID> <媒体周期> <平铺机位目录>
         """
@@ -102,9 +102,9 @@ enum PitchTraceEdge {
                  ("retention", 3) where arguments[2] == "--apply":
                 operation = "运行目录留存检查"
                 try runPython("retention", Array(arguments.dropFirst()))
-            case ("vision-worker", 1), ("vision-worker", 2):
+            case ("vision-worker", _):
                 operation = "单视角观测"
-                try runVisionWorker(modelURL: arguments.dropFirst().first.map { URL(fileURLWithPath: $0) })
+                try runVisionWorker(options: VisionWorkerOptions(arguments: Array(arguments.dropFirst())))
             case ("process-match", 4), ("reconstruct-match", 4), ("stream-match", 4), ("run-match", 3):
                 operation = "比赛场景重建"
                 guard let executable = Bundle.main.executableURL else { throw RecordingError("无法定位 Edge 程序") }

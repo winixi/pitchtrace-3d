@@ -1,0 +1,9 @@
+{
+  "format": "pitchtrace-vision-model-v1",
+  "model": "yolo11n.mlpackage",
+  "task": "person-and-ball",
+  "version": "YOLO11n COCO, Ultralytics 8.3.139, INT8 NMS",
+  "source": "https://github.com/ultralytics/yolo-ios-app/releases/download/v8.3.0/yolo11n.mlpackage.zip",
+  "license": "AGPL-3.0",
+  "preprocessing": "vision-scale-fit"
+}

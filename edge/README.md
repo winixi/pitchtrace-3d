@@ -38,7 +38,7 @@ edge/.build/debug/pitchtrace-edge evaluate-match "$trial_dir/run/scenes.sqlite" 
 | 编排、上行与恢复 | `run-match` 处理已有录像或启动采集，可分别提交场景及原片。`stream-match` 跟随正在采集的媒体段。见[离线运行](run-match.md)、[连续处理](stream-match.md)和[场景归档](scene-archive.md)。 |
 | 复核与留存 | `scene-evidence` 取原帧和关节证据，`match-info` 取运行版本，`export-scenes` 过滤导出，`compare-scenes` 比对复算结果，`evaluate-match` 计量独立真值，`retention` 预览到期清理。见[真值评估](evaluation.md)和[场景归档](scene-archive.md)。 |
 
-比赛配置的 `detector.backend` 默认为 `vision`，在 macOS 上调用系统人体检测、姿态和 OCR。可用 `detector.model` 指定能输出带类别框的 Core ML 足球模型，路径相对于比赛配置。受控球色的训练录像可用 `detector.ballHSV` 设置 OpenCV 的 HSV 上下界，作为无模型或模型漏检时的球候选。`detector.teamColors` 将球队 ID 映射到样衣 sRGB 三元组（0–255），色差大或两队难以区分时保留球队未知。
+比赛配置默认使用系统 Vision 检测人体、估计姿态和识别号码。用 `detector.modelManifest` 接入 Core ML 人球模型后，每个选中帧只跑一次全图检测，人框供姿态、队色和号码复用。可开启 `detector.ballSearch`，在全图漏球时回到该机位的原图裁片查找小球。已有足球专用模型继续用 `detector.model`，受控录像可用 `detector.ballHSV` 按颜色找球。`detector.teamColors` 将球队 ID 映射到样衣 sRGB 三元组（0–255），色差大或两队难以区分时保留球队未知。[准备 YOLO11n 权重、配置比赛与复核观测](vision.md)
 
 整套回归从仓库根目录执行。Node 集成用例复用 Live 网关的 v2 校验器，首次运行需安装其锁定依赖。部分用例会在本机回环地址启动临时网关。
 
@@ -47,7 +47,7 @@ npm ci --prefix live/server
 swift build --package-path edge
 swift test --package-path edge --disable-xctest
 python3 -B -m unittest discover -s edge/Tests/Integration -p 'test_*.py'
-node --test edge/Tests/Integration/{calibration,intrinsics,match-pipeline,media-epoch-replay,run-match}.mjs
+node --test edge/Tests/Integration/{calibration,intrinsics,match-pipeline,media-epoch-replay,run-match,vision-worker}.mjs
 ```
 
 ## 离线录像输入

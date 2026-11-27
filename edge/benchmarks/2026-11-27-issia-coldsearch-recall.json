@@ -1,0 +1,1684 @@
+{
+  "model": {
+    "modelManifest": {
+      "format": "pitchtrace-vision-model-v1",
+      "model": "yolo11n.mlpackage",
+      "task": "person-and-ball",
+      "version": "YOLO11n COCO, Ultralytics 8.3.139, INT8 NMS",
+      "source": "https://github.com/ultralytics/yolo-ios-app/releases/download/v8.3.0/yolo11n.mlpackage.zip",
+      "license": "AGPL-3.0",
+      "preprocessing": "vision-scale-fit"
+    },
+    "modelManifestSha256": "bbbe874d8f253b62e08f83435d24943cc9ee8261675aad7ecd9fed487ccbb519",
+    "modelSha256": {
+      "Data/com.apple.CoreML/model.mlmodel": "a50cc291e2d59900e01006ce4dfd7ce13d5d50bd598e594666e59a15808c35ae",
+      "Data/com.apple.CoreML/weights/weight.bin": "b7a1ff0299c22d5524e4eac7fa17db7822d6bb3d7447c1d1db39b08a5478057a",
+      "Manifest.json": "7b14b31edf25e60527330c99edc595ba8f5b6de5a563e99300b66bb9e5b2da40"
+    }
+  },
+  "workerSha256": "ab3c801cd78b479b6949f84f6b46c4b71d2b00fc3c61da46dc6144f53b573191",
+  "opencv": "5.0.0",
+  "inferenceCodeSha256": {
+    "ball_search.py": "833dc5ba47e96a4befcd5e3b3a492dfecf3a0b3b530cb0f27896f83670d4639d",
+    "tracking.py": "b5b031c6e156099a92ec07b260ec758d7decf9a06bd0402e1e80e1af7594773c",
+    "observations.py": "91c5ddbbe29c5e4b4d9e359547fd5fa733ae06fe4859bb0bcc2632356579f9a6",
+    "observation_quality.py": "15c6774ab236b05f9262b8e10317d06269bbec9dfcc54fdc9715b951da6fa206",
+    "vision_model.py": "a3326e9c5165f60b6cfe67bc85fb859bf4e08bd048c515918977c6d87a6525aa"
+  },
+  "datasetSha256": "cc1493614c97e790fc0f722f6b0def622b81cb68ac91641fbb778558058c3332",
+  "labelsSha256": "d9b73973e45bcd9a37565168f6b7b5e7e5388839a71c36c8772c7b2a189bbd3a",
+  "framesSha256": "0bf904c1df9892d27ca44de41f94784f2689c4f7c982dd78f9ac888dbdf29fec",
+  "scoresSha256": "5300484b0fe17fd812eb6fd1e37a813a6139e950a5ea4cfc84c25ef1521f8b82",
+  "videosSha256": {
+    "cam3": "b2d75f42d12c51a19be354e2ae428a55a767a03c048f6778d70ef221e33a380b",
+    "cam4": "92b111f70c581f610c3b7604d93c8c59c760cc461eb978b5946923985fa8dc30",
+    "cam5": "c59d2298b6baf61734c4fecc6c129d320a55c5cd49faf14d8db1bda8709b2e76",
+    "cam6": "8f08fa9b4cbed1cb019b37373eea7eca0c9a9110436b7ce9ffb46a31e7df161d"
+  },
+  "samplingHz": 10,
+  "smallMaxSidePx": 16,
+  "parallelClips": 2,
+  "boxHitRule": "center-inside-xywh",
+  "pointHitRadiusPx": 3,
+  "total": {
+    "sampled": 2400,
+    "statusCounts": {
+      "unlabeled": 1847,
+      "visible": 553
+    },
+    "reasonCounts": {
+      "noLabel": 1847,
+      "noViewTriangulation": 92,
+      "reprojectionAboveTwoDiameters": 1
+    },
+    "visible": {
+      "visible": 553,
+      "offHits": 1,
+      "onHits": 247,
+      "offRecall": 0.0018083182640144665,
+      "onRecall": 0.44665461121157324,
+      "gain": 246,
+      "loss": 0,
+      "gainFromROI": 233,
+      "gainFromMotionAppearance": 13,
+      "onHitsBySource": {
+        "coreML-ROI": 233,
+        "motion-appearance": 13,
+        "coreML": 1
+      },
+      "wrongLocationBySource": {
+        "coreML-ROI": 14,
+        "coreML": 1
+      },
+      "searchByMode": {
+        "cold": {
+          "regions": 251,
+          "executed": 250,
+          "truthCenterCovered": 73,
+          "returned": 32,
+          "hits": 22,
+          "wrongLocationOnVisible": 10,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 0,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 20,
+              "hits": 10,
+              "wrongLocationOnVisible": 10
+            },
+            "motion-appearance": {
+              "returned": 12,
+              "hits": 12
+            }
+          }
+        },
+        "history": {
+          "regions": 302,
+          "executed": 301,
+          "truthCenterCovered": 288,
+          "returned": 228,
+          "hits": 224,
+          "wrongLocationOnVisible": 4,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 0,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 227,
+              "hits": 223,
+              "wrongLocationOnVisible": 4
+            },
+            "motion-appearance": {
+              "returned": 1,
+              "hits": 1
+            }
+          }
+        }
+      },
+      "both": 1,
+      "neither": 306
+    },
+    "small": {
+      "visible": 439,
+      "offHits": 1,
+      "onHits": 208,
+      "offRecall": 0.002277904328018223,
+      "onRecall": 0.47380410022779046,
+      "gain": 207,
+      "loss": 0,
+      "gainFromROI": 195,
+      "gainFromMotionAppearance": 12,
+      "onHitsBySource": {
+        "coreML-ROI": 195,
+        "motion-appearance": 12,
+        "coreML": 1
+      },
+      "wrongLocationBySource": {
+        "coreML-ROI": 8
+      },
+      "searchByMode": {
+        "cold": {
+          "regions": 191,
+          "executed": 191,
+          "truthCenterCovered": 58,
+          "returned": 23,
+          "hits": 19,
+          "wrongLocationOnVisible": 4,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 0,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 12,
+              "hits": 8,
+              "wrongLocationOnVisible": 4
+            },
+            "motion-appearance": {
+              "returned": 11,
+              "hits": 11
+            }
+          }
+        },
+        "history": {
+          "regions": 248,
+          "executed": 247,
+          "truthCenterCovered": 240,
+          "returned": 192,
+          "hits": 188,
+          "wrongLocationOnVisible": 4,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 0,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 191,
+              "hits": 187,
+              "wrongLocationOnVisible": 4
+            },
+            "motion-appearance": {
+              "returned": 1,
+              "hits": 1
+            }
+          }
+        }
+      },
+      "both": 1,
+      "neither": 231
+    },
+    "larger": {
+      "visible": 21,
+      "offHits": 0,
+      "onHits": 21,
+      "offRecall": 0.0,
+      "onRecall": 1.0,
+      "gain": 21,
+      "loss": 0,
+      "gainFromROI": 21,
+      "gainFromMotionAppearance": 0,
+      "onHitsBySource": {
+        "coreML-ROI": 21
+      },
+      "wrongLocationBySource": {},
+      "searchByMode": {
+        "history": {
+          "regions": 20,
+          "executed": 20,
+          "truthCenterCovered": 20,
+          "returned": 20,
+          "hits": 20,
+          "wrongLocationOnVisible": 0,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 0,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 20,
+              "hits": 20
+            }
+          }
+        },
+        "cold": {
+          "regions": 1,
+          "executed": 1,
+          "truthCenterCovered": 1,
+          "returned": 1,
+          "hits": 1,
+          "wrongLocationOnVisible": 0,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 0,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 1,
+              "hits": 1
+            }
+          }
+        }
+      },
+      "both": 0,
+      "neither": 0
+    },
+    "farRegion": {
+      "visible": 241,
+      "offHits": 0,
+      "onHits": 87,
+      "offRecall": 0.0,
+      "onRecall": 0.36099585062240663,
+      "gain": 87,
+      "loss": 0,
+      "gainFromROI": 78,
+      "gainFromMotionAppearance": 9,
+      "onHitsBySource": {
+        "coreML-ROI": 78,
+        "motion-appearance": 9
+      },
+      "wrongLocationBySource": {
+        "coreML-ROI": 5
+      },
+      "searchByMode": {
+        "cold": {
+          "regions": 134,
+          "executed": 134,
+          "truthCenterCovered": 38,
+          "returned": 16,
+          "hits": 13,
+          "wrongLocationOnVisible": 3,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 0,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 8,
+              "hits": 5,
+              "wrongLocationOnVisible": 3
+            },
+            "motion-appearance": {
+              "returned": 8,
+              "hits": 8
+            }
+          }
+        },
+        "history": {
+          "regions": 107,
+          "executed": 107,
+          "truthCenterCovered": 103,
+          "returned": 76,
+          "hits": 74,
+          "wrongLocationOnVisible": 2,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 0,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 75,
+              "hits": 73,
+              "wrongLocationOnVisible": 2
+            },
+            "motion-appearance": {
+              "returned": 1,
+              "hits": 1
+            }
+          }
+        }
+      },
+      "both": 0,
+      "neither": 154
+    },
+    "farSmall": {
+      "visible": 241,
+      "offHits": 0,
+      "onHits": 87,
+      "offRecall": 0.0,
+      "onRecall": 0.36099585062240663,
+      "gain": 87,
+      "loss": 0,
+      "gainFromROI": 78,
+      "gainFromMotionAppearance": 9,
+      "onHitsBySource": {
+        "coreML-ROI": 78,
+        "motion-appearance": 9
+      },
+      "wrongLocationBySource": {
+        "coreML-ROI": 5
+      },
+      "searchByMode": {
+        "cold": {
+          "regions": 134,
+          "executed": 134,
+          "truthCenterCovered": 38,
+          "returned": 16,
+          "hits": 13,
+          "wrongLocationOnVisible": 3,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 0,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 8,
+              "hits": 5,
+              "wrongLocationOnVisible": 3
+            },
+            "motion-appearance": {
+              "returned": 8,
+              "hits": 8
+            }
+          }
+        },
+        "history": {
+          "regions": 107,
+          "executed": 107,
+          "truthCenterCovered": 103,
+          "returned": 76,
+          "hits": 74,
+          "wrongLocationOnVisible": 2,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 0,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 75,
+              "hits": 73,
+              "wrongLocationOnVisible": 2
+            },
+            "motion-appearance": {
+              "returned": 1,
+              "hits": 1
+            }
+          }
+        }
+      },
+      "both": 0,
+      "neither": 154
+    },
+    "searchByMode": {
+      "cold": {
+        "regions": 1903,
+        "executed": 1902,
+        "truthCenterCovered": 73,
+        "returned": 85,
+        "hits": 22,
+        "wrongLocationOnVisible": 10,
+        "detectionOnAbsent": 0,
+        "unscoredDetections": 53,
+        "outcomesBySource": {
+          "coreML-ROI": {
+            "returned": 71,
+            "unscoredDetections": 51,
+            "hits": 10,
+            "wrongLocationOnVisible": 10
+          },
+          "motion-appearance": {
+            "returned": 14,
+            "unscoredDetections": 2,
+            "hits": 12
+          }
+        }
+      },
+      "history": {
+        "regions": 497,
+        "executed": 496,
+        "truthCenterCovered": 288,
+        "returned": 275,
+        "hits": 224,
+        "wrongLocationOnVisible": 4,
+        "detectionOnAbsent": 0,
+        "unscoredDetections": 47,
+        "outcomesBySource": {
+          "coreML-ROI": {
+            "returned": 272,
+            "unscoredDetections": 45,
+            "hits": 223,
+            "wrongLocationOnVisible": 4
+          },
+          "motion-appearance": {
+            "returned": 3,
+            "hits": 1,
+            "unscoredDetections": 2
+          }
+        }
+      }
+    },
+    "predictedRegions": 2400,
+    "roiSearches": 2398,
+    "roiDetections": 343,
+    "offFalsePositives": {
+      "wrongLocationOnVisible": 1,
+      "detectionOnAbsent": 0
+    },
+    "offUnscoredDetections": 0,
+    "onFalsePositives": {
+      "wrongLocationOnVisible": 15,
+      "detectionOnAbsent": 0
+    },
+    "onUnscoredDetections": 100,
+    "onUnscoredBySource": {
+      "coreML-ROI": 96,
+      "motion-appearance": 4
+    }
+  },
+  "clips": {
+    "cam3": {
+      "sampled": 600,
+      "statusCounts": {
+        "unlabeled": 426,
+        "visible": 174
+      },
+      "reasonCounts": {
+        "noLabel": 426,
+        "noViewTriangulation": 16
+      },
+      "visible": {
+        "visible": 174,
+        "offHits": 0,
+        "onHits": 64,
+        "offRecall": 0.0,
+        "onRecall": 0.367816091954023,
+        "gain": 64,
+        "loss": 0,
+        "gainFromROI": 60,
+        "gainFromMotionAppearance": 4,
+        "onHitsBySource": {
+          "coreML-ROI": 60,
+          "motion-appearance": 4
+        },
+        "wrongLocationBySource": {
+          "coreML-ROI": 2
+        },
+        "searchByMode": {
+          "cold": {
+            "regions": 99,
+            "executed": 99,
+            "truthCenterCovered": 26,
+            "returned": 7,
+            "hits": 6,
+            "wrongLocationOnVisible": 1,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 4,
+                "hits": 3,
+                "wrongLocationOnVisible": 1
+              },
+              "motion-appearance": {
+                "returned": 3,
+                "hits": 3
+              }
+            }
+          },
+          "history": {
+            "regions": 75,
+            "executed": 75,
+            "truthCenterCovered": 71,
+            "returned": 59,
+            "hits": 58,
+            "wrongLocationOnVisible": 1,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 58,
+                "hits": 57,
+                "wrongLocationOnVisible": 1
+              },
+              "motion-appearance": {
+                "returned": 1,
+                "hits": 1
+              }
+            }
+          }
+        },
+        "both": 0,
+        "neither": 110
+      },
+      "small": {
+        "visible": 158,
+        "offHits": 0,
+        "onHits": 64,
+        "offRecall": 0.0,
+        "onRecall": 0.4050632911392405,
+        "gain": 64,
+        "loss": 0,
+        "gainFromROI": 60,
+        "gainFromMotionAppearance": 4,
+        "onHitsBySource": {
+          "coreML-ROI": 60,
+          "motion-appearance": 4
+        },
+        "wrongLocationBySource": {
+          "coreML-ROI": 2
+        },
+        "searchByMode": {
+          "cold": {
+            "regions": 85,
+            "executed": 85,
+            "truthCenterCovered": 24,
+            "returned": 7,
+            "hits": 6,
+            "wrongLocationOnVisible": 1,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 4,
+                "hits": 3,
+                "wrongLocationOnVisible": 1
+              },
+              "motion-appearance": {
+                "returned": 3,
+                "hits": 3
+              }
+            }
+          },
+          "history": {
+            "regions": 73,
+            "executed": 73,
+            "truthCenterCovered": 69,
+            "returned": 59,
+            "hits": 58,
+            "wrongLocationOnVisible": 1,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 58,
+                "hits": 57,
+                "wrongLocationOnVisible": 1
+              },
+              "motion-appearance": {
+                "returned": 1,
+                "hits": 1
+              }
+            }
+          }
+        },
+        "both": 0,
+        "neither": 94
+      },
+      "larger": {
+        "visible": 0,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": null,
+        "onRecall": null,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "gainFromMotionAppearance": 0,
+        "onHitsBySource": {},
+        "wrongLocationBySource": {},
+        "searchByMode": {},
+        "both": 0,
+        "neither": 0
+      },
+      "farRegion": {
+        "visible": 120,
+        "offHits": 0,
+        "onHits": 30,
+        "offRecall": 0.0,
+        "onRecall": 0.25,
+        "gain": 30,
+        "loss": 0,
+        "gainFromROI": 26,
+        "gainFromMotionAppearance": 4,
+        "onHitsBySource": {
+          "coreML-ROI": 26,
+          "motion-appearance": 4
+        },
+        "wrongLocationBySource": {
+          "coreML-ROI": 1
+        },
+        "searchByMode": {
+          "cold": {
+            "regions": 85,
+            "executed": 85,
+            "truthCenterCovered": 24,
+            "returned": 7,
+            "hits": 6,
+            "wrongLocationOnVisible": 1,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 4,
+                "hits": 3,
+                "wrongLocationOnVisible": 1
+              },
+              "motion-appearance": {
+                "returned": 3,
+                "hits": 3
+              }
+            }
+          },
+          "history": {
+            "regions": 35,
+            "executed": 35,
+            "truthCenterCovered": 33,
+            "returned": 24,
+            "hits": 24,
+            "wrongLocationOnVisible": 0,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 23,
+                "hits": 23
+              },
+              "motion-appearance": {
+                "returned": 1,
+                "hits": 1
+              }
+            }
+          }
+        },
+        "both": 0,
+        "neither": 90
+      },
+      "farSmall": {
+        "visible": 120,
+        "offHits": 0,
+        "onHits": 30,
+        "offRecall": 0.0,
+        "onRecall": 0.25,
+        "gain": 30,
+        "loss": 0,
+        "gainFromROI": 26,
+        "gainFromMotionAppearance": 4,
+        "onHitsBySource": {
+          "coreML-ROI": 26,
+          "motion-appearance": 4
+        },
+        "wrongLocationBySource": {
+          "coreML-ROI": 1
+        },
+        "searchByMode": {
+          "cold": {
+            "regions": 85,
+            "executed": 85,
+            "truthCenterCovered": 24,
+            "returned": 7,
+            "hits": 6,
+            "wrongLocationOnVisible": 1,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 4,
+                "hits": 3,
+                "wrongLocationOnVisible": 1
+              },
+              "motion-appearance": {
+                "returned": 3,
+                "hits": 3
+              }
+            }
+          },
+          "history": {
+            "regions": 35,
+            "executed": 35,
+            "truthCenterCovered": 33,
+            "returned": 24,
+            "hits": 24,
+            "wrongLocationOnVisible": 0,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 23,
+                "hits": 23
+              },
+              "motion-appearance": {
+                "returned": 1,
+                "hits": 1
+              }
+            }
+          }
+        },
+        "both": 0,
+        "neither": 90
+      },
+      "searchByMode": {
+        "cold": {
+          "regions": 499,
+          "executed": 499,
+          "truthCenterCovered": 26,
+          "returned": 16,
+          "hits": 6,
+          "wrongLocationOnVisible": 1,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 9,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 12,
+              "unscoredDetections": 8,
+              "hits": 3,
+              "wrongLocationOnVisible": 1
+            },
+            "motion-appearance": {
+              "returned": 4,
+              "unscoredDetections": 1,
+              "hits": 3
+            }
+          }
+        },
+        "history": {
+          "regions": 101,
+          "executed": 101,
+          "truthCenterCovered": 71,
+          "returned": 61,
+          "hits": 58,
+          "wrongLocationOnVisible": 1,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 2,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 60,
+              "unscoredDetections": 2,
+              "hits": 57,
+              "wrongLocationOnVisible": 1
+            },
+            "motion-appearance": {
+              "returned": 1,
+              "hits": 1
+            }
+          }
+        }
+      },
+      "predictedRegions": 600,
+      "roiSearches": 600,
+      "roiDetections": 72,
+      "offFalsePositives": {
+        "wrongLocationOnVisible": 0,
+        "detectionOnAbsent": 0
+      },
+      "offUnscoredDetections": 0,
+      "onFalsePositives": {
+        "wrongLocationOnVisible": 2,
+        "detectionOnAbsent": 0
+      },
+      "onUnscoredDetections": 11,
+      "onUnscoredBySource": {
+        "coreML-ROI": 10,
+        "motion-appearance": 1
+      }
+    },
+    "cam4": {
+      "sampled": 600,
+      "statusCounts": {
+        "visible": 209,
+        "unlabeled": 391
+      },
+      "reasonCounts": {
+        "noViewTriangulation": 68,
+        "noLabel": 391,
+        "reprojectionAboveTwoDiameters": 1
+      },
+      "visible": {
+        "visible": 209,
+        "offHits": 1,
+        "onHits": 106,
+        "offRecall": 0.004784688995215311,
+        "onRecall": 0.507177033492823,
+        "gain": 105,
+        "loss": 0,
+        "gainFromROI": 101,
+        "gainFromMotionAppearance": 4,
+        "onHitsBySource": {
+          "coreML": 1,
+          "coreML-ROI": 101,
+          "motion-appearance": 4
+        },
+        "wrongLocationBySource": {
+          "coreML-ROI": 5,
+          "coreML": 1
+        },
+        "searchByMode": {
+          "cold": {
+            "regions": 75,
+            "executed": 74,
+            "truthCenterCovered": 23,
+            "returned": 14,
+            "hits": 9,
+            "wrongLocationOnVisible": 5,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 10,
+                "wrongLocationOnVisible": 5,
+                "hits": 5
+              },
+              "motion-appearance": {
+                "returned": 4,
+                "hits": 4
+              }
+            }
+          },
+          "history": {
+            "regions": 134,
+            "executed": 133,
+            "truthCenterCovered": 126,
+            "returned": 96,
+            "hits": 96,
+            "wrongLocationOnVisible": 0,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 96,
+                "hits": 96
+              }
+            }
+          }
+        },
+        "both": 1,
+        "neither": 103
+      },
+      "small": {
+        "visible": 119,
+        "offHits": 1,
+        "onHits": 68,
+        "offRecall": 0.008403361344537815,
+        "onRecall": 0.5714285714285714,
+        "gain": 67,
+        "loss": 0,
+        "gainFromROI": 63,
+        "gainFromMotionAppearance": 4,
+        "onHitsBySource": {
+          "coreML": 1,
+          "coreML-ROI": 63,
+          "motion-appearance": 4
+        },
+        "wrongLocationBySource": {},
+        "searchByMode": {
+          "history": {
+            "regions": 82,
+            "executed": 81,
+            "truthCenterCovered": 80,
+            "returned": 60,
+            "hits": 60,
+            "wrongLocationOnVisible": 0,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 60,
+                "hits": 60
+              }
+            }
+          },
+          "cold": {
+            "regions": 37,
+            "executed": 37,
+            "truthCenterCovered": 13,
+            "returned": 7,
+            "hits": 7,
+            "wrongLocationOnVisible": 0,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 3,
+                "hits": 3
+              },
+              "motion-appearance": {
+                "returned": 4,
+                "hits": 4
+              }
+            }
+          }
+        },
+        "both": 1,
+        "neither": 51
+      },
+      "larger": {
+        "visible": 21,
+        "offHits": 0,
+        "onHits": 21,
+        "offRecall": 0.0,
+        "onRecall": 1.0,
+        "gain": 21,
+        "loss": 0,
+        "gainFromROI": 21,
+        "gainFromMotionAppearance": 0,
+        "onHitsBySource": {
+          "coreML-ROI": 21
+        },
+        "wrongLocationBySource": {},
+        "searchByMode": {
+          "history": {
+            "regions": 20,
+            "executed": 20,
+            "truthCenterCovered": 20,
+            "returned": 20,
+            "hits": 20,
+            "wrongLocationOnVisible": 0,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 20,
+                "hits": 20
+              }
+            }
+          },
+          "cold": {
+            "regions": 1,
+            "executed": 1,
+            "truthCenterCovered": 1,
+            "returned": 1,
+            "hits": 1,
+            "wrongLocationOnVisible": 0,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 1,
+                "hits": 1
+              }
+            }
+          }
+        },
+        "both": 0,
+        "neither": 0
+      },
+      "farRegion": {
+        "visible": 40,
+        "offHits": 0,
+        "onHits": 26,
+        "offRecall": 0.0,
+        "onRecall": 0.65,
+        "gain": 26,
+        "loss": 0,
+        "gainFromROI": 24,
+        "gainFromMotionAppearance": 2,
+        "onHitsBySource": {
+          "motion-appearance": 2,
+          "coreML-ROI": 24
+        },
+        "wrongLocationBySource": {},
+        "searchByMode": {
+          "cold": {
+            "regions": 11,
+            "executed": 11,
+            "truthCenterCovered": 3,
+            "returned": 2,
+            "hits": 2,
+            "wrongLocationOnVisible": 0,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "motion-appearance": {
+                "returned": 2,
+                "hits": 2
+              }
+            }
+          },
+          "history": {
+            "regions": 29,
+            "executed": 29,
+            "truthCenterCovered": 29,
+            "returned": 24,
+            "hits": 24,
+            "wrongLocationOnVisible": 0,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 24,
+                "hits": 24
+              }
+            }
+          }
+        },
+        "both": 0,
+        "neither": 14
+      },
+      "farSmall": {
+        "visible": 40,
+        "offHits": 0,
+        "onHits": 26,
+        "offRecall": 0.0,
+        "onRecall": 0.65,
+        "gain": 26,
+        "loss": 0,
+        "gainFromROI": 24,
+        "gainFromMotionAppearance": 2,
+        "onHitsBySource": {
+          "motion-appearance": 2,
+          "coreML-ROI": 24
+        },
+        "wrongLocationBySource": {},
+        "searchByMode": {
+          "cold": {
+            "regions": 11,
+            "executed": 11,
+            "truthCenterCovered": 3,
+            "returned": 2,
+            "hits": 2,
+            "wrongLocationOnVisible": 0,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "motion-appearance": {
+                "returned": 2,
+                "hits": 2
+              }
+            }
+          },
+          "history": {
+            "regions": 29,
+            "executed": 29,
+            "truthCenterCovered": 29,
+            "returned": 24,
+            "hits": 24,
+            "wrongLocationOnVisible": 0,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 24,
+                "hits": 24
+              }
+            }
+          }
+        },
+        "both": 0,
+        "neither": 14
+      },
+      "searchByMode": {
+        "cold": {
+          "regions": 428,
+          "executed": 427,
+          "truthCenterCovered": 23,
+          "returned": 26,
+          "hits": 9,
+          "wrongLocationOnVisible": 5,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 12,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 22,
+              "wrongLocationOnVisible": 5,
+              "unscoredDetections": 12,
+              "hits": 5
+            },
+            "motion-appearance": {
+              "returned": 4,
+              "hits": 4
+            }
+          }
+        },
+        "history": {
+          "regions": 172,
+          "executed": 171,
+          "truthCenterCovered": 126,
+          "returned": 98,
+          "hits": 96,
+          "wrongLocationOnVisible": 0,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 2,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 98,
+              "unscoredDetections": 2,
+              "hits": 96
+            }
+          }
+        }
+      },
+      "predictedRegions": 600,
+      "roiSearches": 598,
+      "roiDetections": 120,
+      "offFalsePositives": {
+        "wrongLocationOnVisible": 1,
+        "detectionOnAbsent": 0
+      },
+      "offUnscoredDetections": 0,
+      "onFalsePositives": {
+        "wrongLocationOnVisible": 6,
+        "detectionOnAbsent": 0
+      },
+      "onUnscoredDetections": 14,
+      "onUnscoredBySource": {
+        "coreML-ROI": 14
+      }
+    },
+    "cam5": {
+      "sampled": 600,
+      "statusCounts": {
+        "unlabeled": 519,
+        "visible": 81
+      },
+      "reasonCounts": {
+        "noLabel": 519
+      },
+      "visible": {
+        "visible": 81,
+        "offHits": 0,
+        "onHits": 31,
+        "offRecall": 0.0,
+        "onRecall": 0.38271604938271603,
+        "gain": 31,
+        "loss": 0,
+        "gainFromROI": 28,
+        "gainFromMotionAppearance": 3,
+        "onHitsBySource": {
+          "coreML-ROI": 28,
+          "motion-appearance": 3
+        },
+        "wrongLocationBySource": {
+          "coreML-ROI": 4
+        },
+        "searchByMode": {
+          "cold": {
+            "regions": 38,
+            "executed": 38,
+            "truthCenterCovered": 11,
+            "returned": 7,
+            "hits": 5,
+            "wrongLocationOnVisible": 2,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 4,
+                "hits": 2,
+                "wrongLocationOnVisible": 2
+              },
+              "motion-appearance": {
+                "returned": 3,
+                "hits": 3
+              }
+            }
+          },
+          "history": {
+            "regions": 43,
+            "executed": 43,
+            "truthCenterCovered": 41,
+            "returned": 28,
+            "hits": 26,
+            "wrongLocationOnVisible": 2,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 28,
+                "hits": 26,
+                "wrongLocationOnVisible": 2
+              }
+            }
+          }
+        },
+        "both": 0,
+        "neither": 50
+      },
+      "small": {
+        "visible": 81,
+        "offHits": 0,
+        "onHits": 31,
+        "offRecall": 0.0,
+        "onRecall": 0.38271604938271603,
+        "gain": 31,
+        "loss": 0,
+        "gainFromROI": 28,
+        "gainFromMotionAppearance": 3,
+        "onHitsBySource": {
+          "coreML-ROI": 28,
+          "motion-appearance": 3
+        },
+        "wrongLocationBySource": {
+          "coreML-ROI": 4
+        },
+        "searchByMode": {
+          "cold": {
+            "regions": 38,
+            "executed": 38,
+            "truthCenterCovered": 11,
+            "returned": 7,
+            "hits": 5,
+            "wrongLocationOnVisible": 2,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 4,
+                "hits": 2,
+                "wrongLocationOnVisible": 2
+              },
+              "motion-appearance": {
+                "returned": 3,
+                "hits": 3
+              }
+            }
+          },
+          "history": {
+            "regions": 43,
+            "executed": 43,
+            "truthCenterCovered": 41,
+            "returned": 28,
+            "hits": 26,
+            "wrongLocationOnVisible": 2,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 28,
+                "hits": 26,
+                "wrongLocationOnVisible": 2
+              }
+            }
+          }
+        },
+        "both": 0,
+        "neither": 50
+      },
+      "larger": {
+        "visible": 0,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": null,
+        "onRecall": null,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "gainFromMotionAppearance": 0,
+        "onHitsBySource": {},
+        "wrongLocationBySource": {},
+        "searchByMode": {},
+        "both": 0,
+        "neither": 0
+      },
+      "farRegion": {
+        "visible": 81,
+        "offHits": 0,
+        "onHits": 31,
+        "offRecall": 0.0,
+        "onRecall": 0.38271604938271603,
+        "gain": 31,
+        "loss": 0,
+        "gainFromROI": 28,
+        "gainFromMotionAppearance": 3,
+        "onHitsBySource": {
+          "coreML-ROI": 28,
+          "motion-appearance": 3
+        },
+        "wrongLocationBySource": {
+          "coreML-ROI": 4
+        },
+        "searchByMode": {
+          "cold": {
+            "regions": 38,
+            "executed": 38,
+            "truthCenterCovered": 11,
+            "returned": 7,
+            "hits": 5,
+            "wrongLocationOnVisible": 2,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 4,
+                "hits": 2,
+                "wrongLocationOnVisible": 2
+              },
+              "motion-appearance": {
+                "returned": 3,
+                "hits": 3
+              }
+            }
+          },
+          "history": {
+            "regions": 43,
+            "executed": 43,
+            "truthCenterCovered": 41,
+            "returned": 28,
+            "hits": 26,
+            "wrongLocationOnVisible": 2,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 28,
+                "hits": 26,
+                "wrongLocationOnVisible": 2
+              }
+            }
+          }
+        },
+        "both": 0,
+        "neither": 50
+      },
+      "farSmall": {
+        "visible": 81,
+        "offHits": 0,
+        "onHits": 31,
+        "offRecall": 0.0,
+        "onRecall": 0.38271604938271603,
+        "gain": 31,
+        "loss": 0,
+        "gainFromROI": 28,
+        "gainFromMotionAppearance": 3,
+        "onHitsBySource": {
+          "coreML-ROI": 28,
+          "motion-appearance": 3
+        },
+        "wrongLocationBySource": {
+          "coreML-ROI": 4
+        },
+        "searchByMode": {
+          "cold": {
+            "regions": 38,
+            "executed": 38,
+            "truthCenterCovered": 11,
+            "returned": 7,
+            "hits": 5,
+            "wrongLocationOnVisible": 2,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 4,
+                "hits": 2,
+                "wrongLocationOnVisible": 2
+              },
+              "motion-appearance": {
+                "returned": 3,
+                "hits": 3
+              }
+            }
+          },
+          "history": {
+            "regions": 43,
+            "executed": 43,
+            "truthCenterCovered": 41,
+            "returned": 28,
+            "hits": 26,
+            "wrongLocationOnVisible": 2,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 28,
+                "hits": 26,
+                "wrongLocationOnVisible": 2
+              }
+            }
+          }
+        },
+        "both": 0,
+        "neither": 50
+      },
+      "searchByMode": {
+        "cold": {
+          "regions": 488,
+          "executed": 488,
+          "truthCenterCovered": 11,
+          "returned": 24,
+          "hits": 5,
+          "wrongLocationOnVisible": 2,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 17,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 20,
+              "hits": 2,
+              "wrongLocationOnVisible": 2,
+              "unscoredDetections": 16
+            },
+            "motion-appearance": {
+              "returned": 4,
+              "hits": 3,
+              "unscoredDetections": 1
+            }
+          }
+        },
+        "history": {
+          "regions": 112,
+          "executed": 112,
+          "truthCenterCovered": 41,
+          "returned": 51,
+          "hits": 26,
+          "wrongLocationOnVisible": 2,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 23,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 49,
+              "hits": 26,
+              "wrongLocationOnVisible": 2,
+              "unscoredDetections": 21
+            },
+            "motion-appearance": {
+              "returned": 2,
+              "unscoredDetections": 2
+            }
+          }
+        }
+      },
+      "predictedRegions": 600,
+      "roiSearches": 600,
+      "roiDetections": 69,
+      "offFalsePositives": {
+        "wrongLocationOnVisible": 0,
+        "detectionOnAbsent": 0
+      },
+      "offUnscoredDetections": 0,
+      "onFalsePositives": {
+        "wrongLocationOnVisible": 4,
+        "detectionOnAbsent": 0
+      },
+      "onUnscoredDetections": 40,
+      "onUnscoredBySource": {
+        "coreML-ROI": 37,
+        "motion-appearance": 3
+      }
+    },
+    "cam6": {
+      "sampled": 600,
+      "statusCounts": {
+        "unlabeled": 511,
+        "visible": 89
+      },
+      "reasonCounts": {
+        "noLabel": 511,
+        "noViewTriangulation": 8
+      },
+      "visible": {
+        "visible": 89,
+        "offHits": 0,
+        "onHits": 46,
+        "offRecall": 0.0,
+        "onRecall": 0.5168539325842697,
+        "gain": 46,
+        "loss": 0,
+        "gainFromROI": 44,
+        "gainFromMotionAppearance": 2,
+        "onHitsBySource": {
+          "motion-appearance": 2,
+          "coreML-ROI": 44
+        },
+        "wrongLocationBySource": {
+          "coreML-ROI": 3
+        },
+        "searchByMode": {
+          "cold": {
+            "regions": 39,
+            "executed": 39,
+            "truthCenterCovered": 13,
+            "returned": 4,
+            "hits": 2,
+            "wrongLocationOnVisible": 2,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "motion-appearance": {
+                "returned": 2,
+                "hits": 2
+              },
+              "coreML-ROI": {
+                "returned": 2,
+                "wrongLocationOnVisible": 2
+              }
+            }
+          },
+          "history": {
+            "regions": 50,
+            "executed": 50,
+            "truthCenterCovered": 50,
+            "returned": 45,
+            "hits": 44,
+            "wrongLocationOnVisible": 1,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 45,
+                "hits": 44,
+                "wrongLocationOnVisible": 1
+              }
+            }
+          }
+        },
+        "both": 0,
+        "neither": 43
+      },
+      "small": {
+        "visible": 81,
+        "offHits": 0,
+        "onHits": 45,
+        "offRecall": 0.0,
+        "onRecall": 0.5555555555555556,
+        "gain": 45,
+        "loss": 0,
+        "gainFromROI": 44,
+        "gainFromMotionAppearance": 1,
+        "onHitsBySource": {
+          "motion-appearance": 1,
+          "coreML-ROI": 44
+        },
+        "wrongLocationBySource": {
+          "coreML-ROI": 2
+        },
+        "searchByMode": {
+          "cold": {
+            "regions": 31,
+            "executed": 31,
+            "truthCenterCovered": 10,
+            "returned": 2,
+            "hits": 1,
+            "wrongLocationOnVisible": 1,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "motion-appearance": {
+                "returned": 1,
+                "hits": 1
+              },
+              "coreML-ROI": {
+                "returned": 1,
+                "wrongLocationOnVisible": 1
+              }
+            }
+          },
+          "history": {
+            "regions": 50,
+            "executed": 50,
+            "truthCenterCovered": 50,
+            "returned": 45,
+            "hits": 44,
+            "wrongLocationOnVisible": 1,
+            "detectionOnAbsent": 0,
+            "unscoredDetections": 0,
+            "outcomesBySource": {
+              "coreML-ROI": {
+                "returned": 45,
+                "hits": 44,
+                "wrongLocationOnVisible": 1
+              }
+            }
+          }
+        },
+        "both": 0,
+        "neither": 36
+      },
+      "larger": {
+        "visible": 0,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": null,
+        "onRecall": null,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "gainFromMotionAppearance": 0,
+        "onHitsBySource": {},
+        "wrongLocationBySource": {},
+        "searchByMode": {},
+        "both": 0,
+        "neither": 0
+      },
+      "farRegion": {
+        "visible": 0,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": null,
+        "onRecall": null,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "gainFromMotionAppearance": 0,
+        "onHitsBySource": {},
+        "wrongLocationBySource": {},
+        "searchByMode": {},
+        "both": 0,
+        "neither": 0
+      },
+      "farSmall": {
+        "visible": 0,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": null,
+        "onRecall": null,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "gainFromMotionAppearance": 0,
+        "onHitsBySource": {},
+        "wrongLocationBySource": {},
+        "searchByMode": {},
+        "both": 0,
+        "neither": 0
+      },
+      "searchByMode": {
+        "cold": {
+          "regions": 488,
+          "executed": 488,
+          "truthCenterCovered": 13,
+          "returned": 19,
+          "hits": 2,
+          "wrongLocationOnVisible": 2,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 15,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 17,
+              "unscoredDetections": 15,
+              "wrongLocationOnVisible": 2
+            },
+            "motion-appearance": {
+              "returned": 2,
+              "hits": 2
+            }
+          }
+        },
+        "history": {
+          "regions": 112,
+          "executed": 112,
+          "truthCenterCovered": 50,
+          "returned": 65,
+          "hits": 44,
+          "wrongLocationOnVisible": 1,
+          "detectionOnAbsent": 0,
+          "unscoredDetections": 20,
+          "outcomesBySource": {
+            "coreML-ROI": {
+              "returned": 65,
+              "hits": 44,
+              "wrongLocationOnVisible": 1,
+              "unscoredDetections": 20
+            }
+          }
+        }
+      },
+      "predictedRegions": 600,
+      "roiSearches": 600,
+      "roiDetections": 82,
+      "offFalsePositives": {
+        "wrongLocationOnVisible": 0,
+        "detectionOnAbsent": 0
+      },
+      "offUnscoredDetections": 0,
+      "onFalsePositives": {
+        "wrongLocationOnVisible": 3,
+        "detectionOnAbsent": 0
+      },
+      "onUnscoredDetections": 35,
+      "onUnscoredBySource": {
+        "coreML-ROI": 35
+      }
+    }
+  },
+  "scoresFile": "2026-11-27-issia-coldsearch-traces/recall-scores.csv.gz"
+}

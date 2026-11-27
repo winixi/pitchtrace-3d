@@ -1,6 +1,6 @@
 """离线比赛主流程：按曝光选帧、单视角观测、几何融合、分析与逐帧提交。"""
 
-from contextlib import ExitStack
+from contextlib import ExitStack, closing
 import hashlib
 import json
 from pathlib import Path
@@ -9,22 +9,8 @@ import subprocess
 import sys
 
 from calibrate import unique_object
-
-
-def digest(path):
-    result = hashlib.sha256()
-    with path.open("rb") as stream:
-        while chunk := stream.read(1024 * 1024):
-            result.update(chunk)
-    return result.hexdigest()
-
-
-def file_identity(path):
-    if path.is_file():
-        return digest(path)
-    if not path.is_dir():
-        raise ValueError(f"找不到模型：{path}")
-    return {str(p.relative_to(path)): digest(p) for p in sorted(path.rglob("*")) if p.is_file()}
+from camera_workers import CameraWorkers
+from vision_model import digest, load_vision_model
 
 
 def media_identity(source, verify):
@@ -108,7 +94,8 @@ class SceneBuilder:
         return frame
 
 
-def analyze_rows(config, rows, archive, media_root, detector_settings, config_dir, executable, *, resume=False):
+def analyze_rows(config, rows, archive, media_root, detector_settings, model, executable, *, resume=False):
+    from ball_search import BallSearch
     from observations import Detector, validate_observation
     from replay_images import ReplayImages
 
@@ -117,11 +104,26 @@ def analyze_rows(config, rows, archive, media_root, detector_settings, config_di
     # 恢复仅保存起始高水位，避免跨帧持有 SQLite 读游标妨碍同时提交上传回执。
     last_seq = archive.last_seq(config.match_id, config.stream_epoch) if resume else None
     with ExitStack() as stack:
+        observers = []
         if replay:
-            images = ReplayImages(media_root)
-            stack.callback(images.close)
-            detector = Detector(detector_settings, config_dir, executable)
-            stack.callback(detector.close)
+            cameras_in_match = {cam for entry in config.timeline for cam in entry.enabled}
+            workers = CameraWorkers(cameras_in_match, detector_settings.get("workers", 1))
+            searches = [BallSearch() if detector_settings.get("ballSearch", False) else None
+                        for _ in range(workers.worker_count)]
+
+        def observe(lane, row, version, cameras):
+            images, detector = observers[lane]
+            search = searches[lane]
+            image = images.read(row)
+            if list(image.shape[:2][::-1]) != cameras[row["cameraId"]]["imageSize"]:
+                raise ValueError(f'机位 {row["cameraId"]} 原片尺寸与当前标定不一致')
+            observed = search.observe(detector, version, row, image) if search else detector.observe(image, None)
+            # 性能采样里的墙钟耗时不参与比赛证据或幂等比较。
+            observed.pop("timing", None)
+            result = {**row, **observed}
+            validate_observation(result)
+            return result
+
         for utc, version, cameras, group in config.groups(rows, replay=replay):
             if last_seq is not None and builder.seq <= last_seq:
                 stored = archive.frame(config.match_id, config.stream_epoch, builder.seq)
@@ -129,21 +131,23 @@ def analyze_rows(config, rows, archive, media_root, detector_settings, config_di
                     raise ValueError("恢复时原帧顺序或标定改变，请指定新的场景周期")
                 proof = archive.evidence(config.match_id, config.stream_epoch, builder.seq)
                 inputs = proof["observations"]
-                # append 在同一事务核对完整快照与原帧引用，已有帧可避免再次推理。
-                frame = builder.append(archive, utc, version, cameras, group, inputs)
-                yield frame
-                continue
-            inputs = []
-            for row in group:
-                if row["cameraId"] not in cameras:
-                    continue
-                if replay:
-                    image = images.read(row)
-                    if list(image.shape[:2][::-1]) != cameras[row["cameraId"]]["imageSize"]:
-                        raise ValueError(f'机位 {row["cameraId"]} 原片尺寸与当前标定不一致')
-                    row = {**row, **detector.observe(image)}
-                    validate_observation(row)
-                inputs.append(row)
+            else:
+                enabled = [row for row in group if row["cameraId"] in cameras]
+                # 已归档的观测足以重建历史；第一组新原帧到来时再启动模型和解码器。
+                if replay and enabled and not observers:
+                    for _ in range(workers.worker_count):
+                        images = stack.enter_context(closing(ReplayImages(media_root)))
+                        detector = stack.enter_context(closing(Detector(detector_settings, model, executable)))
+                        observers.append((images, detector))
+                    # 停工作线程后再释放其解码器和原生推理进程。
+                    stack.enter_context(workers)
+                inputs = workers.map_group(enabled, observe, version, cameras) if replay else enabled
+            # 恢复与首跑均以同一份已选原帧证据推进预测，避免重复解码和推理。
+            if replay:
+                for row in inputs:
+                    search = searches[workers.lane(row["cameraId"])]
+                    if search:
+                        search.record(version, row)
             yield builder.append(archive, utc, version, cameras, group, inputs)
         if last_seq is not None and builder.seq <= last_seq:
             raise ValueError("输入提前结束，无法恢复全部已提交场景")
@@ -165,6 +169,7 @@ def process(command, config_file, source, database, executable):
     if database.resolve() in (manifest.resolve(), config_file.resolve()):
         raise ValueError("归档不能与输入文件同名")
     detector_settings = settings.get("detector", {})
+    model = load_vision_model(detector_settings, config_file.parent) if replay else None
     delivery_keys = {"gateway", "recordings", "captureConfig", "mediaEpoch", "backfillBytesPerSecond", "retentionDays"}
     provenance = {
         "command": command, "sampleSource": config.sample_source,
@@ -172,14 +177,15 @@ def process(command, config_file, source, database, executable):
         "inputSha256": digest(manifest), "reportSha256": {
             item["calibrationId"]: digest(config_file.parent / item["report"]) for item in settings["calibrations"]
         }, "software": {name: digest(Path(__file__).with_name(name)) for name in (
-            "process_match.py", "observations.py", "replay_images.py", "match_config.py", "calibrate.py",
+            "process_match.py", "camera_workers.py", "observations.py", "observation_quality.py", "vision_model.py", "ball_search.py",
+            "replay_images.py", "match_config.py", "calibrate.py",
             "camera_geometry.py", "tracking.py", "match_analysis.py", "match_events.py", "pose.py")},
         "opencv": cv2.__version__, "numpy": numpy.__version__, "python": platform.python_version(),
     }
     if replay and detector_settings.get("backend", "vision") == "vision":
         provenance.update(system=platform.platform(), workerSha256=digest(Path(executable)))
-        if "model" in detector_settings:
-            provenance["modelSha256"] = file_identity(config_file.parent / detector_settings["model"])
+        if model is not None:
+            provenance.update(model.provenance)
     count = 0
     with manifest.open(encoding="utf-8") as stream, SceneArchive(database) as archive:
         if replay:
@@ -187,7 +193,7 @@ def process(command, config_file, source, database, executable):
             provenance["mediaIndexSha256"] = media_identity(source, verify=resume)
         archive.register_run(config.match_id, config.stream_epoch, provenance)
         for _ in analyze_rows(config, load_rows(stream, replay), archive, source if replay else None,
-                              detector_settings, config_file.parent, executable, resume=True):
+                              detector_settings, model, executable, resume=True):
             count += 1
     return {"matchId": config.match_id, "streamEpoch": config.stream_epoch, "frames": count}
 

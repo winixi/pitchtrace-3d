@@ -16,7 +16,35 @@ struct ObservedPlayer: Encodable {
 
 struct ObservedBall: Encodable {
     let pixel: [Double]
+    let box: [Double]
     let confidence: Float
+    let source: String
+}
+
+struct VisionWorkerOptions {
+    let modelURL: URL?
+    let personAndBall: Bool
+    let ballSearch: Bool
+    let individualOCR: Bool
+
+    init(arguments: [String]) throws {
+        var args = arguments[...]
+        if let first = args.first, !first.isEmpty, !first.hasPrefix("--") {
+            modelURL = URL(fileURLWithPath: first)
+            args = args.dropFirst()
+        } else {
+            modelURL = nil
+        }
+        personAndBall = args.first == "--person-and-ball"
+        if personAndBall { args = args.dropFirst() }
+        ballSearch = args.first == "--ball-search"
+        if ballSearch { args = args.dropFirst() }
+        individualOCR = args.first == "--individual-ocr"
+        if individualOCR { args = args.dropFirst() }
+        guard args.isEmpty, modelURL != nil || !(personAndBall || ballSearch) else {
+            throw RecordingError("用法：vision-worker [模型路径 [--person-and-ball] [--ball-search]] [--individual-ocr]")
+        }
+    }
 }
 
 private struct ImageObservation: Encodable {
@@ -24,12 +52,15 @@ private struct ImageObservation: Encodable {
     let players: [ObservedPlayer]
     let ball: ObservedBall?
 
-    enum CodingKeys: CodingKey { case imageSize, players, ball }
+    let timing: VisionTiming?
+
+    enum CodingKeys: CodingKey { case imageSize, players, ball, timing }
     func encode(to encoder: Encoder) throws {
         var keyed = encoder.container(keyedBy: CodingKeys.self)
         try keyed.encode(imageSize, forKey: .imageSize)
         try keyed.encode(players, forKey: .players)
         try keyed.encode(ball, forKey: .ball)
+        try keyed.encodeIfPresent(timing, forKey: .timing)
     }
 }
 
@@ -64,11 +95,40 @@ func originalPixel(_ point: CGPoint, in crop: CGRect) -> [Double]? {
     ]
 }
 
-private func pixelBox(_ box: CGRect, in image: CGImage) -> CGRect {
-    let width = CGFloat(image.width), height = CGFloat(image.height)
-    return CGRect(x: box.minX * width, y: (1 - box.maxY) * height,
-                  width: box.width * width, height: box.height * height)
-        .integral.intersection(CGRect(x: 0, y: 0, width: width, height: height))
+private func pixelBox(_ box: CGRect, in region: CGRect) -> CGRect? {
+    guard box.origin.x.isFinite, box.origin.y.isFinite, box.size.width.isFinite,
+          box.size.height.isFinite, box.size.width > 0, box.size.height > 0 else { return nil }
+    // Vision 已将 scaleFit 的填边换回送入请求的图像坐标，此处只还原裁片偏移和原点。
+    let result = CGRect(x: region.minX + box.minX * region.width,
+                        y: region.minY + (1 - box.maxY) * region.height,
+                        width: box.width * region.width, height: box.height * region.height)
+        .integral.intersection(region)
+    return result.isEmpty ? nil : result
+}
+
+struct SelectedDetections {
+    var people: [(box: CGRect, confidence: Float)] = []
+    var ball: ObservedBall?
+
+    mutating func includePerson(confidence: Float, bounds: CGRect, in region: CGRect) {
+        guard (0.35...1).contains(confidence), let box = pixelBox(bounds, in: region),
+              box.width >= 2, box.height >= 2 else { return }
+        people.append((box, confidence))
+    }
+
+    mutating func include(label: String, confidence: Float, bounds: CGRect, in region: CGRect,
+                          includePeople: Bool, ballSource: String) {
+        switch label.lowercased() {
+        case "person" where includePeople:
+            includePerson(confidence: confidence, bounds: bounds, in: region)
+        case "sports ball", "soccer ball", "football", "ball":
+            guard (0.35...1).contains(confidence), confidence > (ball?.confidence ?? 0),
+                  let box = pixelBox(bounds, in: region) else { return }
+            ball = ObservedBall(pixel: [box.midX, box.midY], box: [box.minX, box.minY, box.width, box.height],
+                                confidence: confidence, source: ballSource)
+        default: break
+        }
+    }
 }
 
 private func shirtColor(_ image: CGImage) -> [Int]? {
@@ -86,7 +146,38 @@ private func shirtColor(_ image: CGImage) -> [Int]? {
     return sampled ? bytes.prefix(3).map(Int.init) : nil
 }
 
-private func performVision(_ requests: [VNRequest], on image: CGImage) throws {
+private enum VisionStage { case detection, pose, ocr }
+
+private final class VisionTiming: Encodable {
+    var detectionNs: UInt64 = 0
+    var poseNs: UInt64 = 0
+    var ocrNs: UInt64 = 0
+    var ocrSheetNs: UInt64 = 0
+    var detectionRequests = 0
+    var poseRequests = 0
+    var ocrRequests = 0
+
+    func record(_ stage: VisionStage, duration: UInt64, requests: Int) {
+        switch stage {
+        case .detection:
+            detectionNs += duration
+            detectionRequests += requests
+        case .pose:
+            poseNs += duration
+            poseRequests += requests
+        case .ocr:
+            ocrNs += duration
+            ocrRequests += requests
+        }
+    }
+}
+
+private func performVision(_ requests: [VNRequest], on image: CGImage,
+                           stage: VisionStage, timing: VisionTiming?) throws {
+    let begin = timing.map { _ in DispatchTime.now().uptimeNanoseconds }
+    defer {
+        if let begin { timing?.record(stage, duration: DispatchTime.now().uptimeNanoseconds - begin, requests: requests.count) }
+    }
     do {
         try VNImageRequestHandler(cgImage: image, options: [:]).perform(requests)
     } catch {
@@ -105,19 +196,77 @@ private func performVision(_ requests: [VNRequest], on image: CGImage) throws {
     }
 }
 
+// 使用统一像素比例排版，保留躯干裁片之间的空白。文字框必须完整属于一个人。
+private struct ShirtCrop {
+    let player: Int
+    let image: CGImage
+}
+
+func shirtOwner(of text: CGRect, in tiles: [CGRect]) -> Int? {
+    guard !text.isEmpty else { return nil }
+    return tiles.firstIndex { $0.contains(text) }
+}
+
+// 原图中央有充足像素和强对比笔画时，保留高分辨率的单人读号机会。
+private func prefersIndividualOCR(_ shirt: CGImage) -> Bool {
+    guard min(shirt.width, shirt.height) >= 32 else { return false }
+    let side = 16
+    var gray = [UInt8](repeating: 0, count: side * side)
+    let drawn = gray.withUnsafeMutableBytes { buffer -> Bool in
+        guard let context = CGContext(data: buffer.baseAddress, width: side, height: side,
+                                      bitsPerComponent: 8, bytesPerRow: side,
+                                      space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue)
+        else { return false }
+        context.interpolationQuality = .medium
+        context.draw(shirt, in: CGRect(x: 0, y: 0, width: side, height: side))
+        return true
+    }
+    guard drawn else { return true }
+    // 忽略边缘草地和极少数的高光，以中央亮度的 10–90 百分位衡量对比。
+    let center = (2..<14).flatMap { y in gray[(y * side + 2)..<(y * side + 14)] }.sorted()
+    return Int(center[center.count * 9 / 10]) - Int(center[center.count / 10]) >= 128
+}
+
+private func numberSheet(_ crops: ArraySlice<ShirtCrop>) -> (CGImage, [CGRect])? {
+    let padding = 16, scale = 3
+    let tileW = crops.map { $0.image.width }.max()! * scale + 2 * padding
+    let tileH = crops.map { $0.image.height }.max()! * scale + 2 * padding
+    let cols = min(crops.count, 3)
+    let w = cols * tileW, h = ((crops.count + cols - 1) / cols) * tileH
+    guard let context = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                  bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
+    context.setFillColor(gray: 0.5, alpha: 1)
+    context.fill(CGRect(x: 0, y: 0, width: w, height: h))
+    context.interpolationQuality = .high
+    var tiles: [CGRect] = []
+    for (i, crop) in crops.enumerated() {
+        let rect = CGRect(x: (i % cols) * tileW + padding, y: (i / cols) * tileH + padding,
+                          width: crop.image.width * scale, height: crop.image.height * scale)
+        context.draw(crop.image, in: rect)
+        // Core Graphics 与 Vision 的相对坐标都从左下算起。
+        tiles.append(rect.applying(CGAffineTransform(scaleX: 1 / Double(w), y: 1 / Double(h))))
+    }
+    return context.makeImage().map { ($0, tiles) }
+}
+
 private final class ImageObserver {
-    private let rectangles = VNDetectHumanRectanglesRequest()
+    private let individualOCR: Bool
+    private let rectangles: VNDetectHumanRectanglesRequest?
+    private let measuresTiming = ProcessInfo.processInfo.environment["PITCHTRACE_VISION_TIMING"] == "1"
     private let pose = VNDetectHumanBodyPoseRequest()
     private let ocr = VNRecognizeTextRequest()
     private let objects: VNCoreMLRequest?
     private var temporaryModel: URL?
 
-    init(modelURL: URL?) throws {
-        rectangles.upperBodyOnly = false
+    init(options: VisionWorkerOptions) throws {
+        individualOCR = options.individualOCR
+        rectangles = options.personAndBall ? nil : VNDetectHumanRectanglesRequest()
+        rectangles?.upperBodyOnly = false
         ocr.recognitionLevel = .accurate
         ocr.usesLanguageCorrection = false
         ocr.recognitionLanguages = ["en-US"]
-        guard let modelURL else {
+        guard let modelURL = options.modelURL else {
             objects = nil
             return
         }
@@ -130,6 +279,12 @@ private final class ImageObserver {
         }
         do {
             let model = try MLModel(contentsOf: compiled, configuration: MLModelConfiguration())
+            // Vision 识别带 NMS 的模型需要框和各类置信度两组输出。
+            let description = model.modelDescription
+            guard description.predictedFeatureName == nil,
+                  description.outputDescriptionsByName.values.filter({ $0.type == .multiArray }).count >= 2 else {
+                throw RecordingError("Core ML 模型须包含检测框和类别置信度输出")
+            }
             let request = try VNCoreMLRequest(model: VNCoreMLModel(for: model))
             request.imageCropAndScaleOption = .scaleFit
             objects = request
@@ -143,7 +298,61 @@ private final class ImageObserver {
         if let temporaryModel { try? FileManager.default.removeItem(at: temporaryModel) }
     }
 
-    func observe(_ data: Data) throws -> ImageObservation {
+    private func selectedResults(_ request: VNCoreMLRequest, in region: CGRect,
+                                 includePeople: Bool, source: String) throws -> SelectedDetections {
+        guard let detections = request.results as? [VNRecognizedObjectObservation] else {
+            throw RecordingError("Core ML 模型须输出 Vision 可读取的带类别检测框")
+        }
+        var selected = SelectedDetections()
+        for detection in detections {
+            if let label = detection.labels.first {
+                // NMS 检测器的框分在 observation 上，类别分只用于选标签。
+                selected.include(label: label.identifier, confidence: detection.confidence,
+                                 bounds: detection.boundingBox, in: region,
+                                 includePeople: includePeople, ballSource: source)
+            }
+        }
+        return selected
+    }
+
+    private func readNumbers(_ crops: [ShirtCrop], players: inout [ObservedPlayer], timing: VisionTiming?) throws {
+        var small: [ShirtCrop] = []
+        func readSingle(_ crop: ShirtCrop) throws {
+            try performVision([ocr], on: crop.image, stage: .ocr, timing: timing)
+            let texts = (ocr.results ?? []).compactMap { $0.topCandidates(1).first }
+            players[crop.player].number = jerseyNumber(texts.filter { $0.confidence >= 0.65 }.map(\.string))
+        }
+        for crop in crops {
+            if !individualOCR && crop.image.width <= 96 && crop.image.height <= 96 && !prefersIndividualOCR(crop.image) {
+                small.append(crop)
+            } else {
+                try readSingle(crop)
+            }
+        }
+        for start in stride(from: 0, to: small.count, by: 6) {
+            let batch = small[start..<min(start + 6, small.count)]
+            let startSheet = timing.map { _ in DispatchTime.now().uptimeNanoseconds }
+            let prepared = batch.count > 1 ? numberSheet(batch) : nil
+            if let startSheet { timing?.ocrSheetNs += DispatchTime.now().uptimeNanoseconds - startSheet }
+            guard let (sheet, tiles) = prepared else {
+                for crop in batch { try readSingle(crop) }
+                continue
+            }
+            try performVision([ocr], on: sheet, stage: .ocr, timing: timing)
+            var strings = Array(repeating: [String](), count: batch.count)
+            for observation in ocr.results ?? [] {
+                if let owner = shirtOwner(of: observation.boundingBox, in: tiles),
+                   let text = observation.topCandidates(1).first, text.confidence >= 0.65 {
+                    strings[owner].append(text.string)
+                }
+            }
+            for (i, crop) in batch.enumerated() {
+                players[crop.player].number = jerseyNumber(strings[i])
+            }
+        }
+    }
+
+    func observe(_ data: Data, ballSearch: CGRect?) throws -> ImageObservation {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               CGImageSourceGetType(source) as String? == UTType.jpeg.identifier,
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
@@ -152,31 +361,37 @@ private final class ImageObserver {
               (1...16384).contains(w), (1...16384).contains(h), w * h <= 48_000_000,
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
         else { throw RecordingError("视觉输入必须为可解码的 JPEG 原图，尺寸超过上限或数据无效") }
-        try performVision([rectangles] + (objects.map { [$0] } ?? []), on: image)
-        var ball: ObservedBall?
+        let frame = CGRect(x: 0, y: 0, width: w, height: h)
+        if let ballSearch, !frame.contains(ballSearch) {
+            throw RecordingError("足球搜索裁片超出原图")
+        }
+        let timing = measuresTiming ? VisionTiming() : nil
+        let requests: [VNRequest] = [rectangles, objects].compactMap { $0 }
+        try performVision(requests, on: image, stage: .detection, timing: timing)
+        var selected = SelectedDetections()
         if let objects {
-            guard let detections = objects.results as? [VNRecognizedObjectObservation] else {
-                throw RecordingError("足球模型须输出 Vision 可读取的带类别检测框")
-            }
-            for detection in detections {
-                guard let label = detection.labels.first,
-                      ["sports ball", "soccer ball", "football", "ball"].contains(label.identifier.lowercased()),
-                      label.confidence >= 0.35, label.confidence > (ball?.confidence ?? 0)
-                else { continue }
-                let box = pixelBox(detection.boundingBox, in: image)
-                guard !box.isEmpty else { continue }
-                ball = ObservedBall(pixel: [box.midX, box.midY], confidence: label.confidence)
+            selected = try selectedResults(objects, in: frame, includePeople: rectangles == nil, source: "coreML")
+            if selected.ball == nil, let ballSearch {
+                guard let crop = image.cropping(to: ballSearch) else {
+                    throw RecordingError("无法提取足球搜索裁片")
+                }
+                try performVision([objects], on: crop, stage: .detection, timing: timing)
+                selected.ball = try selectedResults(objects, in: ballSearch, includePeople: false,
+                                                    source: "coreML-ROI").ball
             }
         }
+        for person in rectangles?.results ?? [] {
+            selected.includePerson(confidence: person.confidence, bounds: person.boundingBox, in: frame)
+        }
         var players: [ObservedPlayer] = []
-        let people = (rectangles.results ?? []).filter { $0.confidence >= 0.35 }
-        let boxes = people.map { pixelBox($0.boundingBox, in: image) }
-        for (i, person) in people.enumerated() {
-            let box = boxes[i]
-            guard box.width >= 2, box.height >= 2, let crop = image.cropping(to: box) else { continue }
+        var shirts: [ShirtCrop] = []
+        let boxes = selected.people.map(\.box)
+        for (i, person) in selected.people.enumerated() {
+            let box = person.box
+            guard let crop = image.cropping(to: box) else { continue }
             var player = ObservedPlayer(box: [box.minX, box.minY, box.width, box.height],
                                         confidence: person.confidence)
-            try performVision([pose], on: crop)
+            try performVision([pose], on: crop, stage: .pose, timing: timing)
             if let poses = pose.results, poses.count == 1 {
                 let points = try poses[0].recognizedPoints(.all)
                 for (key, name) in bodyJoints {
@@ -197,18 +412,22 @@ private final class ImageObserver {
             if !overlaps, let shirt = image.cropping(to: torso) {
                 player.shirtRGB = shirtColor(shirt)
                 if shirt.width >= 12, shirt.height >= 12 {
-                    try performVision([ocr], on: shirt)
-                    let texts = (ocr.results ?? []).compactMap { $0.topCandidates(1).first }
-                    player.number = jerseyNumber(texts.filter { $0.confidence >= 0.65 }.map(\.string))
+                    shirts.append(ShirtCrop(player: players.count, image: shirt))
                 }
             }
             players.append(player)
         }
-        return ImageObservation(imageSize: [w, h], players: players, ball: ball)
+        try readNumbers(shirts, players: &players, timing: timing)
+        return ImageObservation(imageSize: [w, h], players: players, ball: selected.ball, timing: timing)
     }
 }
 
-func readVisionPacket(from input: FileHandle) throws -> Data? {
+struct VisionPacket {
+    let image: Data
+    let ballSearch: CGRect?
+}
+
+func readVisionPacket(from input: FileHandle, ballSearch: Bool = false) throws -> VisionPacket? {
     func read(_ size: Int, allowEOF: Bool = false) throws -> Data? {
         var bytes = Data()
         while bytes.count < size {
@@ -220,19 +439,30 @@ func readVisionPacket(from input: FileHandle) throws -> Data? {
         }
         return bytes
     }
-    guard let header = try read(4, allowEOF: true) else { return nil }
-    let count = header.reduce(0) { $0 * 256 + Int($1) }
+    func integer(_ bytes: Data) -> Int {
+        bytes.reduce(0) { $0 * 256 + Int($1) }
+    }
+    guard let header = try read(ballSearch ? 20 : 4, allowEOF: true) else { return nil }
+    var region: CGRect?
+    if ballSearch && header.prefix(16).contains(where: { $0 != 0 }) {
+        let x = integer(header[0..<4]), y = integer(header[4..<8])
+        let w = integer(header[8..<12]), h = integer(header[12..<16])
+        guard w > 0, h > 0 else { throw RecordingError("足球搜索裁片的宽高必须大于零") }
+        region = CGRect(x: x, y: y, width: w, height: h)
+    }
+    let count = integer(header.suffix(4))
     guard count > 0, count <= 32 * 1024 * 1024 else { throw RecordingError("JPEG 包长度超出范围") }
-    return try read(count)
+    guard let image = try read(count) else { throw RecordingError("JPEG 包缺少图像") }
+    return VisionPacket(image: image, ballSearch: region)
 }
 
-func runVisionWorker(modelURL: URL?) throws {
-    let observer = try ImageObserver(modelURL: modelURL)
+func runVisionWorker(options: VisionWorkerOptions) throws {
+    let observer = try ImageObserver(options: options)
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
-    while let packet = try readVisionPacket(from: .standardInput) {
+    while let packet = try readVisionPacket(from: .standardInput, ballSearch: options.ballSearch) {
         try autoreleasepool {
-            var line = try encoder.encode(observer.observe(packet))
+            var line = try encoder.encode(observer.observe(packet.image, ballSearch: packet.ballSearch))
             line.append(0x0a)
             try FileHandle.standardOutput.write(contentsOf: line)
         }

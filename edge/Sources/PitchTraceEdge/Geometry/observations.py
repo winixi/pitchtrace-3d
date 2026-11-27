@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 
 from calibrate import is_identifier, vector
+from observation_quality import add_model_quality
 
 
 def colour(value, maxima, name):
@@ -19,10 +20,15 @@ def colour(value, maxima, name):
 
 
 class Detector:
-    def __init__(self, settings, folder, executable):
+    def __init__(self, settings, model, executable):
         if not isinstance(settings, dict):
             raise ValueError("detector 必须是对象")
         self.backend = settings.get("backend", "vision")
+        self.model_task = model.task if model is not None else None
+        ocr_mode = settings.get("ocrMode", "batch")
+        if ocr_mode not in ("batch", "individual"):
+            raise ValueError("detector.ocrMode 需要 batch 或 individual")
+        self.ball_search = settings.get("ballSearch", False)
         if self.backend not in ("vision", "color-ball"):
             raise ValueError("detector.backend 需要 vision 或 color-ball")
         self.ball_range = None
@@ -46,8 +52,12 @@ class Detector:
         self.worker = None
         if self.backend == "vision":
             command = [executable, "vision-worker"]
-            if "model" in settings:
-                command.append(str(folder / settings["model"]))
+            if model is not None:
+                command.extend(model.worker_arguments())
+            if self.ball_search:
+                command.append("--ball-search")
+            if ocr_mode == "individual":
+                command.append("--individual-ocr")
             self.worker = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
     def ball_by_colour(self, image):
@@ -69,13 +79,15 @@ class Detector:
                                    "confidence": min(roundness, 1), "source": "ballHSV"})
         return candidates[0] if len(candidates) == 1 else None
 
-    def observe(self, image):
+    def observe(self, image, ball_roi=None):
         h, w = image.shape[:2]
         result = {"imageSize": [w, h], "players": [], "ball": None}
         if self.worker:
             success, jpeg = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 95])
             if not success:
                 raise ValueError("无法编码选中的原帧")
+            if self.ball_search:
+                self.worker.stdin.write(struct.pack(">4I", *(ball_roi or (0, 0, 0, 0))))
             self.worker.stdin.write(struct.pack(">I", jpeg.size))
             self.worker.stdin.write(jpeg.tobytes())
             self.worker.stdin.flush()
@@ -93,6 +105,9 @@ class Detector:
                         player["teamId"] = distances[0][1]
         if result.get("ball") is None and self.ball_range:
             result["ball"] = self.ball_by_colour(image)
+        if self.model_task is not None:
+            add_model_quality(image, result, model_people=self.model_task == "person-and-ball",
+                              search_box=ball_roi)
         return result
 
     def close(self):
@@ -115,6 +130,11 @@ def validate_observation(row):
         if not all(0 <= v < limit for v, limit in zip(p, size)):
             raise ValueError(f"像点超出原图：{p}")
 
+    def box(value, name):
+        x, y, w, h = vector(value, 4, name)
+        if min(x, y) < 0 or min(w, h) <= 0 or x + w > size[0] + 1e-5 or y + h > size[1] + 1e-5:
+            raise ValueError(f"无效{name}")
+
     def confidence(item):
         if "confidence" in item:
             number = item["confidence"]
@@ -130,9 +150,7 @@ def validate_observation(row):
     for player in row["players"]:
         if not isinstance(player, dict):
             raise ValueError("球员观测必须是对象")
-        x, y, w, h = vector(player.get("box"), 4, "球员框")
-        if min(x, y) < 0 or min(w, h) <= 0 or x + w > size[0] + 1e-5 or y + h > size[1] + 1e-5:
-            raise ValueError("无效球员框")
+        box(player.get("box"), "球员框")
         if player.get("foot") is not None:
             pixel(player["foot"])
         joints = player.get("joints", {})
@@ -150,4 +168,7 @@ def validate_observation(row):
         if not isinstance(row["ball"], dict):
             raise ValueError("球观测必须是像点对象或 null")
         pixel(row["ball"].get("pixel"))
+        for field, name in (("box", "球框"), ("searchBox", "足球搜索框")):
+            if field in row["ball"]:
+                box(row["ball"][field], name)
         confidence(row["ball"])

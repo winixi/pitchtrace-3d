@@ -1,0 +1,457 @@
+{
+  "model": {
+    "modelManifest": {
+      "format": "pitchtrace-vision-model-v1",
+      "model": "yolo11n.mlpackage",
+      "task": "person-and-ball",
+      "version": "YOLO11n COCO, Ultralytics 8.3.139, INT8 NMS",
+      "source": "https://github.com/ultralytics/yolo-ios-app/releases/download/v8.3.0/yolo11n.mlpackage.zip",
+      "license": "AGPL-3.0",
+      "preprocessing": "vision-scale-fit"
+    },
+    "modelManifestSha256": "bbbe874d8f253b62e08f83435d24943cc9ee8261675aad7ecd9fed487ccbb519",
+    "modelSha256": {
+      "Data/com.apple.CoreML/model.mlmodel": "a50cc291e2d59900e01006ce4dfd7ce13d5d50bd598e594666e59a15808c35ae",
+      "Data/com.apple.CoreML/weights/weight.bin": "b7a1ff0299c22d5524e4eac7fa17db7822d6bb3d7447c1d1db39b08a5478057a",
+      "Manifest.json": "7b14b31edf25e60527330c99edc595ba8f5b6de5a563e99300b66bb9e5b2da40"
+    }
+  },
+  "workerSha256": "a1cd0a70bf9515441852e6f80f186d7111be2a8deed5c83b78a38e8c8191c157",
+  "opencv": "5.0.0",
+  "datasetSha256": "cc1493614c97e790fc0f722f6b0def622b81cb68ac91641fbb778558058c3332",
+  "labelsSha256": "d9b73973e45bcd9a37565168f6b7b5e7e5388839a71c36c8772c7b2a189bbd3a",
+  "videosSha256": {
+    "cam3": "b2d75f42d12c51a19be354e2ae428a55a767a03c048f6778d70ef221e33a380b",
+    "cam4": "92b111f70c581f610c3b7604d93c8c59c760cc461eb978b5946923985fa8dc30",
+    "cam5": "c59d2298b6baf61734c4fecc6c129d320a55c5cd49faf14d8db1bda8709b2e76",
+    "cam6": "8f08fa9b4cbed1cb019b37373eea7eca0c9a9110436b7ce9ffb46a31e7df161d"
+  },
+  "samplingHz": 10,
+  "smallMaxSidePx": 16,
+  "parallelClips": 2,
+  "boxHitRule": "center-inside-xywh",
+  "pointHitRadiusPx": 3,
+  "total": {
+    "sampled": 2400,
+    "statusCounts": {
+      "unlabeled": 1847,
+      "visible": 553
+    },
+    "reasonCounts": {
+      "noLabel": 1847,
+      "noViewTriangulation": 92,
+      "reprojectionAboveTwoDiameters": 1
+    },
+    "visible": {
+      "visible": 553,
+      "offHits": 1,
+      "onHits": 5,
+      "offRecall": 0.0018083182640144665,
+      "onRecall": 0.009041591320072333,
+      "gain": 4,
+      "loss": 0,
+      "gainFromROI": 4,
+      "both": 1,
+      "neither": 548
+    },
+    "small": {
+      "visible": 439,
+      "offHits": 1,
+      "onHits": 5,
+      "offRecall": 0.002277904328018223,
+      "onRecall": 0.011389521640091117,
+      "gain": 4,
+      "loss": 0,
+      "gainFromROI": 4,
+      "both": 1,
+      "neither": 434
+    },
+    "larger": {
+      "visible": 21,
+      "offHits": 0,
+      "onHits": 0,
+      "offRecall": 0.0,
+      "onRecall": 0.0,
+      "gain": 0,
+      "loss": 0,
+      "gainFromROI": 0,
+      "both": 0,
+      "neither": 21
+    },
+    "farRegion": {
+      "visible": 241,
+      "offHits": 0,
+      "onHits": 0,
+      "offRecall": 0.0,
+      "onRecall": 0.0,
+      "gain": 0,
+      "loss": 0,
+      "gainFromROI": 0,
+      "both": 0,
+      "neither": 241
+    },
+    "farSmall": {
+      "visible": 241,
+      "offHits": 0,
+      "onHits": 0,
+      "offRecall": 0.0,
+      "onRecall": 0.0,
+      "gain": 0,
+      "loss": 0,
+      "gainFromROI": 0,
+      "both": 0,
+      "neither": 241
+    },
+    "predictedRegions": 8,
+    "roiSearches": 7,
+    "roiDetections": 4,
+    "offFalsePositives": {
+      "wrongLocationOnVisible": 1,
+      "detectionOnAbsent": 0
+    },
+    "offUnscoredDetections": 0,
+    "onFalsePositives": {
+      "wrongLocationOnVisible": 1,
+      "detectionOnAbsent": 0
+    },
+    "onUnscoredDetections": 0
+  },
+  "clips": {
+    "cam3": {
+      "sampled": 600,
+      "statusCounts": {
+        "unlabeled": 426,
+        "visible": 174
+      },
+      "reasonCounts": {
+        "noLabel": 426,
+        "noViewTriangulation": 16
+      },
+      "visible": {
+        "visible": 174,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": 0.0,
+        "onRecall": 0.0,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 174
+      },
+      "small": {
+        "visible": 158,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": 0.0,
+        "onRecall": 0.0,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 158
+      },
+      "larger": {
+        "visible": 0,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": null,
+        "onRecall": null,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 0
+      },
+      "farRegion": {
+        "visible": 120,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": 0.0,
+        "onRecall": 0.0,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 120
+      },
+      "farSmall": {
+        "visible": 120,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": 0.0,
+        "onRecall": 0.0,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 120
+      },
+      "predictedRegions": 0,
+      "roiSearches": 0,
+      "roiDetections": 0,
+      "offFalsePositives": {
+        "wrongLocationOnVisible": 0,
+        "detectionOnAbsent": 0
+      },
+      "offUnscoredDetections": 0,
+      "onFalsePositives": {
+        "wrongLocationOnVisible": 0,
+        "detectionOnAbsent": 0
+      },
+      "onUnscoredDetections": 0
+    },
+    "cam4": {
+      "sampled": 600,
+      "statusCounts": {
+        "visible": 209,
+        "unlabeled": 391
+      },
+      "reasonCounts": {
+        "noViewTriangulation": 68,
+        "noLabel": 391,
+        "reprojectionAboveTwoDiameters": 1
+      },
+      "visible": {
+        "visible": 209,
+        "offHits": 1,
+        "onHits": 5,
+        "offRecall": 0.004784688995215311,
+        "onRecall": 0.023923444976076555,
+        "gain": 4,
+        "loss": 0,
+        "gainFromROI": 4,
+        "both": 1,
+        "neither": 204
+      },
+      "small": {
+        "visible": 119,
+        "offHits": 1,
+        "onHits": 5,
+        "offRecall": 0.008403361344537815,
+        "onRecall": 0.04201680672268908,
+        "gain": 4,
+        "loss": 0,
+        "gainFromROI": 4,
+        "both": 1,
+        "neither": 114
+      },
+      "larger": {
+        "visible": 21,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": 0.0,
+        "onRecall": 0.0,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 21
+      },
+      "farRegion": {
+        "visible": 40,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": 0.0,
+        "onRecall": 0.0,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 40
+      },
+      "farSmall": {
+        "visible": 40,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": 0.0,
+        "onRecall": 0.0,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 40
+      },
+      "predictedRegions": 8,
+      "roiSearches": 7,
+      "roiDetections": 4,
+      "offFalsePositives": {
+        "wrongLocationOnVisible": 1,
+        "detectionOnAbsent": 0
+      },
+      "offUnscoredDetections": 0,
+      "onFalsePositives": {
+        "wrongLocationOnVisible": 1,
+        "detectionOnAbsent": 0
+      },
+      "onUnscoredDetections": 0
+    },
+    "cam5": {
+      "sampled": 600,
+      "statusCounts": {
+        "unlabeled": 519,
+        "visible": 81
+      },
+      "reasonCounts": {
+        "noLabel": 519
+      },
+      "visible": {
+        "visible": 81,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": 0.0,
+        "onRecall": 0.0,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 81
+      },
+      "small": {
+        "visible": 81,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": 0.0,
+        "onRecall": 0.0,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 81
+      },
+      "larger": {
+        "visible": 0,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": null,
+        "onRecall": null,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 0
+      },
+      "farRegion": {
+        "visible": 81,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": 0.0,
+        "onRecall": 0.0,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 81
+      },
+      "farSmall": {
+        "visible": 81,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": 0.0,
+        "onRecall": 0.0,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 81
+      },
+      "predictedRegions": 0,
+      "roiSearches": 0,
+      "roiDetections": 0,
+      "offFalsePositives": {
+        "wrongLocationOnVisible": 0,
+        "detectionOnAbsent": 0
+      },
+      "offUnscoredDetections": 0,
+      "onFalsePositives": {
+        "wrongLocationOnVisible": 0,
+        "detectionOnAbsent": 0
+      },
+      "onUnscoredDetections": 0
+    },
+    "cam6": {
+      "sampled": 600,
+      "statusCounts": {
+        "unlabeled": 511,
+        "visible": 89
+      },
+      "reasonCounts": {
+        "noLabel": 511,
+        "noViewTriangulation": 8
+      },
+      "visible": {
+        "visible": 89,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": 0.0,
+        "onRecall": 0.0,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 89
+      },
+      "small": {
+        "visible": 81,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": 0.0,
+        "onRecall": 0.0,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 81
+      },
+      "larger": {
+        "visible": 0,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": null,
+        "onRecall": null,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 0
+      },
+      "farRegion": {
+        "visible": 0,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": null,
+        "onRecall": null,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 0
+      },
+      "farSmall": {
+        "visible": 0,
+        "offHits": 0,
+        "onHits": 0,
+        "offRecall": null,
+        "onRecall": null,
+        "gain": 0,
+        "loss": 0,
+        "gainFromROI": 0,
+        "both": 0,
+        "neither": 0
+      },
+      "predictedRegions": 0,
+      "roiSearches": 0,
+      "roiDetections": 0,
+      "offFalsePositives": {
+        "wrongLocationOnVisible": 0,
+        "detectionOnAbsent": 0
+      },
+      "offUnscoredDetections": 0,
+      "onFalsePositives": {
+        "wrongLocationOnVisible": 0,
+        "detectionOnAbsent": 0
+      },
+      "onUnscoredDetections": 0
+    }
+  }
+}

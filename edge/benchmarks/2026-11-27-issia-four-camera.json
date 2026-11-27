@@ -1,0 +1,630 @@
+{
+  "dateUtc": "2026-11-27T04:30:14.279695+00:00",
+  "chip": "Apple M1 Pro",
+  "memoryBytes": 34359738368,
+  "macOS": "27.2.1",
+  "python": "3.14.6",
+  "openCV": "5.0.0",
+  "binarySha256": "a1cd0a70bf9515441852e6f80f186d7111be2a8deed5c83b78a38e8c8191c157",
+  "modelManifest": {
+    "format": "pitchtrace-vision-model-v1",
+    "model": "yolo11n.mlpackage",
+    "task": "person-and-ball",
+    "version": "YOLO11n COCO, Ultralytics 8.3.139, INT8 NMS",
+    "source": "https://github.com/ultralytics/yolo-ios-app/releases/download/v8.3.0/yolo11n.mlpackage.zip",
+    "license": "AGPL-3.0",
+    "preprocessing": "vision-scale-fit"
+  },
+  "modelManifestSha256": "bbbe874d8f253b62e08f83435d24943cc9ee8261675aad7ecd9fed487ccbb519",
+  "modelSha256": {
+    "Data/com.apple.CoreML/model.mlmodel": "a50cc291e2d59900e01006ce4dfd7ce13d5d50bd598e594666e59a15808c35ae",
+    "Data/com.apple.CoreML/weights/weight.bin": "b7a1ff0299c22d5524e4eac7fa17db7822d6bb3d7447c1d1db39b08a5478057a",
+    "Manifest.json": "7b14b31edf25e60527330c99edc595ba8f5b6de5a563e99300b66bb9e5b2da40"
+  },
+  "settings": {
+    "sampleHzPerCamera": 10,
+    "cameraCount": 4,
+    "inputSeconds": 30,
+    "ballSearch": true,
+    "warmupSamples": 0
+  },
+  "runs": [
+    {
+      "selectedFrames": 1200,
+      "completedFrames": 1200,
+      "elapsedSeconds": 396.6831,
+      "firstResultSeconds": 64.6867,
+      "aggregateFramesPerSecond": 3.025,
+      "processingOverRequiredRate": 0.0756,
+      "fpsAfterFirstSecondOfCompletedSamples": 3.632,
+      "endOfInputOutstanding": 1200,
+      "peakOutstandingIncludesInflight": 1200,
+      "peakConcurrentFrameProcessing": 1,
+      "drainSeconds": 366.6831,
+      "exposureToResultP95Seconds": 353.2424,
+      "exposureToResultMaxSeconds": 366.7631,
+      "byCamera": {
+        "A": {
+          "samples": 300,
+          "decodedSourceFrames": 749,
+          "fpsOverEntireRun": 0.756,
+          "fpsUntilCameraFinished": 0.757,
+          "fpsAfterFirstSecondOfCameraSamples": 0.906,
+          "completedByInputEnd": 0,
+          "firstResultSeconds": 64.6867,
+          "lastResultSeconds": 396.3526,
+          "meanPlayers": 7.23,
+          "roiOffered": 0,
+          "roiSearches": 0,
+          "fullBallHits": 0,
+          "roiBallHits": 0
+        },
+        "B": {
+          "samples": 300,
+          "decodedSourceFrames": 749,
+          "fpsOverEntireRun": 0.756,
+          "fpsUntilCameraFinished": 0.757,
+          "fpsAfterFirstSecondOfCameraSamples": 0.906,
+          "completedByInputEnd": 0,
+          "firstResultSeconds": 65.2159,
+          "lastResultSeconds": 396.5549,
+          "meanPlayers": 10.75,
+          "roiOffered": 8,
+          "roiSearches": 7,
+          "fullBallHits": 2,
+          "roiBallHits": 4
+        },
+        "C": {
+          "samples": 300,
+          "decodedSourceFrames": 749,
+          "fpsOverEntireRun": 0.756,
+          "fpsUntilCameraFinished": 0.756,
+          "fpsAfterFirstSecondOfCameraSamples": 0.907,
+          "completedByInputEnd": 0,
+          "firstResultSeconds": 65.3101,
+          "lastResultSeconds": 396.6212,
+          "meanPlayers": 3.1,
+          "roiOffered": 0,
+          "roiSearches": 0,
+          "fullBallHits": 0,
+          "roiBallHits": 0
+        },
+        "D": {
+          "samples": 300,
+          "decodedSourceFrames": 749,
+          "fpsOverEntireRun": 0.756,
+          "fpsUntilCameraFinished": 0.756,
+          "fpsAfterFirstSecondOfCameraSamples": 0.908,
+          "completedByInputEnd": 0,
+          "firstResultSeconds": 65.5965,
+          "lastResultSeconds": 396.6831,
+          "meanPlayers": 6.19,
+          "roiOffered": 0,
+          "roiSearches": 0,
+          "fullBallHits": 0,
+          "roiBallHits": 0
+        }
+      },
+      "duringInput": [
+        {
+          "second": 1,
+          "due": 40,
+          "completed": 0,
+          "outstanding": 40
+        },
+        {
+          "second": 2,
+          "due": 80,
+          "completed": 0,
+          "outstanding": 80
+        },
+        {
+          "second": 3,
+          "due": 120,
+          "completed": 0,
+          "outstanding": 120
+        },
+        {
+          "second": 4,
+          "due": 160,
+          "completed": 0,
+          "outstanding": 160
+        },
+        {
+          "second": 5,
+          "due": 200,
+          "completed": 0,
+          "outstanding": 200
+        },
+        {
+          "second": 6,
+          "due": 240,
+          "completed": 0,
+          "outstanding": 240
+        },
+        {
+          "second": 7,
+          "due": 280,
+          "completed": 0,
+          "outstanding": 280
+        },
+        {
+          "second": 8,
+          "due": 320,
+          "completed": 0,
+          "outstanding": 320
+        },
+        {
+          "second": 9,
+          "due": 360,
+          "completed": 0,
+          "outstanding": 360
+        },
+        {
+          "second": 10,
+          "due": 400,
+          "completed": 0,
+          "outstanding": 400
+        },
+        {
+          "second": 11,
+          "due": 440,
+          "completed": 0,
+          "outstanding": 440
+        },
+        {
+          "second": 12,
+          "due": 480,
+          "completed": 0,
+          "outstanding": 480
+        },
+        {
+          "second": 13,
+          "due": 520,
+          "completed": 0,
+          "outstanding": 520
+        },
+        {
+          "second": 14,
+          "due": 560,
+          "completed": 0,
+          "outstanding": 560
+        },
+        {
+          "second": 15,
+          "due": 600,
+          "completed": 0,
+          "outstanding": 600
+        },
+        {
+          "second": 16,
+          "due": 640,
+          "completed": 0,
+          "outstanding": 640
+        },
+        {
+          "second": 17,
+          "due": 680,
+          "completed": 0,
+          "outstanding": 680
+        },
+        {
+          "second": 18,
+          "due": 720,
+          "completed": 0,
+          "outstanding": 720
+        },
+        {
+          "second": 19,
+          "due": 760,
+          "completed": 0,
+          "outstanding": 760
+        },
+        {
+          "second": 20,
+          "due": 800,
+          "completed": 0,
+          "outstanding": 800
+        },
+        {
+          "second": 21,
+          "due": 840,
+          "completed": 0,
+          "outstanding": 840
+        },
+        {
+          "second": 22,
+          "due": 880,
+          "completed": 0,
+          "outstanding": 880
+        },
+        {
+          "second": 23,
+          "due": 920,
+          "completed": 0,
+          "outstanding": 920
+        },
+        {
+          "second": 24,
+          "due": 960,
+          "completed": 0,
+          "outstanding": 960
+        },
+        {
+          "second": 25,
+          "due": 1000,
+          "completed": 0,
+          "outstanding": 1000
+        },
+        {
+          "second": 26,
+          "due": 1040,
+          "completed": 0,
+          "outstanding": 1040
+        },
+        {
+          "second": 27,
+          "due": 1080,
+          "completed": 0,
+          "outstanding": 1080
+        },
+        {
+          "second": 28,
+          "due": 1120,
+          "completed": 0,
+          "outstanding": 1120
+        },
+        {
+          "second": 29,
+          "due": 1160,
+          "completed": 0,
+          "outstanding": 1160
+        },
+        {
+          "second": 30,
+          "due": 1200,
+          "completed": 0,
+          "outstanding": 1200
+        }
+      ],
+      "workers": 1,
+      "maxReleaseJitterSeconds": 0.0194,
+      "traceFile": "2026-11-27-issia-traces/10hz-1-workers.ndjson.gz",
+      "traceSha256": "7749f123e8a2be0c63a962b4c8c191e06855785fc9ff8f0270ae12484817e131"
+    },
+    {
+      "selectedFrames": 1200,
+      "completedFrames": 1200,
+      "elapsedSeconds": 121.3119,
+      "firstResultSeconds": 1.5784,
+      "aggregateFramesPerSecond": 9.892,
+      "processingOverRequiredRate": 0.2473,
+      "fpsAfterFirstSecondOfCompletedSamples": 9.973,
+      "endOfInputOutstanding": 772,
+      "peakOutstandingIncludesInflight": 773,
+      "peakConcurrentFrameProcessing": 4,
+      "drainSeconds": 91.3119,
+      "exposureToResultP95Seconds": 67.6489,
+      "exposureToResultMaxSeconds": 91.3919,
+      "byCamera": {
+        "A": {
+          "samples": 300,
+          "decodedSourceFrames": 749,
+          "fpsOverEntireRun": 2.473,
+          "fpsUntilCameraFinished": 3.568,
+          "fpsAfterFirstSecondOfCameraSamples": 3.619,
+          "completedByInputEnd": 104,
+          "firstResultSeconds": 1.5784,
+          "lastResultSeconds": 84.0744,
+          "meanPlayers": 7.23,
+          "roiOffered": 0,
+          "roiSearches": 0,
+          "fullBallHits": 0,
+          "roiBallHits": 0
+        },
+        "B": {
+          "samples": 300,
+          "decodedSourceFrames": 749,
+          "fpsOverEntireRun": 2.473,
+          "fpsUntilCameraFinished": 2.473,
+          "fpsAfterFirstSecondOfCameraSamples": 2.55,
+          "completedByInputEnd": 90,
+          "firstResultSeconds": 4.1332,
+          "lastResultSeconds": 121.3119,
+          "meanPlayers": 10.75,
+          "roiOffered": 8,
+          "roiSearches": 7,
+          "fullBallHits": 2,
+          "roiBallHits": 4
+        },
+        "C": {
+          "samples": 300,
+          "decodedSourceFrames": 749,
+          "fpsOverEntireRun": 2.473,
+          "fpsUntilCameraFinished": 6.762,
+          "fpsAfterFirstSecondOfCameraSamples": 7.129,
+          "completedByInputEnd": 162,
+          "firstResultSeconds": 2.168,
+          "lastResultSeconds": 44.3633,
+          "meanPlayers": 3.1,
+          "roiOffered": 0,
+          "roiSearches": 0,
+          "fullBallHits": 0,
+          "roiBallHits": 0
+        },
+        "D": {
+          "samples": 300,
+          "decodedSourceFrames": 749,
+          "fpsOverEntireRun": 2.473,
+          "fpsUntilCameraFinished": 4.062,
+          "fpsAfterFirstSecondOfCameraSamples": 4.268,
+          "completedByInputEnd": 72,
+          "firstResultSeconds": 3.1358,
+          "lastResultSeconds": 73.8586,
+          "meanPlayers": 6.19,
+          "roiOffered": 0,
+          "roiSearches": 0,
+          "fullBallHits": 0,
+          "roiBallHits": 0
+        }
+      },
+      "duringInput": [
+        {
+          "second": 1,
+          "due": 40,
+          "completed": 0,
+          "outstanding": 40
+        },
+        {
+          "second": 2,
+          "due": 80,
+          "completed": 2,
+          "outstanding": 78
+        },
+        {
+          "second": 3,
+          "due": 120,
+          "completed": 12,
+          "outstanding": 108
+        },
+        {
+          "second": 4,
+          "due": 160,
+          "completed": 24,
+          "outstanding": 136
+        },
+        {
+          "second": 5,
+          "due": 200,
+          "completed": 40,
+          "outstanding": 160
+        },
+        {
+          "second": 6,
+          "due": 240,
+          "completed": 55,
+          "outstanding": 185
+        },
+        {
+          "second": 7,
+          "due": 280,
+          "completed": 70,
+          "outstanding": 210
+        },
+        {
+          "second": 8,
+          "due": 320,
+          "completed": 89,
+          "outstanding": 231
+        },
+        {
+          "second": 9,
+          "due": 360,
+          "completed": 106,
+          "outstanding": 254
+        },
+        {
+          "second": 10,
+          "due": 400,
+          "completed": 120,
+          "outstanding": 280
+        },
+        {
+          "second": 11,
+          "due": 440,
+          "completed": 136,
+          "outstanding": 304
+        },
+        {
+          "second": 12,
+          "due": 480,
+          "completed": 149,
+          "outstanding": 331
+        },
+        {
+          "second": 13,
+          "due": 520,
+          "completed": 164,
+          "outstanding": 356
+        },
+        {
+          "second": 14,
+          "due": 560,
+          "completed": 179,
+          "outstanding": 381
+        },
+        {
+          "second": 15,
+          "due": 600,
+          "completed": 195,
+          "outstanding": 405
+        },
+        {
+          "second": 16,
+          "due": 640,
+          "completed": 208,
+          "outstanding": 432
+        },
+        {
+          "second": 17,
+          "due": 680,
+          "completed": 221,
+          "outstanding": 459
+        },
+        {
+          "second": 18,
+          "due": 720,
+          "completed": 237,
+          "outstanding": 483
+        },
+        {
+          "second": 19,
+          "due": 760,
+          "completed": 250,
+          "outstanding": 510
+        },
+        {
+          "second": 20,
+          "due": 800,
+          "completed": 264,
+          "outstanding": 536
+        },
+        {
+          "second": 21,
+          "due": 840,
+          "completed": 279,
+          "outstanding": 561
+        },
+        {
+          "second": 22,
+          "due": 880,
+          "completed": 292,
+          "outstanding": 588
+        },
+        {
+          "second": 23,
+          "due": 920,
+          "completed": 308,
+          "outstanding": 612
+        },
+        {
+          "second": 24,
+          "due": 960,
+          "completed": 325,
+          "outstanding": 635
+        },
+        {
+          "second": 25,
+          "due": 1000,
+          "completed": 341,
+          "outstanding": 659
+        },
+        {
+          "second": 26,
+          "due": 1040,
+          "completed": 359,
+          "outstanding": 681
+        },
+        {
+          "second": 27,
+          "due": 1080,
+          "completed": 378,
+          "outstanding": 702
+        },
+        {
+          "second": 28,
+          "due": 1120,
+          "completed": 394,
+          "outstanding": 726
+        },
+        {
+          "second": 29,
+          "due": 1160,
+          "completed": 411,
+          "outstanding": 749
+        },
+        {
+          "second": 30,
+          "due": 1200,
+          "completed": 428,
+          "outstanding": 772
+        }
+      ],
+      "workers": 4,
+      "maxReleaseJitterSeconds": 0.0211,
+      "traceFile": "2026-11-27-issia-traces/10hz-4-workers.ndjson.gz",
+      "traceSha256": "02a1d247d993662c31b77a1126c551d067d60e1ab1a63d6fa0864ac525b26dc3"
+    }
+  ],
+  "sources": [
+    {
+      "cameraId": "A",
+      "file": "cam3.avi",
+      "startFrameZeroBased": 400,
+      "fps": 25.0,
+      "imageSize": [
+        1920,
+        1080
+      ],
+      "framesInFile": 3002,
+      "sha256": "b2d75f42d12c51a19be354e2ae428a55a767a03c048f6778d70ef221e33a380b"
+    },
+    {
+      "cameraId": "B",
+      "file": "cam4.avi",
+      "startFrameZeroBased": 400,
+      "fps": 25.0,
+      "imageSize": [
+        1920,
+        1080
+      ],
+      "framesInFile": 3002,
+      "sha256": "92b111f70c581f610c3b7604d93c8c59c760cc461eb978b5946923985fa8dc30"
+    },
+    {
+      "cameraId": "C",
+      "file": "cam5.avi",
+      "startFrameZeroBased": 400,
+      "fps": 25.0,
+      "imageSize": [
+        1920,
+        1080
+      ],
+      "framesInFile": 3002,
+      "sha256": "c59d2298b6baf61734c4fecc6c129d320a55c5cd49faf14d8db1bda8709b2e76"
+    },
+    {
+      "cameraId": "D",
+      "file": "cam6.avi",
+      "startFrameZeroBased": 400,
+      "fps": 25.0,
+      "imageSize": [
+        1920,
+        1080
+      ],
+      "framesInFile": 3002,
+      "sha256": "8f08fa9b4cbed1cb019b37373eea7eca0c9a9110436b7ce9ffb46a31e7df161d"
+    }
+  ],
+  "experiment": {
+    "dataset": "ISSIA Soccer Dataset",
+    "sourceUrl": "https://pspagnolo.jimdofree.com/download/",
+    "cameraMap": {
+      "A": "cam3",
+      "B": "cam4",
+      "C": "cam5",
+      "D": "cam6"
+    },
+    "sourceCodec": "MPEG-4 Part 2 (AVI)",
+    "build": "SwiftPM release",
+    "measurement": "原速投放原帧索引，按需解码、JPEG 重编码、Core ML、姿态/OCR、观测质量与裁片历史，含每组工作进程启动至最后一帧结果。不计已下载录像的初次开文件与定位、标定、融合、归档和网络。",
+    "workloadNote": "单进程组在上海时间约12:31:09至12:31:23与单线程图像盲审解码重叠。该组第40帧完成之后的时段与盲审无重叠。四进程组使用新的工作进程，系统模型缓存未重置。"
+  },
+  "inferenceCodeSha256": {
+    "observations.py": "8bc1f97675cf16cf9545d49079a965a9efed3bddb38ecb8a596cac5671dca087",
+    "observation_quality.py": "15c6774ab236b05f9262b8e10317d06269bbec9dfcc54fdc9715b951da6fa206",
+    "vision_model.py": "7fe82c24be7fed74bfbb509dcb8d028b95f22f292b5ce47e3333332a77169745",
+    "ball_search.py": "45be5a855fee2f7b5cfef99617c27565fa2424c36d535bdabffb0964fbd134f2",
+    "tracking.py": "b5b031c6e156099a92ec07b260ec758d7decf9a06bd0402e1e80e1af7594773c"
+  }
+}

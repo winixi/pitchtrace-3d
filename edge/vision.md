@@ -1,11 +1,66 @@
-# Edge 单视角观测
+# Edge 单视角人球观测
 
-`pitchtrace-edge vision-worker [模型路径]` 在 macOS 14+ 上接收连续 JPEG 帧。调用方在每张原尺寸、编码方向朝上的 JPEG 前写入 4 字节大端无符号长度，读回一行 UTF-8 JSON，再发送下一帧。最后在两帧之间关闭标准输入。解码失败、包截断、模型错误和 Vision 执行失败会结束进程并在标准错误说明原因。单个 JPEG 上限 32 MiB、48 百万像素。
+## 在比赛中启用 YOLO11n
 
-`imageSize` 为编码像素宽高，像素原点在左上。`players[].box` 按左、上、宽、高记录系统 Vision 全身人框。在该框内单独检测姿态，只有检测到一个人体时才取其可见关节。`joints` 按人体左右侧用 `leftShoulder`、`leftElbow`、`leftWrist`、`leftHip`、`leftKnee`、`leftAnkle` 及对应右侧名称记录二维像素，另可包含 `nose`、`neck`、`root`。当脚踝可见、靠近人框下沿且框底在画面内时，`foot` 估计鞋底位置，脚被遮挡或出画时省略。人框和脚点对远端小目标的误差应由回放样本评估。
+在 macOS 14+ 的比赛机上，从仓库根目录运行以下命令。假设比赛配置保存在 `$match_dir/match.json`，请先把 `match_dir` 设为实际的比赛目录。准备工具需要 Python 3，只在准备权重时联网。
 
-躯干区域与其他人框分开时，对其裁片执行系统文字识别。候选限定为一至两位数字，无法确定唯一候选时省略 `number`。`shirtRGB` 为相同区域采样的 sRGB 三通道颜色值（0–255），可供队色比对。球队、名单身份与号码的时序确认由后续关联模块处理。
+```sh
+match_dir=/path/to/match
+python3 edge/models/prepare-yolo11n.py "$match_dir/models"
+```
 
-提供本地 Core ML 带非极大值抑制的对象检测模型（`.mlmodelc`、`.mlpackage` 或 `.mlmodel`）可启用球检测。模型须接受图像输入并经 Vision 输出带类别的检测框。标签支持 `sports ball`、`soccer ball`、`football`、`ball`，取置信度达到 0.35 的最高候选框中心。未提供模型、无球或置信度不足时，`ball` 为 `null`。模型来自运行者指定的本地文件。单图观测描述球的二维像素，后续融合结合标定、曝光和多视角证据决定三维位置。
+命令校验固定版本 ZIP 的 SHA-256，然后将 `yolo11n.mlpackage` 和 `yolo11n.json` 放入指定的新目录。现场无网时可先取得同一 ZIP，再加 `--archive /path/to/yolo11n.mlpackage.zip`。此基线是上游提供的 384×640（宽×高）、INT8 权重、带非极大值抑制（NMS）的 COCO 检测器，许可见模型清单。[上游权重发布页](https://github.com/ultralytics/yolo-ios-app/releases/tag/v8.3.0) · [随附清单](models/yolo11n.json)
 
-已用 Apple 提供的 YOLOv3TinyInt8LUT 权重验证原生模型编译和推理。权重独立提供，可在比赛配置的 `detector.model` 中指定本地路径。[Apple 模型目录](https://developer.apple.com/machine-learning/models/)
+在比赛配置中填写以下 `detector` 对象，然后照常执行 `run-match`、`stream-match` 或 `process-match`。
+
+```json
+{
+  "detector": {
+    "backend": "vision",
+    "modelManifest": "models/yolo11n.json",
+    "ballSearch": true
+  }
+}
+```
+
+`detector.workers` 可设为 1–8 的整数，默认 1。四路比赛可在上面的配置中加入 `"workers": 4`。Edge 将机位固定分配给工作进程，同一机位按曝光顺序解码和推理。收到当前曝光组的全部有效机位结果后，才按原顺序融合并提交场景。工作进程数受已配置机位数限制。
+
+联合检测每帧执行一次全图 Core ML 推理，接受 `person` 和球类标签 `sports ball`、`soccer ball`、`football`、`ball`。保留置信度至少 0.35 的人框，在达到同一门槛的球框中保留最高分。系统 Vision 随后只在人框内估计姿态、从尺寸足够且与其他人框分开的躯干裁片识别号码。场上无人时输出空球员数组，球缺测时输出 `ball: null`。
+
+`detector.ocrMode` 默认使用 `batch`。同一画面中符合读号条件、宽高均不超过 96 px 的躯干裁片，每批最多 6 人拼成一张图，送入 Vision 的高精度文字识别。文字框须完整落入一个人的裁片才能归给该人。大裁片及短边至少 32 px、中央灰度第 90 与第 10 百分位差至少 128 的高反差裁片保留逐人识别。改为 `individual` 可对全部符合条件的裁片逐人精读。复算比较时应为不同配置分配不同的 `streamEpoch`。
+
+`ballSearch` 默认关闭。开启后，每个机位用最近两次二维实测球心和曝光时刻预测原图搜索区域。只有一次观测时沿用该球心，最长沿用 0.3 秒。没有近期球心时，Edge 从当前原图寻找草地附近的小亮斑，并按曝光时隙轮换候选区域和画面分块。全图模型漏球时才在选中的原图裁片上额外运行一次模型。
+
+固定机位还可以用连续三个曝光中的实际亮斑找回运动的球。每帧最多保留 48 个紧致亮斑。候选须有相符的尺寸与位移，并通过人框排除、整体平移和歧义检查。每个机位在 `ballSearch.candidates` 中单独保存候选，换标定、切换媒体周期或图像尺寸变化后重新开始。恢复比赛时从已归档的二维观测还原历史。暗色球、停住的球与镜头移动会影响这一方法。
+
+## 接入已有模型
+
+`detector.modelManifest` 路径相对于比赛配置，清单中的 `model` 路径相对于清单。必填字段如下。
+
+| 字段 | 内容 |
+| --- | --- |
+| `format` | `pitchtrace-vision-model-v1` |
+| `model` | 本地 `.mlpackage`、`.mlmodel` 或 `.mlmodelc`，图像输入，Vision 输出带类别的检测框 |
+| `task` | `person-and-ball` 使用模型提供的人框和球框。`ball` 使用模型找球、系统 Vision 检测人体 |
+| `preprocessing` | `vision-scale-fit`，按原图比例缩放并填边 |
+| `version`、`source`、`license` | 分别记录权重版本、来源、许可，均为非空字符串 |
+
+自有 YOLO11 检测器导出 Core ML 时需使用固定图像输入，启用 `nms=True`，保留类别名。直接填写已有的 `detector.model` 路径沿用足球专用模式。省略模型时，系统 Vision 仍可做人体、姿态和文字识别。[Core ML 导出选项](https://docs.ultralytics.com/integrations/coreml/)
+
+## 复核原图与模型版本
+
+`scene-evidence` 的 `observations` 保存单机位的二维观测。`imageSize` 为编码像素宽高，坐标原点在原图左上。人框与球框 `box` 均按 `[左, 上, 宽, 高]` 记录。球观测同时保存球心 `pixel`、置信度 `confidence` 和来源 `source`。`coreML` 表示模型全图命中，`coreML-ROI` 表示模型裁片命中，`motion-appearance` 表示用多帧外观与运动确认，`ballHSV` 表示显式配置的球色检测。精搜命中记录原图搜索范围 `searchBox`，`searchMode` 中的 `cold` 表示没有近期球心，`history` 表示根据近期球心追搜。
+
+模型框的 `quality.personOverlapFraction` 是其他人框覆盖该框的面积占比，多框重叠区域只计一次。`quality.laplacianVariance` 是原图灰度裁片内的拉普拉斯方差，可在相同尺度、相似纹理下帮助复核模糊帧。裁片任一边小于 4 像素时省略该值。
+
+人框中仅检出一个人体时记录可见关节 `joints`，用 `leftShoulder`、`rightAnkle` 等名称索引原图像素。脚踝可见且接近画面内的人框下沿时，`foot` 估计鞋底位置。躯干裁片中识别出唯一的一到两位数字时记录 `number`，`shirtRGB` 为同一区域的 sRGB 三通道采样。后续融合结合标定与多视角观测估计三维位置，进行时序号码确认和球队关联。
+
+运行 `match-info` 可以读取本周期的 `modelManifest`、清单原始字节摘要 `modelManifestSha256` 和权重 `modelSha256`。模型包按包内相对路径记录各文件摘要。同一场景周期恢复时会核对这些信息。更换模型复算需选用新的 `streamEpoch`。实拍精度按比赛独立标注评估。[评估输入与指标](evaluation.md)
+
+构建 Edge 后，在仓库根目录执行 `node --test edge/Tests/Integration/vision-worker.mjs` 可离线复验。用例将已知人框、球框的微型 Core ML 检测器送入实际工作进程，校验宽屏与竖屏坐标、置信度过滤、空场和裁片命中后还原的原图球框。
+
+ISSIA 实拍基准用四个同步机位的录像对比精搜开关，并在 M1 Pro 上按原速投放四路推理任务。报告记录无历史球心时的命中、错位、三个视觉阶段耗时和正式四进程的积压。[冷启动精搜与四路复测](benchmarks/2026-11-27-issia-coldsearch.md) · [仅历史精搜的旧版基线](benchmarks/2026-11-27-issia.md)
+
+## 直接调用视觉工作进程
+
+`pitchtrace-edge vision-worker [模型路径 [--person-and-ball] [--ball-search]] [--individual-ocr]` 通过标准输入接收原尺寸、编码方向朝上的 JPEG。默认每帧由 4 字节大端无符号长度和 JPEG 数据组成。启用 `--ball-search` 后，每帧在长度之前增加 4 个大端 UInt32，表示原图搜索框 `[左, 上, 宽, 高]`，全零表示本帧只搜全图。比赛编排负责生成搜索框和运动候选。每次发送一帧，读回一行 UTF-8 JSON，再发送下一帧。最后在帧边界关闭标准输入。单个 JPEG 上限为 32 MiB、48 百万像素。解码失败、包截断、裁片越界、模型错误和 Vision 执行失败均通过标准错误报告并退出。
