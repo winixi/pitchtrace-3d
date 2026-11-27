@@ -90,7 +90,7 @@ flowchart LR
 
 ### 2.1 海康机器人 MV-CS050-10GC-PRO 双机采集
 
-现场开发暂定采用两台 **MV-CS050-10GC-PRO 彩色版**。该机使用 Sony IMX264 全局快门传感器，通过千兆以太网传输 GigE Vision 2.0 图像。机身支持 PoE 供电，每台配一只覆盖 2/3 英寸靶面的 C 接口镜头。机身装妥镜头和线缆后为 IP40，露天机位另配防雨罩。[原厂规格书（PDF）](hardware/MV-CS050-10GMGC-PRO-datasheet-20210115.pdf) · [硬件选型](05-hardware-selection.md#相机开发基线)
+现场开发暂定采用两台 **MV-CS050-10GC-PRO 彩色版**，每台配一只 **MVL-KF0618M-12MPE（6 mm，C 接口）**。该机使用 Sony IMX264 全局快门传感器，通过千兆以太网传输 GigE Vision 2.0 图像，支持 PoE 供电。首轮以两个机位能同时看清同一区域的传球为目标，分别按实际 1080p 裁切标定。机身装妥镜头和线缆后为 IP40，露天机位另配防雨罩。[相机规格书（PDF）](hardware/MV-CS050-10GMGC-PRO-datasheet-20210115.pdf) · [镜头规格书（中文 PDF）](hardware/MVL-KF0618M-12MPE-datasheet-20221022-zh.pdf) · [视野估算与现场核验](05-hardware-selection.md#双机试拍镜头)
 
 | 环节 | 设计与验证 |
 | --- | --- |
