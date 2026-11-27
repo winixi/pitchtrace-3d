@@ -17,6 +17,25 @@ PitchTrace 3D is a 3D tracking and replay project for football (soccer) matches.
 
 The [live viewing frontend](live/web/) can also connect to a WebSocket live data feed and play external HLS footage. After cloning, you can open the [offline viewing page](live/web/dist/index.html) directly in a browser.
 
+## Edge CLI preview · offline quick start
+
+Run a two-second, two-camera match on an Apple Silicon Mac with macOS 14 or later. The preview includes a prebuilt CLI, its resource bundle, and a script that generates the footage. [Download v0.1.0-alpha.1 (arm64 ZIP)](https://github.com/winixi/pitchtrace-3d/releases/download/edge-v0.1.0-alpha.1/pitchtrace-edge-v0.1.0-alpha.1-macos-arm64.zip) · [SHA-256 checksum](https://github.com/winixi/pitchtrace-3d/releases/download/edge-v0.1.0-alpha.1/pitchtrace-edge-v0.1.0-alpha.1-macos-arm64.zip.sha256) · [Release notes and known limitations](https://github.com/winixi/pitchtrace-3d/releases/tag/edge-v0.1.0-alpha.1)
+
+The sample needs Python 3.10+ with NumPy and an FFmpeg-enabled OpenCV build, plus `ffmpeg` (with `libx264`) and `ffprobe` on your `PATH`. Save the ZIP and checksum in the same directory, then run these commands there.
+
+```sh
+shasum -a 256 -c pitchtrace-edge-v0.1.0-alpha.1-macos-arm64.zip.sha256
+unzip -q pitchtrace-edge-v0.1.0-alpha.1-macos-arm64.zip
+cd pitchtrace-edge-v0.1.0-alpha.1-macos-arm64
+
+trial_dir=$(mktemp -d)
+python3 -B samples/generate-match.py "$trial_dir/input"
+./pitchtrace-edge run-match "$trial_dir/input/match.json" "$trial_dir/run"
+./pitchtrace-edge scene-evidence "$trial_dir/run/scenes.sqlite" training video 5
+```
+
+Expect 40 camera frames in total, zero recording gaps, and 20 scene snapshots in `$trial_dir/run/scenes.sqlite`. The last command shows the source frames for scene 5.
+
 ## Subprojects and responsibilities
 
 **Edge produces match data; Live Server receives, archives, and distributes it; Live Web presents it to viewers.** There are two independently built and released products: PitchTrace Edge (`edge/`) and PitchTrace Live (`live/`). Live includes a server and a browser frontend. The table below describes responsibilities in the complete system, including planned features; implementation status follows separately.
@@ -136,7 +155,7 @@ For each subproject, see [edge/README.md](edge/README.md), [live/web/README.md](
 
 ## Build & test
 
-Requires Swift 6.0+ for Edge and Node.js 22.13+ for the local v2 gateway. The Web build also supports Node.js 20.19+ on the Node 20 line. The commands below run from the repository root.
+Building Edge from source requires Swift 6.0+. The local v2 gateway requires Node.js 22.13+. The Web build also supports Node.js 20.19+ on the Node 20 line. The commands below run from the repository root.
 
 ```sh
 # Edge · build and test

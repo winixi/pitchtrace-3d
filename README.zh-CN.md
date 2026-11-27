@@ -17,6 +17,25 @@
 
 [直播观赛前端](live/web/) 也支持连接 WebSocket 直播数据和播放外部 HLS 实拍视频。克隆仓库后可直接用浏览器打开[离线观赛页](live/web/dist/index.html)。
 
+## Edge CLI 预览版 · 离线快速开始
+
+在运行 macOS 14 或更高版本的 Apple Silicon Mac 上，可以离线处理一段两秒的双机位比赛样例。预览包内含已编译的 CLI、配套资源包和生成录像的脚本。[下载 v0.1.0-alpha.1（arm64 ZIP）](https://github.com/winixi/pitchtrace-3d/releases/download/edge-v0.1.0-alpha.1/pitchtrace-edge-v0.1.0-alpha.1-macos-arm64.zip) · [SHA-256 校验文件](https://github.com/winixi/pitchtrace-3d/releases/download/edge-v0.1.0-alpha.1/pitchtrace-edge-v0.1.0-alpha.1-macos-arm64.zip.sha256) · [发布说明与已知限制](https://github.com/winixi/pitchtrace-3d/releases/tag/edge-v0.1.0-alpha.1)
+
+样例需要 Python 3.10+、NumPy 和带 FFmpeg 后端的 OpenCV，`PATH` 中需有 `ffmpeg`（含 `libx264` 编码器）和 `ffprobe`。将 ZIP 和校验文件下载到同一目录，在该目录执行以下命令。
+
+```sh
+shasum -a 256 -c pitchtrace-edge-v0.1.0-alpha.1-macos-arm64.zip.sha256
+unzip -q pitchtrace-edge-v0.1.0-alpha.1-macos-arm64.zip
+cd pitchtrace-edge-v0.1.0-alpha.1-macos-arm64
+
+trial_dir=$(mktemp -d)
+python3 -B samples/generate-match.py "$trial_dir/input"
+./pitchtrace-edge run-match "$trial_dir/input/match.json" "$trial_dir/run"
+./pitchtrace-edge scene-evidence "$trial_dir/run/scenes.sqlite" training video 5
+```
+
+预期两路合计导出 40 帧，录像缺口为 0，并在 `$trial_dir/run/scenes.sqlite` 中生成 20 个场景快照。最后一条命令列出场景序号 5 对应的原始机位帧。
+
 ## 子项目与职责分工
 
 **Edge 生产比赛数据，Live Server 接收、归档和分发，Live Web 向观众呈现。** 项目包含两个独立构建和发布的产品：PitchTrace Edge（`edge/`）和 PitchTrace Live（`live/`）。Live 内含服务端和浏览器前端。下表说明完整系统中的职责，包含规划功能；实际实现状态在后文单独列出。
@@ -136,7 +155,7 @@ pitchtrace-3d/
 
 ## 构建与测试
 
-Edge 需要 Swift 6.0+，本地 v2 网关需要 Node.js 22.13+。前端也支持 Node 20 系列的 20.19+。下列命令从仓库根目录运行。
+从源码构建 Edge 需要 Swift 6.0+，本地 v2 网关需要 Node.js 22.13+。前端也支持 Node 20 系列的 20.19+。下列命令从仓库根目录运行。
 
 ```sh
 # Edge · 构建和测试
