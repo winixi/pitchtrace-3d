@@ -13,6 +13,10 @@ swift test --package-path edge --disable-xctest
 
 在仅安装 Command Line Tools 的 Swift 6.4.2 环境，若测试提示 `plugin for module 'TestingMacros' not found`，可在上面的 `swift test` 命令末尾追加 `-Xswiftc -plugin-path -Xswiftc /Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing`。
 
+## 发布离线 CLI 预览版
+
+在包含[发布工作流](../.github/workflows/edge-release.yml)的待发布提交上创建并推送新的预发布标签，例如 `edge-v0.1.0-alpha.2` 或 `edge-v0.2.0-rc.1`。GitHub Actions 会在 Apple Silicon 运行器上构建 Release CLI，将资源包、许可证和样例一同压缩，再从解压目录运行双机位样例。通过后，对应的 GitHub 预发布将提供 ZIP 和同名的 `.zip.sha256` 校验文件。[包内使用说明与已知限制](preview.md)
+
 ## 不接相机跑完一场样例
 
 比赛处理需要 Python 3.10+、带 FFmpeg 后端的 OpenCV、NumPy、FFmpeg 和 ffprobe。以下命令生成 2 秒双机位 H.264/fMP4 录像及独立坐标真值。球色检测读取原片像素，样例还提供一份带球员和球的二维标注，供几何与身份模块独立复算。
