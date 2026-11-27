@@ -92,7 +92,57 @@
             margin-bottom: 2rem;
             display: flex;
             gap: 2rem;
+            align-items: center;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        
+        .connection-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .connection-connected {
+            background: #d1f4e0;
+            color: #027a48;
+        }
+        
+        .connection-connected .connection-indicator {
+            background: #12b76a;
+        }
+        
+        .connection-connecting {
+            background: #fef0c7;
+            color: #b54708;
+        }
+        
+        .connection-connecting .connection-indicator {
+            background: #f79009;
+        }
+        
+        .connection-disconnected {
+            background: #fee4e2;
+            color: #c01048;
+        }
+        
+        .connection-disconnected .connection-indicator {
+            background: #f04438;
         }
         
         .status-item {
@@ -290,6 +340,10 @@
     
     <div class="container">
         <div id="statusBar" class="status-bar">
+            <div id="connectionStatus" class="connection-status connection-connecting">
+                <div class="connection-indicator"></div>
+                <span id="connectionText">Connecting...</span>
+            </div>
             <div class="status-item">
                 <span class="status-label">Match:</span>
                 <span class="status-value" id="matchId">—</span>
@@ -321,53 +375,201 @@
     </div>
     
     <script>
-        // 状态管理
-        let currentStatus = null;
-        let isLoading = false;
+        // ===== WebSocket 实时监控 =====
         
-        // 初始化
-        document.addEventListener('DOMContentLoaded', () => {
-            setupEventListeners();
-            loadStatus();
+        class RealtimeMonitor {
+            constructor() {
+                this.ws = null;
+                this.reconnectDelay = 1000;
+                this.maxReconnectDelay = 30000;
+                this.reconnectAttempts = 0;
+                this.isIntentionalClose = false;
+                this.useWebSocket = true;
+                this.httpFallbackInterval = null;
+                
+                this.connect();
+            }
             
-            // 每 5 秒自动刷新
-            setInterval(loadStatus, 5000);
-        });
-        
-        // 设置事件监听器
-        function setupEventListeners() {
-            document.getElementById('refreshBtn').addEventListener('click', () => {
-                loadStatus();
-            });
+            connect() {
+                if (this.isIntentionalClose) return;
+                
+                // 尝试 WebSocket 连接
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/api/live`;
+                
+                console.log('Attempting WebSocket connection to', wsUrl);
+                this.updateConnectionStatus('connecting', 'Connecting...');
+                
+                try {
+                    this.ws = new WebSocket(wsUrl);
+                    
+                    this.ws.onopen = () => {
+                        console.log('WebSocket connected');
+                        this.reconnectDelay = 1000;
+                        this.reconnectAttempts = 0;
+                        this.useWebSocket = true;
+                        this.updateConnectionStatus('connected', 'WebSocket');
+                        
+                        // 停止 HTTP 轮询（如果在运行）
+                        if (this.httpFallbackInterval) {
+                            clearInterval(this.httpFallbackInterval);
+                            this.httpFallbackInterval = null;
+                        }
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        try {
+                            const msg = JSON.parse(event.data);
+                            this.handleMessage(msg);
+                        } catch (error) {
+                            console.error('Failed to parse WebSocket message:', error);
+                        }
+                    };
+                    
+                    this.ws.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                    };
+                    
+                    this.ws.onclose = () => {
+                        console.log('WebSocket closed');
+                        this.ws = null;
+                        
+                        if (!this.isIntentionalClose) {
+                            this.reconnectAttempts++;
+                            
+                            // 3 次尝试后降级到 HTTP 轮询
+                            if (this.reconnectAttempts >= 3 && this.useWebSocket) {
+                                console.log('WebSocket failed 3 times, falling back to HTTP polling');
+                                this.useWebSocket = false;
+                                this.startHttpPolling();
+                            } else if (this.useWebSocket) {
+                                // 继续尝试 WebSocket
+                                this.updateConnectionStatus('connecting', 
+                                    `Reconnecting (${this.reconnectAttempts})...`);
+                                setTimeout(() => this.connect(), this.reconnectDelay);
+                                this.reconnectDelay = Math.min(
+                                    this.reconnectDelay * 2, 
+                                    this.maxReconnectDelay
+                                );
+                            }
+                        }
+                    };
+                    
+                } catch (error) {
+                    console.error('Failed to create WebSocket:', error);
+                    this.startHttpPolling();
+                }
+            }
             
-            document.getElementById('startBtn').addEventListener('click', () => {
-                alert('Start control will be implemented in Phase 2');
-            });
+            handleMessage(msg) {
+                switch (msg.type) {
+                    case 'initial':
+                    case 'update':
+                        if (msg.data) {
+                            renderStatus(msg.data);
+                        }
+                        break;
+                        
+                    case 'ping':
+                        // 响应 pong
+                        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                            this.ws.send(JSON.stringify({ type: 'pong' }));
+                        }
+                        break;
+                        
+                    case 'error':
+                        console.error('Server error:', msg.message);
+                        showError(msg.message);
+                        break;
+                        
+                    default:
+                        console.warn('Unknown message type:', msg.type);
+                }
+            }
             
-            document.getElementById('stopBtn').addEventListener('click', () => {
-                alert('Stop control will be implemented in Phase 2');
-            });
+            startHttpPolling() {
+                this.updateConnectionStatus('connected', 'HTTP Polling');
+                console.log('Using HTTP polling (every 5 seconds)');
+                
+                // 立即加载一次
+                loadStatusHTTP();
+                
+                // 每 5 秒轮询
+                this.httpFallbackInterval = setInterval(() => {
+                    loadStatusHTTP();
+                }, 5000);
+            }
+            
+            updateConnectionStatus(state, text) {
+                const statusEl = document.getElementById('connectionStatus');
+                const textEl = document.getElementById('connectionText');
+                
+                if (statusEl && textEl) {
+                    statusEl.className = `connection-status connection-${state}`;
+                    textEl.textContent = text;
+                }
+            }
+            
+            close() {
+                this.isIntentionalClose = true;
+                if (this.ws) {
+                    this.ws.close();
+                }
+                if (this.httpFallbackInterval) {
+                    clearInterval(this.httpFallbackInterval);
+                }
+            }
         }
         
-        // 加载状态
-        async function loadStatus() {
-            if (isLoading) return;
-            
-            isLoading = true;
+        // ===== HTTP 加载（降级方案） =====
+        
+        async function loadStatusHTTP() {
             try {
                 const response = await fetch('/api/status');
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
                 
-                currentStatus = await response.json();
-                renderStatus(currentStatus);
+                const status = await response.json();
+                renderStatus(status);
             } catch (error) {
-                console.error('Failed to load status:', error);
+                console.error('Failed to load status via HTTP:', error);
                 showError(`Failed to load status: ${error.message}`);
-            } finally {
-                isLoading = false;
             }
+        }
+        
+        // ===== 状态管理 =====
+        let currentStatus = null;
+        let monitor = null;
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            setupEventListeners();
+            
+            // 启动实时监控（WebSocket 优先，失败后降级到 HTTP）
+            monitor = new RealtimeMonitor();
+        });
+        
+        // 页面卸载时关闭连接
+        window.addEventListener('beforeunload', () => {
+            if (monitor) {
+                monitor.close();
+            }
+        });
+        
+        // 设置事件监听器
+        function setupEventListeners() {
+            document.getElementById('refreshBtn').addEventListener('click', () => {
+                loadStatusHTTP();
+            });
+            
+            document.getElementById('startBtn').addEventListener('click', () => {
+                alert('Start control will be implemented in Phase 4');
+            });
+            
+            document.getElementById('stopBtn').addEventListener('click', () => {
+                alert('Stop control will be implemented in Phase 4');
+            });
         }
         
         // 渲染状态
