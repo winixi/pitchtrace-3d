@@ -176,22 +176,50 @@ struct WebUICommand {
         let matchDirURL = matchDir.map { URL(fileURLWithPath: $0, isDirectory: true) }
         await SystemMonitor.shared.configure(matchDirectory: matchDirURL)
         
-        // 启动后台任务：定期更新状态缓存
+        // 创建 WebSocket 连接管理器
+        let wsManager = WebSocketConnectionManager()
+        
+        // 启动后台任务：定期更新状态缓存并推送 WebSocket
         // 使用后台 Task 避免阻塞 HTTP 服务器主线程
+        var lastBroadcastedStatus: SystemStatus?
+        
         let updateTask = Task.detached {
             while !Task.isCancelled {
                 do {
                     // 从 SystemMonitor 获取最新状态
                     let status = try await SystemMonitor.shared.currentStatus()
-                    // 更新线程安全的缓存
+                    
+                    // 更新线程安全的缓存（供 HTTP 路由使用）
                     StatusCache.shared.update(status)
+                    
+                    // 如果状态发生变化，广播到 WebSocket 客户端
+                    if status != lastBroadcastedStatus {
+                        let message = WebSocketMessage.update(status)
+                        await wsManager.broadcast(message)
+                        lastBroadcastedStatus = status
+                    }
                 } catch {
                     // 如果获取失败，保持使用上一次的状态
                     print("Warning: Failed to update status: \(error)")
+                    
+                    // 通知 WebSocket 客户端发生错误
+                    let errorMsg = WebSocketMessage.error("Failed to read match data: \(error.localizedDescription)")
+                    await wsManager.broadcast(errorMsg)
                 }
                 
                 // 每 2 秒更新一次
                 try? await Task.sleep(for: .seconds(2))
+            }
+        }
+        
+        // 启动心跳任务：每 30 秒发送 ping 并清理超时连接
+        let heartbeatTask = Task.detached {
+            // 首次延迟 30 秒启动
+            try? await Task.sleep(for: .seconds(30))
+            
+            while !Task.isCancelled {
+                await wsManager.sendPingAndCleanup(timeout: 60)
+                try? await Task.sleep(for: .seconds(30))
             }
         }
         
@@ -212,6 +240,49 @@ struct WebUICommand {
         server["/api/health"] = { request in
             return .ok(.text("OK"))
         }
+        
+        // WebSocket 实时推送端点
+        server["/api/live"] = websocket(
+            text: { session, text in
+                // 处理客户端发送的文本消息
+                Task {
+                    if let data = text.data(using: .utf8),
+                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let type = json["type"] as? String {
+                        
+                        if type == "pong" {
+                            // 客户端响应心跳
+                            // 注意：这里无法直接获取 session 的 ID，需要在 connected 时建立映射
+                            // 暂时跳过，心跳超时由 sendPingAndCleanup 处理
+                        }
+                    }
+                }
+            },
+            connected: { session in
+                // 新客户端连接
+                Task {
+                    let id = UUID()
+                    
+                    // 发送初始状态
+                    let initialStatus = StatusCache.shared.current
+                    let initialMessage = WebSocketMessage.initial(initialStatus)
+                    session.writeText(initialMessage)
+                    
+                    // 注册到连接管理器
+                    await wsManager.add(id: id, session: session)
+                    
+                    print("WebSocket: Client connected, sent initial status")
+                }
+            },
+            disconnected: { session in
+                // 客户端断开
+                // 注意：由于无法直接从 session 获取我们的 UUID，
+                // 心跳超时会自动清理断开的连接
+                Task {
+                    print("WebSocket: Client disconnected")
+                }
+            }
+        )
         
         // 启动服务器
         print("")
@@ -238,10 +309,12 @@ struct WebUICommand {
             // 保持服务器运行
             defer {
                 updateTask.cancel()
+                heartbeatTask.cancel()
             }
             try await Task.sleep(for: .seconds(365 * 24 * 3600)) // 1 year
         } catch {
             updateTask.cancel()
+            heartbeatTask.cancel()
             throw ValidationError("Failed to start server: \(error.localizedDescription)")
         }
     }
@@ -311,7 +384,7 @@ struct WebUICommand {
 
 // MARK: - 数据结构
 
-struct SystemStatus: Codable {
+struct SystemStatus: Codable, Equatable {
     let timestamp: String
     let matchId: String
     let matchState: String
@@ -331,7 +404,7 @@ struct SystemStatus: Codable {
     }
 }
 
-struct CameraStatus: Codable {
+struct CameraStatus: Codable, Equatable {
     let cameraId: String
     let state: String
     let fps: Double
@@ -344,14 +417,14 @@ struct CameraStatus: Codable {
     let calibrationValid: Bool
 }
 
-struct Alert: Codable {
+struct Alert: Codable, Equatable {
     let level: String
     let cameraId: String?
     let message: String
     let timestamp: String
 }
 
-struct DiskStatus: Codable {
+struct DiskStatus: Codable, Equatable {
     let totalBytes: Int64
     let usedBytes: Int64
     let availableBytes: Int64
