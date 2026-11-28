@@ -12,6 +12,8 @@ swift run --package-path edge pitchtrace-edge stream-match match.json ./capture-
 | `streamWaitSeconds` | 有路缺段时等待其曝光映射的秒数，默认 2 秒。超窗后先处理已到视角，迟到原片仍可提交网关。 |
 | `gateway` | 可选的 HTTP(S) 网关基址。省略时执行本地归档，随后可填入地址并重跑完成补传。 |
 | `backfillBytesPerSecond` | 历史场景补传速率，默认 0 表示不限速。媒体交付由独立线程完成。 |
+| `deviceTokenFile` | Live 签发的设备凭据文件，相对比赛配置目录，须为 0600。也可用环境变量 `PITCHTRACE_DEVICE_TOKEN`，后者优先。凭据附在场景与原片的全部写入请求上，不进入运行记录。 |
+| `gatewayAllowHttp` | 默认 false：凭据只经 HTTPS 或回环地址发送。隔离的现场局域网用明文 HTTP 时设为 true。 |
 | `mediaBytesPerSecond` | 原片上传速率（字节/秒），计入 init、片段和索引三件，默认 0 表示不限速。按令牌桶在每次请求前等待，单次突发不超过一个请求的大小。与场景补传各自限速，合计带宽需分别留出。 |
 
 ## 启动、积压和恢复

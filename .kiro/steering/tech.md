@@ -41,7 +41,8 @@ node server.cjs   # 监听 127.0.0.1:8766
 - v1：`POST /frame`、`WS /live`、`WS /demo`，复用前端校验器。
 - v2 场景：`POST/GET /v2/matches/{matchId}/frames`、`WS /v2/matches/{matchId}/live`，SQLite 归档（`scene-archive.mjs`）、分页历史（`history-query.mjs`）。
 - v2 原片：`PUT/GET /v2/matches/{matchId}/cameras/...` 媒体三件（init/segment/index）、播放列表与按曝光定位（`media-http.mjs`、`media-archive.mjs`、`media-index.mjs`）。
-- 环境变量：`PITCHTRACE_HOST`、`PITCHTRACE_PORT`、`PITCHTRACE_DB`、`PITCHTRACE_MEDIA_DIR`。
+- 环境变量：`PITCHTRACE_HOST`、`PITCHTRACE_PORT`、`PITCHTRACE_DB`、`PITCHTRACE_MEDIA_DIR`、`PITCHTRACE_DEVICE_AUTH`（`required` 时在回环地址也强制设备凭据）。
+- 设备凭据：`node live/server/tools/devices.mjs issue|list|revoke`，网关模块 `device-auth.mjs`。
 - 从仓库根目录直接试播（需先构建前端）：`node live/server/server.cjs`。
 - 源码按模块拆分（`server.mjs` 之外另有 6 个 `.mjs`），改任何模块后都要 `npm run build` 重新打包。
 

@@ -43,7 +43,7 @@ class RunMatchTests(unittest.TestCase):
         self.binary.write_text("测试替身")
         owner = self
 
-        def command(_, name, *args):
+        def command(_, name, *args, env=None):
             label = name + ("/" + args[-1].name if name == "publish-media" else "")
             with owner.mutex:
                 owner.calls.append(label)

@@ -18,6 +18,7 @@ private struct MediaRequest: Equatable {
 private final class MediaProtocol: URLProtocol {
     struct Log {
         var requests: [MediaRequest] = []
+        var authorizations: [String?] = []
         var indexStatus = 202
     }
 
@@ -43,8 +44,10 @@ private final class MediaProtocol: URLProtocol {
             path: url.path, method: request.httpMethod,
             digest: request.value(forHTTPHeaderField: "X-Content-SHA256"), body: body
         )
+        let authorization = request.value(forHTTPHeaderField: "Authorization")
         let status = Self.log.withLock { state in
             state.requests.append(upload)
+            state.authorizations.append(authorization)
             return url.lastPathComponent == "index" ? state.indexStatus : 202
         }
         let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!
@@ -78,15 +81,17 @@ struct MediaPublishingTests {
         }
     }
 
-    private func publish(indexStatus: Int = 202, mediaEpoch: String? = "replay-1") async throws -> Int {
+    private func publish(indexStatus: Int = 202, mediaEpoch: String? = "replay-1",
+                         credential: DeviceCredential? = nil,
+                         gateway: String = "http://127.0.0.1:8766") async throws -> Int {
         MediaProtocol.log.withLock { $0 = MediaProtocol.Log(indexStatus: indexStatus) }
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MediaProtocol.self]
         let session = URLSession(configuration: config)
         defer { session.invalidateAndCancel() }
         return try await publishCameraMedia(
-            from: camera, gateway: URL(string: "http://127.0.0.1:8766")!,
-            matchID: "trial-1", mediaEpoch: mediaEpoch, session: session
+            from: camera, gateway: URL(string: gateway)!,
+            matchID: "trial-1", mediaEpoch: mediaEpoch, credential: credential, session: session
         )
     }
 
@@ -109,6 +114,39 @@ struct MediaPublishingTests {
         let repeated = try await publish()
         #expect(repeated == count)
         #expect(MediaProtocol.log.withLock { $0.requests } == requests)
+    }
+
+    @Test func sendsDeviceCredentialOnEveryPartOnlyOverSafeTransport() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try makePeriod(in: camera)
+        let token = "pt1.edge-a." + String(repeating: "A", count: 43)
+        let credential = try #require(try DeviceCredential.fromEnvironment(["PITCHTRACE_DEVICE_TOKEN": token + "\n"]))
+        #expect(try await publish(credential: credential) == 2)
+        #expect(MediaProtocol.log.withLock { $0.authorizations } == Array(repeating: "Bearer " + token, count: 5))
+        _ = try await publish()
+        #expect(MediaProtocol.log.withLock { $0.authorizations }.allSatisfy { $0 == nil })
+        // 局域网明文 HTTP 不发送凭据，除非显式允许；HTTPS 总可发送。
+        await #expect(throws: RecordingError.self) {
+            try await publish(credential: credential, gateway: "http://192.168.1.20:8766")
+        }
+        #expect(MediaProtocol.log.withLock { $0.requests }.isEmpty)
+        #expect(try await publish(credential: credential, gateway: "https://live.example") == 2)
+        try checkCredentialTransport(URL(string: "http://192.168.1.20:8766")!, credential: credential,
+                                     environment: ["PITCHTRACE_GATEWAY_ALLOW_HTTP": "1"])
+        try checkCredentialTransport(URL(string: "http://192.168.1.20:8766")!, credential: nil, environment: [:])
+    }
+
+    @Test func rejectsMalformedCredentialWithoutEchoingIt() throws {
+        #expect(try DeviceCredential.fromEnvironment([:]) == nil)
+        #expect(try DeviceCredential.fromEnvironment(["PITCHTRACE_DEVICE_TOKEN": ""]) == nil)
+        for bad in ["secret-value", "pt1.edge.a", "pt1.bad.id." + String(repeating: "A", count: 43)] {
+            do {
+                _ = try DeviceCredential.fromEnvironment(["PITCHTRACE_DEVICE_TOKEN": bad])
+                Issue.record("应拒绝 \(bad)")
+            } catch {
+                #expect(!error.localizedDescription.contains(bad))
+            }
+        }
     }
 
     @Test func uploadsRepeatedSegmentNumbersUnderTheirOwnPeriods() async throws {

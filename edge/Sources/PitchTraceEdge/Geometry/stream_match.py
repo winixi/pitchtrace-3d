@@ -116,8 +116,9 @@ class MediaQueue:
     bytes_per_second 大于零时按令牌桶限速，计入全部上传字节。
     """
 
-    def __init__(self, db, bytes_per_second=0):
+    def __init__(self, db, bytes_per_second=0, headers=None):
         self.db = db
+        self.headers = headers or {}
         self.rate = bytes_per_second
         self.ready_at = time.monotonic()
         db.executescript("""
@@ -194,7 +195,7 @@ class MediaQueue:
                 if sha and (not 0 < size <= 128 * 1024 * 1024 or digest(local) != sha):
                     raise ValueError(f"原片与曝光索引不一致：{local}")
                 self.pace(size)
-                headers = {"Content-Length": str(size), "Content-Type": "application/json"}
+                headers = {"Content-Length": str(size), "Content-Type": "application/json", **self.headers}
                 if sha:
                     headers.update({"X-Content-SHA256": sha, "Content-Type": "video/mp4"})
                 with local.open("rb") as stream:
@@ -266,6 +267,10 @@ def stream_match(path, capture, run, executable):
     rate = settings.get("backfillBytesPerSecond", 0)
     if type(rate) is not int or rate < 0:
         raise ValueError("backfillBytesPerSecond 必须为非负整数")
+    from gateway_auth import DELIVERY_KEYS, allows_http, auth_headers, load_device_token
+
+    # 启动时即核对凭据与连接方式，避免录到中途才发现无法上行。
+    write_headers = auth_headers(gateway, load_device_token(settings, path.parent), allows_http(settings)) if gateway else {}
     media_rate = settings.get("mediaBytesPerSecond", 0)
     if type(media_rate) is not int or media_rate < 0:
         raise ValueError("mediaBytesPerSecond 必须为非负整数")
@@ -296,7 +301,7 @@ def stream_match(path, capture, run, executable):
             if any(p.name not in (".stream-match.lock", "PAUSE") for p in run.iterdir()):
                 raise ValueError("首次直播运行需要新的或空的输出目录")
             write_json(marker, identity)
-        processing = {k: v for k, v in settings.items() if k not in ("gateway", "backfillBytesPerSecond", "mediaBytesPerSecond")}
+        processing = {k: v for k, v in settings.items() if k not in ("gateway", "backfillBytesPerSecond", "mediaBytesPerSecond", *DELIVERY_KEYS)}
         versions, model = inference_inputs(processing, path.parent, Path(executable))
         from observations import Degradation
         from vision_model import validate_degradation
@@ -329,9 +334,10 @@ def stream_match(path, capture, run, executable):
                 with SceneArchive(db) as local:
                     if which == "场景":
                         def send():
-                            return local.publish(gateway, config.match_id, config.stream_epoch, rate, max_frames=16)
+                            return local.publish(gateway, config.match_id, config.stream_epoch, rate, max_frames=16,
+                                                 headers=write_headers)
                     else:
-                        queue = MediaQueue(local.db, media_rate)
+                        queue = MediaQueue(local.db, media_rate, write_headers)
                         def send():
                             return queue.send_one(gateway, config.match_id, media)
                     upload_loop(which, send, finished, hold)

@@ -257,7 +257,7 @@ class SceneArchive:
             raise ValueError(f"找不到场景帧 {(match_id, stream_epoch, seq)}")
         return None if row[0] is None else json.loads(row[0])
 
-    def publish(self, gateway, match_id, stream_epoch, backfill_bytes_per_second=0, max_frames=None):
+    def publish(self, gateway, match_id, stream_epoch, backfill_bytes_per_second=0, max_frames=None, headers=None):
         """先发当前帧，再逐帧补历史；每次网络请求前释放数据库读锁。"""
         stream = _stream(match_id, stream_epoch)
         if type(backfill_bytes_per_second) is not int or backfill_bytes_per_second < 0:
@@ -311,7 +311,7 @@ class SceneArchive:
                 seq, payload = row
                 body = payload.encode("utf-8")
                 try:
-                    connection.request("POST", endpoint, body, {"Content-Type": "application/json"})
+                    connection.request("POST", endpoint, body, {"Content-Type": "application/json", **(headers or {})})
                     reply = connection.getresponse()
                     detail = reply.read(1024).decode("utf-8", errors="replace")
                     if reply.status != 202:
@@ -358,7 +358,12 @@ def main():
         raise ValueError(f"找不到本地场景数据库 {args.db}")
     with SceneArchive(args.db) as archive:
         if args.command == "publish":
-            count = archive.publish(args.gateway, args.match, args.epoch, args.backfill_bytes_per_second)
+            from gateway_auth import allows_http, auth_headers, load_device_token
+
+            # 命令行补传只从 PITCHTRACE_DEVICE_TOKEN 取凭据，run-match 调用时由其传入。
+            headers = auth_headers(args.gateway, load_device_token({}, Path.cwd()), allows_http({}))
+            count = archive.publish(args.gateway, args.match, args.epoch, args.backfill_bytes_per_second,
+                                    headers=headers)
             print(f"已确认 {count} 个场景快照。")
         elif args.command == "export":
             for frame in archive.frames(args.match, args.epoch, from_ms=args.from_ms, to_ms=args.to_ms,

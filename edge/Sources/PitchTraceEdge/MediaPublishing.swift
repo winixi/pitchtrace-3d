@@ -1,8 +1,36 @@
 import Foundation
 
-private func putMedia(_ data: Data, to url: URL, digest: String? = nil, session: URLSession) async throws {
+/// Live 签发的设备凭据，取自环境变量 PITCHTRACE_DEVICE_TOKEN（run-match 由此传入）。
+struct DeviceCredential: Equatable {
+    let token: String
+
+    /// 未设置时返回 nil。格式不对时报错，但错误信息不含凭据本身。
+    static func fromEnvironment(_ environment: [String: String] = ProcessInfo.processInfo.environment) throws -> DeviceCredential? {
+        guard let raw = environment["PITCHTRACE_DEVICE_TOKEN"], !raw.isEmpty else { return nil }
+        let token = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard token.wholeMatch(of: /pt1\.[A-Za-z0-9_-]{1,64}\.[A-Za-z0-9_-]{43}/) != nil else {
+            throw RecordingError("PITCHTRACE_DEVICE_TOKEN 格式无效，应为 Live 签发的 pt1.<设备 ID>.<密钥>")
+        }
+        return DeviceCredential(token: token)
+    }
+}
+
+/// 凭据只经 HTTPS 或回环地址发送；隔离的现场局域网需设置 PITCHTRACE_GATEWAY_ALLOW_HTTP=1。
+func checkCredentialTransport(_ gateway: URL, credential: DeviceCredential?,
+                              environment: [String: String] = ProcessInfo.processInfo.environment) throws {
+    guard credential != nil, gateway.scheme?.lowercased() != "https" else { return }
+    let host = gateway.host ?? ""
+    let loopback = host == "localhost" || host == "::1" || host.hasPrefix("127.")
+    guard loopback || environment["PITCHTRACE_GATEWAY_ALLOW_HTTP"] == "1" else {
+        throw RecordingError("设备凭据只经 HTTPS 或回环地址发送；隔离的现场局域网可设 PITCHTRACE_GATEWAY_ALLOW_HTTP=1")
+    }
+}
+
+private func putMedia(_ data: Data, to url: URL, digest: String? = nil, credential: DeviceCredential?,
+                      session: URLSession) async throws {
     var request = URLRequest(url: url)
     request.httpMethod = "PUT"
+    if let credential { request.setValue("Bearer \(credential.token)", forHTTPHeaderField: "Authorization") }
     request.setValue(digest == nil ? "application/json" : "video/mp4", forHTTPHeaderField: "Content-Type")
     request.setValue(digest, forHTTPHeaderField: "X-Content-SHA256")
     let body: Data
@@ -22,7 +50,8 @@ private func putMedia(_ data: Data, to url: URL, digest: String? = nil, session:
 }
 
 func publishCameraMedia(
-    from directory: URL, gateway: URL, matchID: String, mediaEpoch: String? = nil, session: URLSession
+    from directory: URL, gateway: URL, matchID: String, mediaEpoch: String? = nil,
+    credential: DeviceCredential? = nil, session: URLSession
 ) async throws -> Int {
     let cameraID = directory.lastPathComponent
     guard isMediaCameraID(matchID), isMediaCameraID(cameraID) else {
@@ -33,6 +62,7 @@ func publishCameraMedia(
           gateway.query == nil, gateway.fragment == nil else {
         throw RecordingError("需要有效的 HTTP 或 HTTPS 网关地址")
     }
+    try checkCredentialTransport(gateway, credential: credential)
     let periods = try cameraMediaPeriods(in: directory)
     let base = gateway.appending(path: "v2/matches/\(matchID)/cameras/\(cameraID)/epochs")
     var total = 0
@@ -48,14 +78,15 @@ func publishCameraMedia(
         }
         total += try await publishMediaPeriod(
             from: period.directory, cameraID: cameraID, mediaEpoch: epoch,
-            to: base.appending(path: epoch), session: session
+            to: base.appending(path: epoch), credential: credential, session: session
         )
     }
     return total
 }
 
 private func publishMediaPeriod(
-    from directory: URL, cameraID: String, mediaEpoch: String, to base: URL, session: URLSession
+    from directory: URL, cameraID: String, mediaEpoch: String, to base: URL, credential: DeviceCredential?,
+    session: URLSession
 ) async throws -> Int {
     let segments = directory.appending(path: "segments")
     let numbers = try segmentNumbers(in: segments, cameraId: cameraID, indexSuffix: ".json", mediaEpoch: mediaEpoch)
@@ -79,11 +110,13 @@ private func publishMediaPeriod(
         }
 
         if offset == 0 {
-            try await putMedia(initialization, to: base.appending(path: "init.mp4"), digest: initDigest, session: session)
+            try await putMedia(initialization, to: base.appending(path: "init.mp4"), digest: initDigest,
+                               credential: credential, session: session)
         }
-        try await putMedia(indexData, to: base.appending(path: "segments/\(number)/index"), session: session)
+        try await putMedia(indexData, to: base.appending(path: "segments/\(number)/index"),
+                           credential: credential, session: session)
         try await putMedia(segment, to: base.appending(path: "segments/\(number).m4s"),
-                           digest: index.segmentSha256, session: session)
+                           digest: index.segmentSha256, credential: credential, session: session)
     }
     return numbers.count
 }

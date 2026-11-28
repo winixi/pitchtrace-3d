@@ -7,6 +7,7 @@ import { validFrame } from "../web/src/protocol.js";
 import { openSceneArchive } from "./scene-archive.mjs";
 import { readHistoryQuery } from "./history-query.mjs";
 import { createMediaHandler } from "./media-http.mjs";
+import { createDeviceAuth, refuseWrite } from "./device-auth.mjs";
 import {
   sceneRoute,
   serializeSceneFrame,
@@ -19,7 +20,11 @@ const serverDir = path.dirname(process.argv[1]);
 const page = path.resolve(serverDir, "../web/dist/index.html");
 const archivePath =
   process.env.PITCHTRACE_DB || path.join(serverDir, "data", "scenes.sqlite");
-const media = createMediaHandler(archivePath, process.env.PITCHTRACE_MEDIA_DIR);
+// 写入接口（v1 帧、v2 场景、v2 原片三件）校验设备凭据；读取与订阅不在此列。
+const devices = createDeviceAuth(archivePath, { host });
+const media = createMediaHandler(archivePath, process.env.PITCHTRACE_MEDIA_DIR, {
+  authorize: (request, matchId) => devices.check(request, matchId),
+});
 const maxFrameBytes = 256000;
 const wss = new WebSocketServer({ noServer: true, maxPayload: maxFrameBytes });
 const sceneViewers = new Map();
@@ -127,6 +132,9 @@ const server = http.createServer(async (request, response) => {
 
   const v1 = request.url === "/frame";
   if (!v1 && !matchId) return reply(404, "Unknown endpoint");
+  // 先验凭据再读请求体，未授权的上传不占用解析与归档。
+  const denied = devices.check(request, v1 ? null : matchId);
+  if (denied) return refuseWrite(request, response, denied);
   const { frame, code, message } = await readFrame(request);
   if (code) return reply(code, message);
 
@@ -229,7 +237,13 @@ server.on("close", () => {
   clearInterval(ticker);
   archive?.close();
   media.close();
+  devices.close();
 });
-server.listen(port, host, () =>
-  console.log("PitchTrace 3D   http://" + host + ":" + server.address().port),
-);
+server.listen(port, host, () => {
+  console.log("PitchTrace 3D   http://" + host + ":" + server.address().port);
+  console.error(
+    devices.required
+      ? "设备凭据：所有写入需 Authorization: Bearer，签发见 tools/devices.mjs"
+      : "设备凭据：回环地址试播，未带凭据的写入照常接受",
+  );
+});

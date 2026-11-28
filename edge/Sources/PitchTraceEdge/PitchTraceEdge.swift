@@ -144,7 +144,7 @@ enum PitchTraceEdge {
                 defer { session.finishTasksAndInvalidate() }
                 let count = try await publishCameraMedia(
                     from: directory, gateway: gateway, matchID: arguments[2],
-                    mediaEpoch: mediaEpoch, session: session
+                    mediaEpoch: mediaEpoch, credential: try DeviceCredential.fromEnvironment(), session: session
                 )
                 print("已确认机位 \(directory.lastPathComponent) 的 \(count) 个片段。")
             default:

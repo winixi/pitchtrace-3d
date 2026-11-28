@@ -1,6 +1,7 @@
 """模拟相机直采时边录边分析：camera-capture 写出的片段与曝光清单直接驱动 stream-match。需先构建 Edge。"""
 from contextlib import closing
 import json
+import os
 from pathlib import Path
 import sqlite3
 import subprocess
@@ -11,6 +12,7 @@ import unittest
 
 EDGE = Path(__file__).resolve().parents[2]
 BINARY = EDGE / ".build/debug/pitchtrace-edge"
+LIVE = EDGE.parent / "live/server"
 
 
 class NativeStreamTest(unittest.TestCase):
@@ -49,7 +51,42 @@ class NativeStreamTest(unittest.TestCase):
         stats, _ = self.run_stream(during=pause_then_resume)
         self.assertFalse(stats["paused"])
 
-    def run_stream(self, detector=None, during=None):
+    def gateway(self, root):
+        """以 required 模式启动本地网关，签发只能写 training 的设备凭据。"""
+        env = {**os.environ, "PITCHTRACE_HOST": "127.0.0.1", "PITCHTRACE_PORT": "0",
+               "PITCHTRACE_DB": str(root / "gateway.sqlite"), "PITCHTRACE_MEDIA_DIR": str(root / "gateway-media"),
+               "PITCHTRACE_DEVICE_AUTH": "required"}
+        node = subprocess.Popen(["node", LIVE / "server.cjs"], env=env, stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL, text=True)
+        self.addCleanup(lambda: (node.terminate(), node.wait(timeout=10), node.stdout.close()))
+        address = node.stdout.readline().strip().split(" ")[-1]
+        token = root / "edge.token"
+        subprocess.run(["node", LIVE / "tools/devices.mjs", "issue", "edge-a", "--match", "training", "--out", token],
+                       env=env, check=True, capture_output=True)
+        return address, token
+
+    def test_authenticated_stream_uploads_scenes_and_media(self):
+        def configure(root, match):
+            address, token = self.gateway(root)
+            match.update(gateway=address, deviceTokenFile=token.name)
+            return address
+
+        stats, run = self.run_stream(configure=configure)
+        self.assertEqual(stats["pendingUploads"], {"scenes": 0, "mediaSegments": 0})
+        with closing(sqlite3.connect(run / "scenes.sqlite")) as db:
+            provenance = db.execute("SELECT provenance FROM edge_runs").fetchone()[0]
+        self.assertNotIn("deviceTokenFile", provenance)
+        self.assertNotIn("pt1.", provenance)
+
+    def test_gateway_rejects_stream_without_credential(self):
+        def configure(root, match):
+            address, _ = self.gateway(root)
+            match.update(gateway=address)
+
+        error = self.run_stream(configure=configure, expect_failure=True)
+        self.assertIn("401", error)
+
+    def run_stream(self, detector=None, during=None, configure=None, expect_failure=False):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name)
@@ -63,6 +100,8 @@ class NativeStreamTest(unittest.TestCase):
         match.update(captureConfig="cameras.json", streamWaitSeconds=1)
         if detector is not None:
             match["detector"] = detector
+        if configure is not None:
+            configure(root, match)
         (root / "match.json").write_text(json.dumps(match))
         cameras = {name: {"type": "simulated", "source": "pattern", "width": 320, "height": 192, "framerate": 10,
                           "clock": {"mode": "ptp-utc"}, "reconnectAttempts": 0, "mediaEpoch": "live",
@@ -98,6 +137,9 @@ class NativeStreamTest(unittest.TestCase):
         _, capture_error = capture.communicate(timeout=60)
         self.assertEqual(capture.returncode, 0, capture_error)
         output, error = stream.communicate(timeout=120)
+        if expect_failure:
+            self.assertNotEqual(stream.returncode, 0)
+            return error
         self.assertEqual(stream.returncode, 0, error)
         stats = json.loads(output)
         self.assertEqual(stats["status"], "completed")

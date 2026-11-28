@@ -2407,7 +2407,7 @@ var require_websocket = __commonJS({
     var net = require("net");
     var querystring = require("querystring");
     var tls = require("tls");
-    var { randomBytes, createHash: createHash2 } = require("crypto");
+    var { randomBytes: randomBytes2, createHash: createHash3 } = require("crypto");
     var { Duplex, Readable } = require("stream");
     var { URL: URL2 } = require("url");
     var PerMessageDeflate2 = require_permessage_deflate();
@@ -2961,7 +2961,7 @@ var require_websocket = __commonJS({
         }
       }
       const defaultPort = isSecure ? 443 : 80;
-      const key = randomBytes(16).toString("base64");
+      const key = randomBytes2(16).toString("base64");
       const request = isSecure ? https.request : http2.request;
       const protocolSet = /* @__PURE__ */ new Set();
       let perMessageDeflate;
@@ -3098,8 +3098,8 @@ var require_websocket = __commonJS({
           abortHandshake(websocket, socket, "Invalid Upgrade header");
           return;
         }
-        const digest = createHash2("sha1").update(key + GUID).digest("base64");
-        if (res.headers["sec-websocket-accept"] !== digest) {
+        const digest2 = createHash3("sha1").update(key + GUID).digest("base64");
+        if (res.headers["sec-websocket-accept"] !== digest2) {
           abortHandshake(websocket, socket, "Invalid Sec-WebSocket-Accept header");
           return;
         }
@@ -3483,7 +3483,7 @@ var require_websocket_server = __commonJS({
     var EventEmitter = require("events");
     var http2 = require("http");
     var { Duplex } = require("stream");
-    var { createHash: createHash2 } = require("crypto");
+    var { createHash: createHash3 } = require("crypto");
     var extension2 = require_extension();
     var PerMessageDeflate2 = require_permessage_deflate();
     var subprotocol2 = require_subprotocol();
@@ -3793,12 +3793,12 @@ var require_websocket_server = __commonJS({
           );
         }
         if (this._state > RUNNING) return abortHandshake(socket, 503);
-        const digest = createHash2("sha1").update(key + GUID).digest("base64");
+        const digest2 = createHash3("sha1").update(key + GUID).digest("base64");
         const headers = [
           "HTTP/1.1 101 Switching Protocols",
           "Upgrade: websocket",
           "Connection: Upgrade",
-          `Sec-WebSocket-Accept: ${digest}`
+          `Sec-WebSocket-Accept: ${digest2}`
         ];
         const ws = new this.options.WebSocket(null, void 0, this.options);
         if (protocols.size) {
@@ -10787,8 +10787,8 @@ var require_ajv = __commonJS({
 
 // server.mjs
 var import_node_http = __toESM(require("node:http"), 1);
-var import_node_fs4 = __toESM(require("node:fs"), 1);
-var import_node_path4 = __toESM(require("node:path"), 1);
+var import_node_fs5 = __toESM(require("node:fs"), 1);
+var import_node_path5 = __toESM(require("node:path"), 1);
 
 // node_modules/ws/wrapper.mjs
 var import_stream = __toESM(require_stream(), 1);
@@ -22301,16 +22301,108 @@ function prepareArchive(db) {
   };
 }
 
-// media-http.mjs
+// device-auth.mjs
 var import_node_crypto = require("node:crypto");
-var import_node_fs3 = require("node:fs");
-var import_promises = require("node:fs/promises");
-var import_node_os = require("node:os");
-var import_node_path3 = require("node:path");
-
-// media-archive.mjs
 var import_node_fs2 = require("node:fs");
 var import_node_path2 = require("node:path");
+var TOKEN_PREFIX = "pt1";
+var idPattern = /^[A-Za-z0-9_-]{1,64}$/;
+var secretPattern = /^[A-Za-z0-9_-]{43}$/;
+var ALL_MATCHES = "*";
+function validDeviceId(value) {
+  return typeof value === "string" && idPattern.test(value);
+}
+function digest(secret) {
+  return (0, import_node_crypto.createHash)("sha256").update(secret, "utf8").digest();
+}
+function parseToken(token) {
+  if (typeof token !== "string") return null;
+  const parts = token.split(".");
+  if (parts.length !== 3 || parts[0] !== TOKEN_PREFIX) return null;
+  const [, deviceId, secret] = parts;
+  if (!validDeviceId(deviceId) || !secretPattern.test(secret)) return null;
+  return { deviceId, secret };
+}
+function openDatabase(filename) {
+  const sqlite = process.getBuiltinModule?.("node:sqlite");
+  if (!sqlite) return null;
+  if (filename !== ":memory:") (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(filename), { recursive: true });
+  const db = new sqlite.DatabaseSync(filename);
+  db.exec(`
+    PRAGMA busy_timeout = 1000;
+    CREATE TABLE IF NOT EXISTS device_credentials (
+      device_id TEXT PRIMARY KEY,
+      token_sha256 BLOB NOT NULL,
+      matches TEXT NOT NULL,
+      label TEXT,
+      issued_at TEXT NOT NULL,
+      revoked_at TEXT
+    ) STRICT;
+  `);
+  return db;
+}
+function loopback(host2) {
+  return ["127.0.0.1", "::1", "localhost"].includes(host2) || /^127\./.test(host2);
+}
+function createDeviceAuth(filename, { host: host2, mode = process.env.PITCHTRACE_DEVICE_AUTH } = {}) {
+  if (mode !== void 0 && mode !== "" && mode !== "required" && mode !== "optional")
+    throw new Error("PITCHTRACE_DEVICE_AUTH \u987B\u4E3A required \u6216 optional");
+  if (mode === "optional" && !loopback(host2))
+    throw new Error("\u975E\u56DE\u73AF\u5730\u5740\u76D1\u542C\u65F6\u5FC5\u987B\u6821\u9A8C\u8BBE\u5907\u51ED\u636E");
+  const required = mode === "required" || !loopback(host2);
+  let db;
+  let statement;
+  function lookup(deviceId) {
+    if (db === void 0) {
+      db = openDatabase(filename);
+      statement = db?.prepare(
+        "SELECT token_sha256, matches FROM device_credentials WHERE device_id = ? AND revoked_at IS NULL"
+      );
+    }
+    return statement?.get(deviceId);
+  }
+  return {
+    required,
+    check(request, matchId) {
+      const header = request.headers.authorization;
+      if (header === void 0) {
+        return required ? { status: 401, message: "Device credential required" } : null;
+      }
+      const match = /^Bearer (\S+)$/.exec(header);
+      const parsed = match && parseToken(match[1]);
+      const row = parsed && lookup(parsed.deviceId);
+      const expected = row && Buffer.from(row.token_sha256);
+      if (!row || !(0, import_node_crypto.timingSafeEqual)(expected, digest(parsed.secret)))
+        return { status: 401, message: "Invalid or revoked device credential" };
+      const matches = JSON.parse(row.matches);
+      if (matchId !== null && !matches.includes(ALL_MATCHES) && !matches.includes(matchId))
+        return { status: 403, message: "Device is not allowed to write this match" };
+      request.deviceId = parsed.deviceId;
+      return null;
+    },
+    close() {
+      db?.close();
+    }
+  };
+}
+function refuseWrite(request, response, { status, message }) {
+  const headers = { "Content-Type": "text/plain; charset=utf-8", Connection: "close" };
+  if (status === 401) headers["WWW-Authenticate"] = 'Bearer realm="pitchtrace-device"';
+  response.writeHead(status, headers);
+  response.end(message);
+  request.resume();
+}
+
+// media-http.mjs
+var import_node_crypto2 = require("node:crypto");
+var import_node_fs4 = require("node:fs");
+var import_promises = require("node:fs/promises");
+var import_node_os = require("node:os");
+var import_node_path4 = require("node:path");
+
+// media-archive.mjs
+var import_node_fs3 = require("node:fs");
+var import_node_path3 = require("node:path");
 
 // media-index.mjs
 var import_ajv2 = __toESM(require_ajv(), 1);
@@ -22434,10 +22526,10 @@ function readMediaIndex(input) {
 function openMediaArchive(filename, directory) {
   const sqlite = process.getBuiltinModule?.("node:sqlite");
   if (!sqlite) return null;
-  (0, import_node_fs2.mkdirSync)((0, import_node_path2.join)(directory, "parts"), { recursive: true });
-  (0, import_node_fs2.mkdirSync)((0, import_node_path2.join)(directory, "uploads"), { recursive: true });
+  (0, import_node_fs3.mkdirSync)((0, import_node_path3.join)(directory, "parts"), { recursive: true });
+  (0, import_node_fs3.mkdirSync)((0, import_node_path3.join)(directory, "uploads"), { recursive: true });
   if (filename !== ":memory:")
-    (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(filename), { recursive: true });
+    (0, import_node_fs3.mkdirSync)((0, import_node_path3.dirname)(filename), { recursive: true });
   const db = new sqlite.DatabaseSync(filename);
   try {
     db.exec(`
@@ -22526,7 +22618,7 @@ function prepareArchive2(db, directory) {
       AND abs(e.utc - ?) <= e.tolerance_us
     ORDER BY abs(e.utc - ?), e.utc, e.epoch, e.segment LIMIT 1
   `);
-  const part = (digest) => (0, import_node_path2.join)(directory, "parts", digest);
+  const part = (digest2) => (0, import_node_path3.join)(directory, "parts", digest2);
   function transaction(write) {
     db.exec("BEGIN IMMEDIATE");
     try {
@@ -22540,13 +22632,13 @@ function prepareArchive2(db, directory) {
   }
   function publishFile(upload) {
     try {
-      (0, import_node_fs2.linkSync)(upload.filename, part(upload.digest));
+      (0, import_node_fs3.linkSync)(upload.filename, part(upload.digest));
     } catch (error2) {
       if (error2.code !== "EEXIST") throw error2;
     }
   }
   return {
-    uploads: (0, import_node_path2.join)(directory, "uploads"),
+    uploads: (0, import_node_path3.join)(directory, "uploads"),
     part,
     close: () => db.close(),
     writeInit(key, upload) {
@@ -22686,24 +22778,24 @@ async function readUpload(request, limit, consume) {
   return count;
 }
 async function writeBinary(request, store, key, kind) {
-  const digest = request.headers["x-content-sha256"];
-  if (!validSha256(digest)) {
+  const digest2 = request.headers["x-content-sha256"];
+  if (!validSha256(digest2)) {
     request.resume();
     throw new UploadError(422, "A valid X-Content-SHA256 header is required");
   }
-  const filename = (0, import_node_path3.join)(store.uploads, (0, import_node_crypto.randomUUID)());
+  const filename = (0, import_node_path4.join)(store.uploads, (0, import_node_crypto2.randomUUID)());
   const file = await (0, import_promises.open)(filename, "wx");
-  const hash = (0, import_node_crypto.createHash)("sha256");
+  const hash = (0, import_node_crypto2.createHash)("sha256");
   try {
     const bytes = await readUpload(request, mediaMaxBytes, async (chunk) => {
       hash.update(chunk);
       await file.writeFile(chunk);
     });
-    if (!bytes || hash.digest("hex") !== digest)
+    if (!bytes || hash.digest("hex") !== digest2)
       throw new UploadError(422, "Media length or digest is invalid");
     await file.sync();
     const write = kind === "init" ? store.writeInit : store.writeSegment;
-    return write(key, { filename, digest, bytes });
+    return write(key, { filename, digest: digest2, bytes });
   } finally {
     await file.close();
     await (0, import_promises.unlink)(filename);
@@ -22783,7 +22875,7 @@ function send(response, status, data, type = "text/plain; charset=utf-8") {
   });
   response.end(data);
 }
-function createMediaHandler(filename, configuredDirectory) {
+function createMediaHandler(filename, configuredDirectory, { authorize } = {}) {
   let store;
   let temporary;
   return {
@@ -22794,9 +22886,16 @@ function createMediaHandler(filename, configuredDirectory) {
       const put = request.method === "PUT" && ["init", "segment", "index"].includes(kind);
       const get = request.method === "GET" && kind !== "index";
       if (!put && !get) return false;
+      if (put && authorize) {
+        const denied = authorize(request, key[0]);
+        if (denied) {
+          refuseWrite(request, response, denied);
+          return true;
+        }
+      }
       try {
         if (store === void 0) {
-          const directory = configuredDirectory || (filename === ":memory:" ? temporary ??= (0, import_node_fs3.mkdtempSync)((0, import_node_path3.join)((0, import_node_os.tmpdir)(), "pitchtrace-media-")) : (0, import_node_path3.join)((0, import_node_path3.dirname)(filename), "media"));
+          const directory = configuredDirectory || (filename === ":memory:" ? temporary ??= (0, import_node_fs4.mkdtempSync)((0, import_node_path4.join)((0, import_node_os.tmpdir)(), "pitchtrace-media-")) : (0, import_node_path4.join)((0, import_node_path4.dirname)(filename), "media"));
           store = openMediaArchive(filename, directory);
         }
         if (!store)
@@ -22827,7 +22926,7 @@ function createMediaHandler(filename, configuredDirectory) {
         } else {
           const part = kind === "init" ? store.readyInit(key) : store.readySegment(key);
           if (!part) throw new UploadError(404, "Media part is unavailable");
-          const stream = (0, import_node_fs3.createReadStream)(
+          const stream = (0, import_node_fs4.createReadStream)(
             store.part(part.digest ?? part.segment_digest)
           );
           stream.once("error", () => {
@@ -22855,7 +22954,7 @@ function createMediaHandler(filename, configuredDirectory) {
     },
     close() {
       store?.close();
-      if (temporary) (0, import_node_fs3.rmSync)(temporary, { recursive: true, force: true });
+      if (temporary) (0, import_node_fs4.rmSync)(temporary, { recursive: true, force: true });
     }
   };
 }
@@ -22863,10 +22962,13 @@ function createMediaHandler(filename, configuredDirectory) {
 // server.mjs
 var host = process.env.PITCHTRACE_HOST || "127.0.0.1";
 var port = Number(process.env.PITCHTRACE_PORT || 8766);
-var serverDir = import_node_path4.default.dirname(process.argv[1]);
-var page = import_node_path4.default.resolve(serverDir, "../web/dist/index.html");
-var archivePath = process.env.PITCHTRACE_DB || import_node_path4.default.join(serverDir, "data", "scenes.sqlite");
-var media = createMediaHandler(archivePath, process.env.PITCHTRACE_MEDIA_DIR);
+var serverDir = import_node_path5.default.dirname(process.argv[1]);
+var page = import_node_path5.default.resolve(serverDir, "../web/dist/index.html");
+var archivePath = process.env.PITCHTRACE_DB || import_node_path5.default.join(serverDir, "data", "scenes.sqlite");
+var devices = createDeviceAuth(archivePath, { host });
+var media = createMediaHandler(archivePath, process.env.PITCHTRACE_MEDIA_DIR, {
+  authorize: (request, matchId) => devices.check(request, matchId)
+});
 var maxFrameBytes = 256e3;
 var wss = new import_websocket_server.default({ noServer: true, maxPayload: maxFrameBytes });
 var sceneViewers = /* @__PURE__ */ new Map();
@@ -22926,10 +23028,10 @@ var server = import_node_http.default.createServer(async (request, response) => 
   const pathname = separator < 0 ? request.url : request.url.slice(0, separator);
   const queryString = separator < 0 ? "" : request.url.slice(separator + 1);
   if (request.method === "GET" && pathname === "/") {
-    if (!import_node_fs4.default.existsSync(page))
+    if (!import_node_fs5.default.existsSync(page))
       return reply(404, "Build the viewer with npm run build in live/web.");
     response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    import_node_fs4.default.createReadStream(page).on("error", () => response.destroy()).pipe(response);
+    import_node_fs5.default.createReadStream(page).on("error", () => response.destroy()).pipe(response);
     return;
   }
   const matchId = sceneRoute(pathname, "frames");
@@ -22958,6 +23060,8 @@ var server = import_node_http.default.createServer(async (request, response) => 
   if (request.method !== "POST") return reply(404, "Unknown endpoint");
   const v1 = request.url === "/frame";
   if (!v1 && !matchId) return reply(404, "Unknown endpoint");
+  const denied = devices.check(request, v1 ? null : matchId);
+  if (denied) return refuseWrite(request, response, denied);
   const { frame, code, message } = await readFrame(request);
   if (code) return reply(code, message);
   if (v1) {
@@ -23054,12 +23158,14 @@ server.on("close", () => {
   clearInterval(ticker);
   archive?.close();
   media.close();
+  devices.close();
 });
-server.listen(
-  port,
-  host,
-  () => console.log("PitchTrace 3D   http://" + host + ":" + server.address().port)
-);
+server.listen(port, host, () => {
+  console.log("PitchTrace 3D   http://" + host + ":" + server.address().port);
+  console.error(
+    devices.required ? "\u8BBE\u5907\u51ED\u636E\uFF1A\u6240\u6709\u5199\u5165\u9700 Authorization: Bearer\uFF0C\u7B7E\u53D1\u89C1 tools/devices.mjs" : "\u8BBE\u5907\u51ED\u636E\uFF1A\u56DE\u73AF\u5730\u5740\u8BD5\u64AD\uFF0C\u672A\u5E26\u51ED\u636E\u7684\u5199\u5165\u7167\u5E38\u63A5\u53D7"
+  );
+});
 /*! Bundled license information:
 
 three/build/three.core.js:

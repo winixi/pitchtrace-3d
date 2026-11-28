@@ -205,7 +205,8 @@ def process(command, config_file, source, database, executable):
         raise ValueError("归档不能与输入文件同名")
     detector_settings = settings.get("detector", {})
     model = load_vision_model(detector_settings, config_file.parent) if replay else None
-    delivery_keys = {"gateway", "recordings", "captureConfig", "mediaEpoch", "backfillBytesPerSecond", "mediaBytesPerSecond", "retentionDays"}
+    delivery_keys = {"gateway", "recordings", "captureConfig", "mediaEpoch", "backfillBytesPerSecond", "mediaBytesPerSecond", "retentionDays",
+                     "deviceTokenFile", "gatewayAllowHttp"}
     provenance = {
         "command": command, "sampleSource": config.sample_source,
         "configuration": {k: v for k, v in settings.items() if k not in delivery_keys},

@@ -1,3 +1,4 @@
+import { refuseWrite } from "./device-auth.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, mkdtempSync, rmSync } from "node:fs";
 import { open, unlink } from "node:fs/promises";
@@ -194,7 +195,7 @@ function send(response, status, data, type = "text/plain; charset=utf-8") {
   response.end(data);
 }
 
-export function createMediaHandler(filename, configuredDirectory) {
+export function createMediaHandler(filename, configuredDirectory, { authorize } = {}) {
   let store;
   let temporary;
   return {
@@ -206,6 +207,13 @@ export function createMediaHandler(filename, configuredDirectory) {
         request.method === "PUT" && ["init", "segment", "index"].includes(kind);
       const get = request.method === "GET" && kind !== "index";
       if (!put && !get) return false;
+      if (put && authorize) {
+        const denied = authorize(request, key[0]);
+        if (denied) {
+          refuseWrite(request, response, denied);
+          return true;
+        }
+      }
       try {
         if (store === undefined) {
           const directory =

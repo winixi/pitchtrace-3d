@@ -43,7 +43,9 @@ def file_signature(path):
 
 
 def inference_inputs(data, base, executable):
-    inputs = {"configuration": {k: v for k, v in data.items() if k != "gateway"},
+    from gateway_auth import DELIVERY_KEYS
+
+    inputs = {"configuration": {k: v for k, v in data.items() if k != "gateway" and k not in DELIVERY_KEYS},
               "reports": {entry["calibrationId"]: digest(base / entry["report"]) for entry in data["calibrations"]},
               "worker": digest(executable),
               "modules": {p.name: digest(p) for p in Path(__file__).parent.glob("*.py")}}
@@ -110,9 +112,9 @@ class Run:
             self.state.pop("failedStage", None)
         write_json(self.root / "run-state.json", self.state)
 
-    def command(self, *args):
+    def command(self, *args, env=None):
         # 子进程若在父进程退出后继续写盘，继承的文件锁可防止另一编排器重入。
-        result = subprocess.run([self.executable, *args], stdout=sys.stderr, pass_fds=(self.lock.fileno(),))
+        result = subprocess.run([self.executable, *args], stdout=sys.stderr, pass_fds=(self.lock.fileno(),), env=env)
         if result.returncode:
             raise ValueError(f"{args[0]} 退出码为 {result.returncode}，请查看该命令的诊断")
 
@@ -185,13 +187,13 @@ class Run:
             raise ValueError("运行目录内场景或证据发生变化")
         self.save("localComplete")
         if gateway:
-            self.publish(config, data, media, db, gateway)
+            self.publish(config, data, media, db, gateway, path.parent)
         if self.state.get("retentionDays") is not None:
             from retention import record_owned_outputs
             record_owned_outputs(self.root)
         self.save("completed")
 
-    def publish(self, config, data, media, db, gateway):
+    def publish(self, config, data, media, db, gateway, folder):
         destinations = self.state.setdefault("destinations", {})
         jobs = destinations.setdefault(gateway, {})
         commands = {"scenes": ["publish-scenes", db, gateway, config.match_id, config.stream_epoch]}
@@ -202,10 +204,14 @@ class Run:
             if not (camera / "epochs").is_dir():
                 args.append(data.get("mediaEpoch", config.stream_epoch))
             commands["media/" + camera.name] = args + [camera]
+        from gateway_auth import allows_http, child_environment, load_device_token
+
+        # 凭据只经环境变量交给子进程，不出现在命令行参数或运行记录中。
+        env = child_environment(load_device_token(data, folder), allows_http(data))
         self.save("publishing")
         errors = []
         with ThreadPoolExecutor(max_workers=len(commands)) as pool:
-            pending = {pool.submit(self.command, *args): name for name, args in commands.items()
+            pending = {pool.submit(self.command, *args, env=env): name for name, args in commands.items()
                        if jobs.get(name) != "confirmed"}
             for future in as_completed(pending):
                 name = pending[future]
@@ -232,6 +238,10 @@ def run_match(path, root, executable):
                 or url.query or url.fragment):
             raise ValueError("gateway 必须为不含帐号、查询或片段的 HTTP(S) 网关基址")
         gateway = gateway.rstrip("/")
+        from gateway_auth import allows_http, auth_headers, load_device_token
+
+        # 先核对凭据与连接方式，避免重建完成后才发现无法上行。
+        auth_headers(gateway, load_device_token(data, path.parent), allows_http(data))
     if not is_identifier(data.get("mediaEpoch", config.stream_epoch)):
         raise ValueError("mediaEpoch 必须是有效的 v2 标识")
     rate = data.get("backfillBytesPerSecond", 0)

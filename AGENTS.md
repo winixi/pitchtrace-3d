@@ -82,7 +82,7 @@ node server.cjs   # 监听 127.0.0.1:8766
 node live/server/server.cjs   # 需先在 live/web 执行过 npm run build
 ```
 
-启动后用浏览器打开 <http://127.0.0.1:8766/>。环境变量 `PITCHTRACE_HOST`、`PITCHTRACE_PORT` 可改监听地址，`PITCHTRACE_DB` 可指定 v2 SQLite 路径。
+启动后用浏览器打开 <http://127.0.0.1:8766/>。环境变量 `PITCHTRACE_HOST`、`PITCHTRACE_PORT` 可改监听地址，`PITCHTRACE_DB` 可指定 v2 SQLite 路径，`PITCHTRACE_DEVICE_AUTH=required` 在回环地址也强制设备凭据（非回环地址始终强制）。设备凭据用 `node live/server/tools/devices.mjs` 签发，Edge 经 `deviceTokenFile` 或 `PITCHTRACE_DEVICE_TOKEN` 携带。
 
 ## 架构与边界
 

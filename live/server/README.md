@@ -16,7 +16,7 @@ node live/server/server.cjs
 
 - **本机试播** 从 `/demo` 接收每秒 20 帧循环播放的模拟比赛，可验证 WebSocket 通路。
 - **连接直播 → 连接数据** 订阅 `/live`。边缘端向同一服务的 `POST /frame` 发送每帧完整的场景 JSON。服务把校验通过的帧广播给订阅者。第一帧到来后画面才会显示。网页用约 100 毫秒的小缓冲插值，停帧会显示等待提示。断线后自动重连。
-- 默认监听 `127.0.0.1:8766`。在可信局域网中，可通过 `PITCHTRACE_HOST` 指定 Mac 的局域网 IP、通过 `PITCHTRACE_PORT` 指定端口，观众用相应的 IP 和端口打开页面。服务采用本地开发配置，没有身份验证。
+- 默认监听 `127.0.0.1:8766`。在可信局域网中，可通过 `PITCHTRACE_HOST` 指定 Mac 的局域网 IP、通过 `PITCHTRACE_PORT` 指定端口，观众用相应的 IP 和端口打开页面。监听非回环地址时，所有写入（v1 帧、v2 场景、原片三件）都需要设备凭据；回环地址默认不强制，可设 `PITCHTRACE_DEVICE_AUTH=required` 在本机强制。观看与订阅目前不做身份验证。见下文「设备凭据」。
 - **内置演示** 回到内置的一分钟时间轴。WebSocket 模式持续显示传入的时间戳，时长由数据源决定。
 
 ## 发布 Live
@@ -133,6 +133,20 @@ node live/server/tools/review-sample.mjs http://127.0.0.1:8766
 | `GET /{cameraId}/locate?captureUtcUs=…` | 返回匹配曝光、差值、媒体 epoch、片段、PTS、时基及单段复核播放列表。缺口返回 404。 |
 
 二进制上传需要 `X-Content-SHA256`，值为 64 位小写十六进制摘要。三件齐备且校验匹配后才对浏览器可见。同路径重传相同内容返回 202，内容或交叉校验冲突返回 409，摘要或索引格式错误返回 422。二进制单件上限 128 MiB，索引上限 1 MB。SQLite 存储媒体元数据和曝光索引，原始字节默认放在数据库同目录的 `media/`，可用 `PITCHTRACE_MEDIA_DIR` 指定位置。使用磁盘数据库和媒体目录验证重启恢复。[曝光索引格式](../../schemas/v2/media-index.schema.json)
+
+## 设备凭据
+
+为每台 Edge 签发凭据，使用与网关相同的 `PITCHTRACE_DB`：
+
+```sh
+node live/server/tools/devices.mjs issue edge-01 --match training --label "场边 Mac A" --out edge-01.token
+node live/server/tools/devices.mjs list
+node live/server/tools/devices.mjs revoke edge-01
+```
+
+`issue` 只显示一次明文凭据；`--out` 新建权限为 0600 的文件且不覆盖已有文件。`--match` 可重复，`--all-matches` 授权全部比赛。重新签发同一设备即轮换，旧凭据立即失效。网关库中只保存密钥摘要，吊销和轮换无需重启网关。工具只依赖 Node.js 22.13+ 内置模块，可在只有 `server.cjs` 的主机上运行。
+
+写入请求携带 `Authorization: Bearer <凭据>`。缺凭据或凭据无效返回 401（附 `WWW-Authenticate`），凭据未授权该比赛返回 403，校验发生在读取请求体之前。Edge 侧在比赛配置填写 `deviceTokenFile`，或设置环境变量 `PITCHTRACE_DEVICE_TOKEN`。完整约定见 [技术方案「设备凭据」](../../docs/02-technical-design.md#设备凭据)。
 
 ## 重新构建试播网关
 

@@ -8,6 +8,7 @@
 | `gateway` | 可选 HTTP(S) 网关基址，例如 `http://127.0.0.1:8766`。省略时只产出本地归档。 |
 | `mediaEpoch` | 平铺机位的媒体周期，默认使用 `streamEpoch`。显式分周期的机位沿用录像内的周期名。 |
 | `backfillBytesPerSecond` | 历史场景补传的字节速率。默认 0 表示使用可用带宽。 |
+| `deviceTokenFile`、`gatewayAllowHttp` | 设备凭据文件与明文 HTTP 许可，含义同 [stream-match](stream-match.md)。启动时即核对凭据格式、文件权限与连接方式；凭据经环境变量交给 `publish-scenes`、`publish-media` 子进程。 |
 | `retentionDays` | 可选正整数，指定本地生成物的保留天数。启用后由留存命令预演及执行清理。 |
 
 例如，已有 `match.json` 和同目录的 `recordings/` 时，在比赛配置中加入 `"recordings": "recordings"`，然后从仓库根目录运行下列命令。首次选择一个新目录或空目录。
