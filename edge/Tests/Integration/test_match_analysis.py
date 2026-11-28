@@ -9,7 +9,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "Sources/PitchTraceEdge/Geometry"))
 from match_analysis import MatchAnalysis
 from match_events import CandidateDetector
-from pose import MODEL_TO_WORLD, local_pose
+from pose import MODEL_TO_WORLD, constrain_bones, local_pose
 
 
 def subject(track="one", x=0):
@@ -81,6 +81,7 @@ class AnalysisTests(unittest.TestCase):
         for name in points.keys() - {"leftWrist"}:
             np.testing.assert_allclose(measured[name]["reconstructedM"], points[name], atol=1e-8)
         bones = players[0]["bones"]
+        self.assertEqual(analysis.measurements["one"]["axialTwist"]["left_knee"], "unobserved")
         np.testing.assert_allclose(bones["body"], [0, 0, 0, 1], atol=1e-8)
         self.assertAlmostEqual(players[0]["yawRad"], 0)
         self.assertNotIn("left_elbow", bones)
@@ -97,6 +98,25 @@ class AnalysisTests(unittest.TestCase):
         self.assertAlmostEqual(yaw, np.pi / 2)
         np.testing.assert_allclose(turned["left_knee"], bones["left_knee"], atol=1e-8)
 
+    def test_bone_length_and_range_constraints(self):
+        pts = {"leftHip": np.array([0, .9, 0.]), "leftKnee": np.array([0, .5, 0.]),
+               "leftAnkle": np.array([0, .5, .4])}
+        out, notes, lengths = constrain_bones(pts, {})
+        self.assertEqual(notes, {})
+        self.assertAlmostEqual(lengths["leftHip-leftKnee"], .4)
+        # 小腿突然拉长到 0.8 米：沿原方向缩到估计长度的 +15%。
+        stretched = dict(pts, leftAnkle=np.array([0, .5, .8]))
+        out, notes, after = constrain_bones(stretched, lengths)
+        self.assertEqual(notes, {"leftAnkle": "lengthClamped"})
+        self.assertAlmostEqual(np.linalg.norm(out["leftAnkle"] - out["leftKnee"]), .46, places=6)
+        self.assertEqual(after["leftKnee-leftAnkle"], lengths["leftKnee-leftAnkle"])
+        # 小腿折回大腿方向（膝完全折返）：舍弃踝及其后子链。
+        folded = dict(pts, leftAnkle=np.array([0, .85, 0.]), leftToe=np.array([0, .9, .1]))
+        out, notes, _ = constrain_bones(folded, lengths)
+        self.assertEqual(notes["leftAnkle"], "rangeRejected")
+        self.assertNotIn("leftAnkle", out)
+        # 不改变输入。
+        np.testing.assert_allclose(pts["leftAnkle"], [0, .5, .4])
     def test_kick_shot_pass_and_gaps(self):
         for pitch, expected in ((None, "kick"), (20, "shot")):
             detector = CandidateDetector(pitch, 5 if pitch else None)

@@ -15,6 +15,63 @@ JOINTS = {"nose", "neck", "root", *(side + part for side in ("left", "right")
 MODEL_TO_WORLD = np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]], dtype=float)
 
 
+# (起点, 终点, 最小长度, 最大长度)，单位米，按父到子排序。限制成人骨段的可信范围。
+SEGMENTS = (("Hip", "Knee", .25, .60), ("Knee", "Ankle", .25, .60), ("Ankle", "Toe", .08, .30),
+            ("Shoulder", "Elbow", .18, .45), ("Elbow", "Wrist", .15, .40))
+LENGTH_TOLERANCE = .15
+LENGTH_RATE = .1
+# 膝、肘处上下骨段方向夹角的上限，超过时近似完全折返，视为关节不可信。
+MAX_BEND_RAD = math.radians(165)
+# 二维关节估计逐骨段只给出摆动方向，沿骨轴的扭转无观测。
+LIMB_BONES = frozenset(side + "_" + bone for side in ("left", "right")
+                       for bone in ("thigh", "knee", "ankle", "shoulder", "elbow"))
+
+
+def constrain_bones(joints, lengths):
+    """用骨长范围和关节折返上限约束关节，返回 (关节, 备注, 更新后的骨长)。
+
+    lengths 是该轨迹上各骨段的长度估计（滑动平均）。长度超出估计容差或绝对范围时，
+    子关节沿原方向缩放到边界。折返超限的子关节被舍弃，其后的子链随之缺测。
+    """
+    result, notes, updated = dict(joints), {}, dict(lengths)
+    for side in ("left", "right"):
+        previous_direction = None
+        for start, end, low, high in SEGMENTS:
+            a, b = side + start, side + end
+            if start in ("Hip", "Shoulder"):
+                previous_direction = None
+            if a not in result or b not in result:
+                previous_direction = None
+                continue
+            vector = result[b] - result[a]
+            length = float(np.linalg.norm(vector))
+            if length < 1e-6:
+                del result[b]
+                notes[b] = "degenerate"
+                previous_direction = None
+                continue
+            direction = vector / length
+            if previous_direction is not None and start in ("Knee", "Elbow"):
+                angle = math.acos(float(np.clip(previous_direction @ direction, -1, 1)))
+                if angle > MAX_BEND_RAD:
+                    del result[b]
+                    notes[b] = "rangeRejected"
+                    previous_direction = None
+                    continue
+            key = a + "-" + b
+            estimate = lengths.get(key)
+            lo, hi = (low, high) if estimate is None else (
+                max(low, estimate * (1 - LENGTH_TOLERANCE)), min(high, estimate * (1 + LENGTH_TOLERANCE)))
+            clamped = min(max(length, lo), hi)
+            if clamped != length:
+                result[b] = result[a] + direction * clamped
+                notes[b] = "lengthClamped"
+            else:
+                updated[key] = length if estimate is None else estimate + LENGTH_RATE * (length - estimate)
+            previous_direction = direction
+    return result, notes, updated
+
+
 def frame_ref(row):
     return {k: row[k] for k in ("cameraId", "captureUtcUs", "mediaEpoch", "segment", "pts") if k in row}
 

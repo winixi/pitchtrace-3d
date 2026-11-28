@@ -18,6 +18,10 @@ BALL_RMS_PX = 3.0
 PREDICTION_US = 300_000
 REACQUIRE_US = 1_000_000
 PLAYER_LIMIT = 32
+# 三路及以上的足点组中，偏离中位数超过此距离的视角视为离群。
+FOOT_OUTLIER_M = 0.75
+# 轨迹与观测的号码均已读出且不一致时加到匹配代价上，OCR 可能出错，故不直接禁配。
+NUMBER_MISMATCH_M = 1.5
 
 
 def assign(costs):
@@ -127,6 +131,29 @@ def team(group):
     return next(iter(values)) if len(values) == 1 else None
 
 
+def number(group):
+    """组内置信度总和最高的号码，没有读出时为 None。"""
+    weights = {}
+    for foot in group:
+        value = foot.reference["player"].get("number")
+        if value is not None:
+            weights[value] = weights.get(value, 0.) + foot.quality
+    if not weights:
+        return None
+    best = max(weights.values())
+    winners = [v for v, w in weights.items() if w == best]
+    return winners[0] if len(winners) == 1 else None
+
+
+def reject_outliers(group):
+    """三个及以上视角时剔除偏离中位足点过远的视角，保留至少两个。"""
+    if len(group) < 3:
+        return group
+    median = np.median([foot.position for foot in group], axis=0)
+    kept = [foot for foot in group if math.dist(foot.position, median) <= FOOT_OUTLIER_M]
+    return kept if len(kept) >= 2 else group
+
+
 def cost_to_group(group, foot):
     known_team = team(group)
     other = foot.reference["player"].get("teamId")
@@ -176,7 +203,7 @@ def collect(cameras, rows):
             if pixel is not None:
                 view = (camera.report, camera.rotation, camera.translation, pixel)
                 ball_views.append(({**reference, "ball": ball}, view, confidence(ball)))
-    return groups, ball_views
+    return [reject_outliers(group) for group in groups], ball_views
 
 
 def measure_ball(views):
@@ -211,6 +238,7 @@ class Motion:
     velocity: np.ndarray = field(default_factory=lambda: np.zeros(3))
     quality: float = 1.
     team_id: str | None = None
+    number: int | None = None
 
     def extrapolate(self, utc):
         seconds = min((utc - self.time) / 1e6, PREDICTION_US / 1e6)
@@ -231,12 +259,16 @@ class Motion:
         return {"state": "lost", "positionM": None, "views": []}
 
 
-def track_cost(track, point, team_id, utc):
+def track_cost(track, point, team_id, utc, number_value=None):
     if track.team_id and team_id and track.team_id != team_id:
         return math.inf
     delta = (utc - track.time) / 1e6
     gap = math.dist(track.extrapolate(utc), point)
-    return gap if gap <= min(4., .65 + 12 * delta) else math.inf
+    if gap > min(4., .65 + 12 * delta):
+        return math.inf
+    if track.number is not None and number_value is not None and track.number != number_value:
+        gap += NUMBER_MISMATCH_M
+    return gap
 
 
 class Tracker:
@@ -287,9 +319,10 @@ class Tracker:
         groups = groups[:PLAYER_LIMIT]
         points = [group_position(group) for group in groups]
         teams = [team(group) for group in groups]
+        numbers = [number(group) for group in groups]
         active = {k: v for k, v in self.tracks.items() if utc_us - v.time <= REACQUIRE_US}
         track_ids = sorted(active)
-        pairs = assign([[track_cost(active[k], p, t, utc_us) for p, t in zip(points, teams)] for k in track_ids])
+        pairs = assign([[track_cost(active[k], p, t, utc_us, n) for p, t, n in zip(points, teams, numbers)] for k in track_ids])
         labels = {j: track_ids[i] for i, j in pairs}
         people, evidence = {}, {}
         for j, group in enumerate(groups):
@@ -303,6 +336,7 @@ class Tracker:
                 active[track_id].update(point, utc_us, 12.)
             track = active[track_id]
             track.team_id = teams[j] or track.team_id
+            track.number = numbers[j] if numbers[j] is not None else track.number
             track.quality = sum(foot.quality for foot in group) / len(group)
             self.last_feet[track_id] = group
             evidence[track_id] = [foot.reference for foot in group]

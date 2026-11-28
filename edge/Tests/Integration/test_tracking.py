@@ -144,5 +144,31 @@ class TrackingTests(unittest.TestCase):
         self.assertEqual(len({p["trackId"] for p in people}), 32)
 
 
+    def test_foot_outlier_view_is_dropped_from_group(self):
+        rows = [row(c, 0, [(0, 0)]) for c in ("A", "B", "C")]
+        rows[2]["players"] = [{"foot": pixel("C", (.9, 0, 0))}]
+        people, _, evidence = Tracker().update(0, cameras(), rows)
+        self.assertEqual(people[0]["views"], ["A", "B"])
+        np.testing.assert_allclose(people[0]["positionM"], [0, 0, 0], atol=1e-7)
+        self.assertEqual([r["cameraId"] for r in evidence[people[0]["trackId"]]], ["A", "B"])
+        # 两个视角分歧时无法判定离群方，不剔除。
+        people, _, _ = Tracker().update(0, cameras(), rows[1:])
+        self.assertEqual(people[0]["views"], ["B", "C"])
+
+    def test_number_mismatch_prefers_matching_track(self):
+        def numbered(cam, utc, items):
+            result = row(cam, utc, [(x, z) for x, z, _ in items])
+            for player, (_, _, number) in zip(result["players"], items):
+                player["number"] = number
+            return result
+        tracker = Tracker()
+        people, _, _ = tracker.update(0, cameras(), [numbered("A", 0, [(-.2, 0, 7), (.2, 0, 9)])])
+        ids = {7: people[0]["trackId"], 9: people[1]["trackId"]}
+        # 两人交叉后各自靠近对方上一位置，号码使身份留在原轨迹。
+        people, _, _ = tracker.update(100_000, cameras(), [numbered("A", 100_000, [(-.1, 0, 9), (.1, 0, 7)])])
+        x = {p["trackId"]: p["positionM"][0] for p in people}
+        self.assertAlmostEqual(x[ids[7]], .1)
+        self.assertAlmostEqual(x[ids[9]], -.1)
+
 if __name__ == "__main__":
     unittest.main()

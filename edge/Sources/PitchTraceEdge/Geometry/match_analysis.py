@@ -8,7 +8,7 @@ import numpy as np
 from calibrate import is_identifier
 from match_config import utc_us as parse_utc
 from match_events import CandidateDetector
-from pose import frame_ref, local_pose, measure_joints
+from pose import LIMB_BONES, constrain_bones, frame_ref, local_pose, measure_joints
 
 
 def interval(row, label):
@@ -76,6 +76,7 @@ class MatchAnalysis:
         self.votes = {}
         self.detector = CandidateDetector(pitch_length_m, goal_width_m)
         self.measurements = {}
+        self.bone_lengths = {}
         self.previous_time = None
 
     def reset_geometry(self):
@@ -123,13 +124,23 @@ class MatchAnalysis:
                         point = alpha * point + (1 - alpha) * np.asarray(old["smoothedM"])
                     smoothed[name] = point
                     audit[name]["smoothedM"] = point.tolist()
+                smoothed, notes, self.bone_lengths[track] = constrain_bones(
+                    smoothed, self.bone_lengths.get(track, {}))
+                for name in joints:
+                    if name in notes:
+                        audit[name]["constraint"] = notes[name]
+                    if name not in smoothed:
+                        audit[name].pop("smoothedM", None)
+                    elif name in notes:
+                        audit[name]["smoothedM"] = smoothed[name].tolist()
                 yaw, bones = local_pose(smoothed)
                 if yaw is not None:
                     player["yawRad"] = yaw
                 if bones:
                     player["bones"] = bones
                 tracks[track] = dict(player=player, joints=joints, refs=[frame_ref(r) for r in rows])
-            self.measurements[track] = {"joints": audit, "frames": [frame_ref(r) for r in rows],
+            self.measurements[track] = {"joints": audit,
+                                        "axialTwist": {k: "unobserved" for k in player.get("bones", {}) if k in LIMB_BONES}, "frames": [frame_ref(r) for r in rows],
                                         "identitySource": "manual" if manual else "vote"}
             result.append(player)
 
@@ -141,6 +152,7 @@ class MatchAnalysis:
                     if len(winners) != 1 or p is not winners[0]:
                         p["rosterId"] = None
         self.votes = {t: self.votes[t] for t in self.measurements}
+        self.bone_lengths = {t: v for t, v in self.bone_lengths.items() if t in self.measurements}
         self.previous_time = utc_us
         ball_refs = [frame_ref(r) for r in evidence.get("_ball", []) if r["cameraId"] in (ball or {}).get("views", [])]
         return result, self.detector.update(utc_us, tracks, ball, ball_refs)
