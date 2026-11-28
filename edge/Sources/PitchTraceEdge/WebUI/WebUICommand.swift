@@ -35,12 +35,14 @@ struct WebUICommand {
     let bindAddress: String
     let matchDir: String?
     var captureConfig: String? = nil
+    var runDir: String? = nil
     
     /// 解析命令行参数
     static func parse(arguments: [String]) throws -> WebUICommand {
         var bindAddress = "127.0.0.1:8765"
         var matchDir: String?
         var captureConfig: String?
+        var runDir: String?
         
         var i = 0
         while i < arguments.count {
@@ -64,6 +66,12 @@ struct WebUICommand {
                 }
                 captureConfig = arguments[i + 1]
                 i += 2
+            case "--run-dir":
+                guard i + 1 < arguments.count else {
+                    throw ValidationError("--run-dir requires a stream-match run directory")
+                }
+                runDir = arguments[i + 1]
+                i += 2
             case "--help", "-h":
                 printHelp()
                 throw ExitSuccess()
@@ -75,7 +83,7 @@ struct WebUICommand {
         if captureConfig != nil && matchDir == nil {
             throw ValidationError("--capture-config requires --match-dir (the capture root directory)")
         }
-        return WebUICommand(bindAddress: bindAddress, matchDir: matchDir, captureConfig: captureConfig)
+        return WebUICommand(bindAddress: bindAddress, matchDir: matchDir, captureConfig: captureConfig, runDir: runDir)
     }
     
     /// 执行命令，启动 Web UI 服务器
@@ -107,7 +115,8 @@ struct WebUICommand {
             controller = CaptureController(executable: executable, configURL: setup.configURL, root: root)
         }
         let previews = matchDirURL.map { PreviewRenderer(root: $0) }
-        await SystemMonitor.shared.configure(root: matchDirURL, setup: setup, controller: controller)
+        let runDirURL = runDir.map { URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL }
+        await SystemMonitor.shared.configure(root: matchDirURL, setup: setup, controller: controller, runDir: runDirURL)
         StatusCache.shared.update(await SystemMonitor.shared.currentStatus())
         
         // 创建 WebSocket 连接管理器
@@ -120,8 +129,10 @@ struct WebUICommand {
         let updateTask = Task.detached {
             while !Task.isCancelled {
                 // 从采集目录汇总最新状态，更新线程安全的缓存（供 HTTP 路由使用）
-                let status = await SystemMonitor.shared.currentStatus()
+                let now = Date()
+                let status = await SystemMonitor.shared.currentStatus(now: now)
                 StatusCache.shared.update(status)
+                MetricsHistory.shared.record(status, now: now)
 
                 // 时间戳之外有变化时才广播到 WebSocket 客户端
                 if status.ignoringTimestamp != lastBroadcastedStatus?.ignoringTimestamp {
@@ -161,6 +172,15 @@ struct WebUICommand {
         
         server["/api/health"] = { request in
             return .ok(.text("OK"))
+        }
+
+        server.GET["/api/metrics"] = { request in
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            guard let body = try? encoder.encode(MetricsHistory.shared.report(now: Date())) else {
+                return .internalServerError
+            }
+            return .raw(200, "OK", ["Content-Type": "application/json", "Cache-Control": "no-store"]) { try $0.write(body) }
         }
 
         server.POST["/api/control/start"] = { request in
@@ -238,6 +258,9 @@ struct WebUICommand {
             
             print("✓ Server is running")
             print("  → Open http://\(hostname):\(port) in your browser")
+            if let runDirURL {
+                print("  → Processing: \(runDirURL.path)/stream-state.json")
+            }
             if let matchDirURL {
                 print("  → Monitoring: \(matchDirURL.path)")
                 print(controller == nil ? "  → Read-only (pass --capture-config to enable Start/Stop)"
@@ -344,6 +367,8 @@ struct WebUICommand {
                                     Use 0.0.0.0:8765 for LAN access
             --match-dir <path>      Capture root directory to monitor (optional)
             --capture-config <file> Capture config; enables Start/Stop (needs --match-dir)
+            --run-dir <path>        stream-match run directory; shows inference backlog
+                                    and pending uploads, and records /api/metrics
             --help, -h              Show this help message
         
         EXAMPLES:
@@ -373,13 +398,21 @@ struct SystemStatus: Codable, Equatable {
     /// 是否提供了采集配置，可以开始／结束采集。
     let controlsEnabled: Bool
     let cameras: [CameraStatus]
-    let alerts: [Alert]
+    var alerts: [Alert]
     let disk: DiskStatus
+    /// 指定 --run-dir 且 stream-state.json 存在时给出。
+    var processing: ProcessingStatus? = nil
 
     var ignoringTimestamp: SystemStatus {
         SystemStatus(timestamp: "", matchId: matchId, matchState: matchState, controlsEnabled: controlsEnabled,
                      cameras: cameras, alerts: alerts.map { Alert(level: $0.level, cameraId: $0.cameraId, message: $0.message, timestamp: "") },
-                     disk: disk)
+                     disk: disk, processing: processing.map {
+                         ProcessingStatus(status: $0.status, frames: $0.frames, processedFramesPerSecond: $0.processedFramesPerSecond,
+                                          committedRows: $0.committedRows, consumedRows: $0.consumedRows, backlogRows: $0.backlogRows,
+                                          backlogExposureSeconds: $0.backlogExposureSeconds, lastSceneUtcUs: $0.lastSceneUtcUs,
+                                          pendingScenes: $0.pendingScenes, pendingMediaSegments: $0.pendingMediaSegments,
+                                          error: $0.error, updatedAt: nil)
+                     })
     }
 
     /// 转换为 JSON 对象（用于 Swifter 响应）

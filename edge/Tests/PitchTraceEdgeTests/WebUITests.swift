@@ -80,8 +80,10 @@ struct WebUITests {
         #expect(throws: ValidationError.self) {
             _ = try WebUICommand.parse(arguments: ["--capture-config", "cameras.json"])
         }
-        let command = try WebUICommand.parse(arguments: ["--match-dir", "/tmp/s", "--capture-config", "cameras.json"])
+        let command = try WebUICommand.parse(arguments: ["--match-dir", "/tmp/s", "--capture-config", "cameras.json",
+                                                         "--run-dir", "/tmp/run"])
         #expect(command.captureConfig == "cameras.json")
+        #expect(command.runDir == "/tmp/run")
     }
 
     @Test("机位标识与 v2 规则一致并拒绝路径穿越")
@@ -263,6 +265,83 @@ struct WebUITests {
         #expect(latestSealedSegment(in: root)?.lastPathComponent == "1.m4s")
         #expect(latestSealedSegment(in: root.appendingPathComponent("missing")) == nil)
         #expect(PreviewRenderer(root: root).jpeg(cameraId: "../A") == nil)
+    }
+
+    @Test("读取 stream-state.json 的积压与待上传数")
+    func processingStatus() throws {
+        let run = try temporaryDirectory()
+        let now = Date()
+        try writeJSON(run, "stream-state.json", [
+            "status": "running", "frames": 120, "processedFramesPerSecond": 9.5, "committedRows": 260,
+            "consumedRows": 240, "backlogRows": 20, "backlogExposureSeconds": 75.0, "lastSceneUtcUs": "1795494597700000",
+            "pendingUploads": ["scenes": 3, "mediaSegments": 1], "updatedUnix": now.timeIntervalSince1970,
+        ])
+        let (processing, alerts) = readProcessingStatus(runDir: run, now: now, timestamp: "t")
+        let value = try #require(processing)
+        #expect(value.status == "running")
+        #expect(value.backlogRows == 20)
+        #expect(value.pendingScenes == 3)
+        #expect(value.pendingMediaSegments == 1)
+        #expect(alerts.map(\.level) == ["warning"])
+        #expect(readProcessingStatus(runDir: run.appendingPathComponent("none"), now: now, timestamp: "t").0 == nil)
+    }
+
+    @Test("积压接近 300 秒预算、失联与失败时告警")
+    func processingAlerts() throws {
+        let run = try temporaryDirectory()
+        let now = Date()
+        try writeJSON(run, "stream-state.json", ["status": "running", "frames": 1, "backlogExposureSeconds": 250.0,
+                                                 "updatedUnix": now.timeIntervalSince1970])
+        #expect(readProcessingStatus(runDir: run, now: now, timestamp: "t").1.map(\.level) == ["error"])
+
+        try writeJSON(run, "stream-state.json", ["status": "running", "frames": 1, "backlogExposureSeconds": 250.0,
+                                                 "updatedUnix": now.timeIntervalSince1970 - 30])
+        let (stale, staleAlerts) = readProcessingStatus(runDir: run, now: now, timestamp: "t")
+        #expect(stale?.status == "unresponsive")
+        #expect(staleAlerts.count == 1)
+
+        try writeJSON(run, "stream-state.json", ["status": "failed", "frames": 20, "error": "仍有待提交的场景",
+                                                 "pendingDelivery": ["场景": "HTTP 503"], "pendingUploads": NSNull(),
+                                                 "updatedUnix": now.timeIntervalSince1970])
+        let (failed, failedAlerts) = readProcessingStatus(runDir: run, now: now, timestamp: "t")
+        #expect(failed?.pendingScenes == nil)
+        #expect(failed?.error == "仍有待提交的场景 · 场景: HTTP 503")
+        #expect(failedAlerts.first?.message.contains("HTTP 503") == true)
+    }
+
+    @Test("指标只保留窗口内采样并给出队列年龄百分位")
+    func metricsWindow() {
+        let history = MetricsHistory(windowSeconds: 10)
+        let start = Date(timeIntervalSince1970: 1_000)
+        func status(_ age: Double?, _ state: String = "running") -> SystemStatus {
+            var value = readCaptureStatus(root: nil, setup: nil, process: CaptureProcessState(), now: start)
+            value.processing = ProcessingStatus(status: state, frames: 0, processedFramesPerSecond: nil, committedRows: nil,
+                                                consumedRows: nil, backlogRows: nil, backlogExposureSeconds: age,
+                                                lastSceneUtcUs: nil, pendingScenes: nil, pendingMediaSegments: nil,
+                                                error: nil, updatedAt: nil)
+            return value
+        }
+        for second in 0..<15 {
+            history.record(status(Double(second)), now: start.addingTimeInterval(Double(second)))
+        }
+        // 已结束的运行不再计入队列年龄。
+        history.record(status(99, "completed"), now: start.addingTimeInterval(15))
+        let report = history.report(now: start.addingTimeInterval(15))
+        #expect(report.timeSeries.count == 10)
+        #expect(report.timeSeries.first?.timestampMs == 1_006_000)
+        #expect(report.timeSeries.last?.backlogExposureSeconds == nil)
+        #expect(report.summary.backlogExposureSecondsMax == 14)
+        #expect(report.summary.backlogExposureSecondsP50 == 10)
+        #expect(percentile([], 0.5) == nil)
+        #expect(percentile([1, 2, 3, 4], 0.95) == 4)
+        #expect(percentile([1, 2, 3, 4], 0.5) == 2)
+    }
+
+    @Test("告警按严重程度排序且同级保持顺序")
+    func alertOrder() {
+        let alerts = [("warning", "a"), ("critical", "b"), ("warning", "c"), ("error", "d")]
+            .map { Alert(level: $0.0, cameraId: nil, message: $0.1, timestamp: "") }
+        #expect(sortedAlerts(alerts).map(\.message) == ["b", "d", "a", "c"])
     }
 
     @Test("SystemStatus 编码保留缺测为 null")

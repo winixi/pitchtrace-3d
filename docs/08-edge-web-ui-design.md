@@ -2,7 +2,7 @@
 
 **版本**　v0.1 草案  
 **更新**　2025-01-20  
-**状态**　部分实现：状态、告警、开始／结束采集与预览已实现，暂停／恢复、性能指标与配置界面仍在设计中
+**状态**　部分实现：状态、告警、开始／结束采集、预览与推理积压指标已实现，暂停／恢复、资源指标与配置界面仍在设计中
 
 ## 1. 目标与范围
 
@@ -235,6 +235,8 @@ pitchtrace-edge web-ui --bind 127.0.0.1:8765 --match-dir /path/to/match
 
 ### 3.3 性能指标 API
 
+> **已实现的口径**：需 `web-ui --run-dir <stream-match 运行目录>`。Edge 侧不测量曝光到浏览器首次绘制的延迟（由 Live 测时），因此不提供下例的 `latency`；改为报告 Edge 推理队列年龄 `backlogExposureSeconds` 的 P50／P95／最大值。`timeSeries` 每点含 `backlogRows`、`backlogExposureSeconds`、`processedFramesPerSecond`、`pendingScenes`、`pendingMediaSegments`、`recordingBytesPerSecond`，未知值省略。CPU、内存与 GPU 指标未实现。
+
 **GET /api/metrics**
 
 返回延迟、队列、资源使用的时间序列数据（最近 5 分钟，每秒 1 个点）。
@@ -428,10 +430,10 @@ pitchtrace-edge web-ui --bind 127.0.0.1:8765 --match-dir /path/to/match
 ### 阶段 4：性能图表（W9，3 天）
 
 **交付物**：
-- [ ] 实现 `MetricsCollector` 记录延迟、队列、资源时间序列
-- [ ] 实现 `GET /api/metrics` 返回最近 5 分钟数据
-- [ ] 前端集成 Chart.js（CDN），绘制折线图
-- [ ] 自动刷新图表（每 5 秒）
+- [x] 实现 `MetricsHistory` 记录队列年龄、积压与待上传数的时间序列（资源指标未实现）
+- [x] 实现 `GET /api/metrics` 返回最近 5 分钟数据
+- [x] 前端绘制队列年龄折线（内嵌 SVG，不依赖 CDN，场边可离线）
+- [x] 自动刷新图表（每 5 秒）
 
 **验收**：连续运行 10 分钟，图表显示延迟 P95 和队列深度的变化趋势。模拟队列积压，图表立即反映。
 

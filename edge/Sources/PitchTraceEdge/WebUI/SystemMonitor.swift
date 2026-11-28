@@ -152,10 +152,16 @@ func readCaptureStatus(root: URL?, setup: CaptureSetup?, process: CaptureProcess
     if let seconds = disk.remainingRecordingSeconds, seconds < 3600 {
         alerts.append(Alert(level: "warning", cameraId: nil, message: "About \(seconds / 60) min of recording left at the current bitrate", timestamp: timestamp))
     }
-    let rank = ["critical": 0, "error": 1, "warning": 2, "info": 3]
-    alerts.sort { (rank[$0.level] ?? 4) < (rank[$1.level] ?? 4) }
     return SystemStatus(timestamp: timestamp, matchId: matchId(root: root, setup: setup), matchState: matchState,
-                        controlsEnabled: controlsEnabled, cameras: cameras, alerts: alerts, disk: disk)
+                        controlsEnabled: controlsEnabled, cameras: cameras, alerts: sortedAlerts(alerts), disk: disk)
+}
+
+/// 按严重程度排序，同级保持原有顺序。
+func sortedAlerts(_ alerts: [Alert]) -> [Alert] {
+    let rank = ["critical": 0, "error": 1, "warning": 2, "info": 3]
+    return alerts.enumerated()
+        .sorted { ((rank[$0.element.level] ?? 4), $0.offset) < ((rank[$1.element.level] ?? 4), $1.offset) }
+        .map(\.element)
 }
 
 /// 机位最新媒体周期目录（按 status.json 的开始时刻排序）。
@@ -229,16 +235,24 @@ actor SystemMonitor {
     private var root: URL?
     private var setup: CaptureSetup?
     private var controller: CaptureController?
+    private var runDir: URL?
 
     private init() {}
 
-    func configure(root: URL?, setup: CaptureSetup?, controller: CaptureController?) {
+    func configure(root: URL?, setup: CaptureSetup?, controller: CaptureController?, runDir: URL? = nil) {
         self.root = root
         self.setup = setup
         self.controller = controller
+        self.runDir = runDir
     }
 
-    func currentStatus() -> SystemStatus {
-        readCaptureStatus(root: root, setup: setup, process: controller?.processState ?? CaptureProcessState(), now: Date())
+    func currentStatus(now: Date = Date()) -> SystemStatus {
+        var status = readCaptureStatus(root: root, setup: setup, process: controller?.processState ?? CaptureProcessState(), now: now)
+        if let runDir {
+            let (processing, alerts) = readProcessingStatus(runDir: runDir, now: now, timestamp: status.timestamp)
+            status.processing = processing
+            status.alerts = sortedAlerts(status.alerts + alerts)
+        }
+        return status
     }
 }

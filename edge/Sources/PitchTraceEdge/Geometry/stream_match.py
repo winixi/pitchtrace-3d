@@ -279,9 +279,25 @@ def stream_match(path, capture, run, executable):
             started = time.monotonic()
             state = {**identity, "status": "running", "frames": 0, "lastSceneUtcUs": None}
             status_path = run / "stream-state.json"
+            scene_key = urlsplit(gateway).geturl().rstrip("/") if gateway else None
+            def pending_uploads():
+                # 归档为 WAL 模式，状态线程用只读连接计数，不与提交线程争用写锁。
+                with closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=1)) as reader:
+                    scenes = reader.execute("""SELECT COUNT(*) FROM edge_scene_pending
+                                               WHERE gateway=? AND match_id=? AND epoch=?""",
+                                            (scene_key, config.match_id, config.stream_epoch)).fetchone()[0]
+                    media_parts = reader.execute("SELECT COUNT(*) FROM stream_pending WHERE gateway=?",
+                                                 (gateway,)).fetchone()[0]
+                return {"scenes": scenes, "mediaSegments": media_parts}
+
             def save_status():
                 snapshot = {**state, **journal.metrics(), "updatedUnix": time.time(),
                             "processedFramesPerSecond": state["frames"] / max(.001, time.monotonic() - started)}
+                if gateway:
+                    try:
+                        snapshot["pendingUploads"] = pending_uploads()
+                    except sqlite3.Error:
+                        snapshot["pendingUploads"] = None
                 write_json(status_path, snapshot)
                 return snapshot
 

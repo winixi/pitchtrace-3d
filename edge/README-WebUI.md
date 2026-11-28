@@ -113,6 +113,8 @@ swift run pitchtrace-edge web-ui --bind 0.0.0.0:8765
 swift run pitchtrace-edge web-ui --match-dir /path/to/session
 # 监控并允许场务开始／结束采集
 swift run pitchtrace-edge web-ui --match-dir /path/to/session --capture-config cameras.json
+# 同时显示 stream-match 的推理积压与待上传数
+swift run pitchtrace-edge web-ui --match-dir /path/to/session --capture-config cameras.json --run-dir /path/to/stream-run
 
 # 显示帮助
 swift run pitchtrace-edge web-ui --help
@@ -131,6 +133,7 @@ swift run pitchtrace-edge web-ui --help
 | `/api/control/start` | POST | 以 `--capture-config` 启动 `capture`，已有采集在写同一目录时返回 409 |
 | `/api/control/stop` | POST | 写入 `STOP` 标记有序停止，也能停止 Web UI 之外启动的采集；采集尚未写出首份 health.json 时返回 409 |
 | `/api/preview/:cameraId` | GET | 最新已封口片段首帧的 320×180 JPEG，无片段时 404 |
+| `/api/metrics` | GET | 最近 5 分钟、每秒一个点的积压行数、队列年龄、处理速率、待上传数和录制码率，另给队列年龄 P50／P95／最大值 |
 
 ### 采集控制
 
@@ -141,7 +144,9 @@ swift run pitchtrace-edge web-ui --help
 
 ### 状态口径
 
-状态只来自 capture 写盘的文件。`matchState` 取 `idle`、`capturing`、`stopping`、`stopped`、`unresponsive`（health.json 超过 5 秒未刷新但仍有活动机位）。机位给出最新媒体周期、周期数、已封口段数、实测码率、输入类型、曝光时钟来源和失败原因。帧率、曝光偏差和推理积压不在采集层记录，状态中不提供；剩余录制时长只在 capture 已估算时给出。
+状态只来自 capture 写盘的文件。`matchState` 取 `idle`、`capturing`、`stopping`、`stopped`、`unresponsive`（health.json 超过 5 秒未刷新但仍有活动机位）。机位给出最新媒体周期、周期数、已封口段数、实测码率、输入类型、曝光时钟来源和失败原因。帧率和曝光偏差不在采集层记录，状态中不提供；剩余录制时长只在 capture 已估算时给出。
+
+指定 `--run-dir` 后，`processing` 字段来自 stream-match 的 `stream-state.json`：状态、场景帧数、处理速率、积压行数、队列年龄（`backlogExposureSeconds`）和待上传数。超过 5 秒未刷新的运行显示为 `unresponsive`。队列年龄达到 60 秒告警、240 秒报错，对应曝光到首次绘制 300 秒的上限。指标历史只在内存中保存，Web UI 重启后清空。
 
 ---
 
@@ -203,7 +208,8 @@ swift run pitchtrace-edge web-ui --help
 - [x] 控制接口 (启动/停止)
 - [x] 机位预览
 - [ ] 暂停/恢复处理（需接管 stream-match）
-- [ ] 性能指标 `/api/metrics`（可读 stream-state.json 的积压与处理速率）
+- [x] 性能指标 `/api/metrics`（积压、队列年龄、待上传数）
+- [ ] CPU／内存／GPU 资源指标
 - [ ] 录像回放
 - [ ] 性能监控 (Prometheus)
 - [ ] 多比赛支持

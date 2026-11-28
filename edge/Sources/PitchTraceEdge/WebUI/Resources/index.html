@@ -209,6 +209,14 @@
             color: #475467;
         }
 
+        .backlog-chart {
+            width: 100%;
+            height: 60px;
+            margin-top: 12px;
+            background: #f5f5f7;
+            border-radius: 6px;
+        }
+
         img.preview {
             display: block;
             object-fit: contain;
@@ -373,6 +381,14 @@
             <div class="loading">Loading cameras...</div>
         </div>
         
+        <div class="alerts-section" id="processingSection" hidden>
+            <div class="alerts-header">Processing (stream-match)</div>
+            <div class="camera-metrics" id="processingMetrics"></div>
+            <svg id="backlogChart" class="backlog-chart" viewBox="0 0 300 60" preserveAspectRatio="none"
+                 role="img" aria-label="Inference backlog over the last 5 minutes"></svg>
+            <div class="alert-time" id="backlogSummary"></div>
+        </div>
+
         <div class="alerts-section">
             <div class="alerts-header">Alerts</div>
             <div id="alertsList" class="alert-list">
@@ -586,6 +602,8 @@
 
             // 每秒刷新可预览机位的缩略图
             setInterval(refreshPreviews, 1000);
+            // 每 5 秒刷新推理积压曲线
+            setInterval(loadMetrics, 5000);
         }
 
         // ===== 采集控制 =====
@@ -655,6 +673,9 @@
             // 渲染相机
             renderCameras(status.cameras);
             
+            // 渲染推理与上行状态
+            renderProcessing(status.processing);
+
             // 渲染告警
             renderAlerts(status.alerts);
         }
@@ -717,6 +738,61 @@
             `).join('');
         }
         
+        // 渲染 stream-match 状态
+        function renderProcessing(processing) {
+            const section = document.getElementById('processingSection');
+            section.hidden = !processing;
+            if (!processing) return;
+            const value = (v, format) => v == null ? '—' : format(v);
+            const items = [
+                ['State', capitalizeFirst(processing.status)],
+                ['Scene Frames', processing.frames.toLocaleString()],
+                ['Processed', value(processing.processedFramesPerSecond, v => v.toFixed(1) + ' fps')],
+                ['Backlog', value(processing.backlogRows, v => `${v} rows`)],
+                ['Queue Age', value(processing.backlogExposureSeconds, v => v.toFixed(1) + ' s')],
+                ['Pending Scenes', value(processing.pendingScenes, v => v.toLocaleString())],
+                ['Pending Media', value(processing.pendingMediaSegments, v => `${v} segments`)],
+            ];
+            document.getElementById('processingMetrics').innerHTML = items.map(([label, text]) => `
+                <div class="metric">
+                    <span class="metric-label">${label}</span>
+                    <span class="metric-value">${escapeHtml(text)}</span>
+                </div>`).join('') +
+                (processing.error ? `<div class="alert-message">${escapeHtml(processing.error)}</div>` : '');
+        }
+
+        async function loadMetrics() {
+            if (document.getElementById('processingSection').hidden) return;
+            try {
+                const response = await fetch('/api/metrics');
+                if (!response.ok) return;
+                renderBacklogChart(await response.json());
+            } catch (error) {
+                console.warn('Failed to load metrics:', error);
+            }
+        }
+
+        // 不依赖 CDN：场边 Mac 可能离线
+        function renderBacklogChart(report) {
+            const svg = document.getElementById('backlogChart');
+            const points = report.timeSeries.filter(p => p.backlogExposureSeconds != null);
+            const s = report.summary;
+            document.getElementById('backlogSummary').textContent = s.backlogExposureSecondsP95 == null
+                ? 'Queue age: no samples yet'
+                : `Queue age over ${report.windowSeconds / 60} min · P50 ${s.backlogExposureSecondsP50.toFixed(1)} s · ` +
+                  `P95 ${s.backlogExposureSecondsP95.toFixed(1)} s · max ${s.backlogExposureSecondsMax.toFixed(1)} s`;
+            if (points.length < 2) { svg.innerHTML = ''; return; }
+            const end = report.timeSeries[report.timeSeries.length - 1].timestampMs;
+            const start = end - report.windowSeconds * 1000;
+            const top = Math.max(60, ...points.map(p => p.backlogExposureSeconds));
+            const x = t => ((t - start) / (end - start) * 300).toFixed(1);
+            const y = v => (60 - v / top * 56 - 2).toFixed(1);
+            const line = points.map(p => `${x(p.timestampMs)},${y(p.backlogExposureSeconds)}`).join(' ');
+            // 240 s 告警线仅在量程内绘制
+            const limit = top >= 240 ? `<line x1="0" x2="300" y1="${y(240)}" y2="${y(240)}" stroke="#c01048" stroke-dasharray="4 3" stroke-width="1"/>` : '';
+            svg.innerHTML = `${limit}<polyline fill="none" stroke="#0071e3" stroke-width="1.5" points="${line}"/>`;
+        }
+
         // 渲染告警列表
         function renderAlerts(alerts) {
             const list = document.getElementById('alertsList');

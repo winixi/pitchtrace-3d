@@ -119,6 +119,9 @@ class StreamTest(unittest.TestCase):
                             _, error = process.communicate(timeout=30)
                             self.assertNotEqual(process.returncode, 0)
                             self.assertIn("待提交", error)
+                            offline = json.loads((run / "stream-state.json").read_text())
+                            self.assertGreater(offline["pendingUploads"]["scenes"], 0)
+                            self.assertGreater(offline["pendingUploads"]["mediaSegments"], 0)
                         finally:
                             if process.poll() is None:
                                 process.kill()
@@ -144,6 +147,9 @@ class StreamTest(unittest.TestCase):
                     self.assertEqual(stats["committedRows"], 40)
                     self.assertEqual(stats["backlogRows"], 0)
                     self.assertGreater(stats["processedFramesPerSecond"], 0)
+                    self.assertEqual(stats["pendingUploads"], {"scenes": 0, "mediaSegments": 0})
+                    saved = json.loads((run / "stream-state.json").read_text())
+                    self.assertEqual(saved["pendingUploads"], stats["pendingUploads"])
                     confirmed = list(delivered)
                     subprocess.run(cmd, check=True, capture_output=True, timeout=30)
                     self.assertEqual(delivered, confirmed)

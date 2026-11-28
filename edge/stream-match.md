@@ -21,7 +21,7 @@ swift run --package-path edge pitchtrace-edge stream-match match.json ./capture-
 
 原命令或机器中断后，在相同的比赛、采集和运行目录重新执行。程序根据持久化的帧顺序和已保存的二维观测恢复跟踪状态，并核对归档中的既有场景与证据。重复的网关回执按目标地址隔离。相同运行目录必须对应原先的采集根目录、比赛周期、曝光配置及推理版本。另行复算时使用新的场景周期和目录。
 
-`stream-state.json` 在运行中约每半秒更新，结束或失败时写入最后一份状态。
+`stream-state.json` 在运行中约每半秒更新，结束或失败时写入最后一份状态。`pitchtrace-edge web-ui --run-dir <运行目录>` 会读取它，显示积压与待上传数，并记录最近 5 分钟的队列年龄。
 
 | 字段 | 含义 |
 | --- | --- |
@@ -30,5 +30,6 @@ swift run --package-path edge pitchtrace-edge stream-match match.json ./capture-
 | `frames`、`lastSceneUtcUs` | 已处理的场景帧数及最近一帧的原始曝光时刻。 |
 | `processedFramesPerSecond` | 本次启动以来处理的场景数除以单调时钟耗时，包含恢复时核对的已有帧。与发布目标频率、积压变化一起观察。 |
 | `status`、`pendingDelivery` | 本地运行状态和退出时仍待处理的上行错误。 |
+| `pendingUploads` | 配置网关时给出，`scenes` 为该网关尚未确认的场景帧数，`mediaSegments` 为尚未三件全部确认的媒体段数。归档读取失败时为 `null`。 |
 
 运行 `swift build --package-path edge` 后，验证命令为 `python3 -B edge/Tests/Integration/test_stream_match.py`。回归在两个机位分段到达时先让网关返回 503，检查原片和场景仍然落盘，再恢复真实本地网关，核对历史快照、按曝光 UTC 定位的原片，以及第三次运行的幂等回执。

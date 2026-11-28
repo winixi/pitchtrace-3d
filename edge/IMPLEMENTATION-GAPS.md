@@ -344,7 +344,8 @@
 **当前状态**: ✅ 已实现开始／结束采集（`POST /api/control/start`、`/stop`，需 `web-ui --capture-config`）
 
 - ✅ 状态改为读取 capture 的 `health.json` 与逐周期 `status.json`（原实现读取不存在的 `camera_*/epoch_*` 目录，对真实采集显示为空）
-- ❌ 暂停／恢复处理（需接管 stream-match）、`/api/metrics` 性能指标
+- ✅ `web-ui --run-dir` 显示 stream-match 积压、队列年龄与待上传数，`/api/metrics` 保留最近 5 分钟
+- ❌ 暂停／恢复处理（需接管 stream-match）、CPU／内存资源指标
 
 **阻塞**: 无（G6 场务操作验收需现场执行）
 
