@@ -1,3 +1,4 @@
+import CoreML
 import Foundation
 import Testing
 @testable import PitchTraceEdge
@@ -111,6 +112,50 @@ struct VisionObservationTests {
     @Test func individualOCRCanBeSelectedWithOrWithoutAModel() throws {
         #expect(try VisionWorkerOptions(arguments: ["--individual-ocr"]).individualOCR)
         #expect(try VisionWorkerOptions(arguments: ["m", "--person-and-ball", "--ball-search", "--individual-ocr"]).individualOCR)
+    }
+
+    @Test func computeUnitsDefaultToAllAndRequireAModel() throws {
+        #expect(try VisionWorkerOptions(arguments: ["m"]).computeUnits == .all)
+        for (name, units) in [("cpuAndNeuralEngine", MLComputeUnits.cpuAndNeuralEngine),
+                              ("cpuAndGPU", .cpuAndGPU), ("cpuOnly", .cpuOnly), ("all", .all)] {
+            let options = try VisionWorkerOptions(arguments: ["m", "--person-and-ball", "--ocr-hints",
+                                                              "--compute-units", name])
+            #expect(options.computeUnits == units && options.ocrHints && options.personAndBall)
+        }
+        for args in [["--compute-units", "cpuOnly"], ["m", "--compute-units"], ["m", "--compute-units", "gpu"],
+                     ["m", "--compute-units", "cpuOnly", "--ocr-hints"]] {
+            #expect(throws: RecordingError.self) { try VisionWorkerOptions(arguments: args) }
+        }
+        #expect(try VisionWorkerOptions(arguments: ["--ocr-hints"]).ocrHints)
+    }
+
+    @Test func ocrHintPacketsFollowBallSearchAndKeepFrameBoundaries() throws {
+        func be(_ values: [Int]) -> [UInt8] {
+            values.flatMap { v in (0..<4).map { UInt8((v >> (8 * (3 - $0))) & 0xff) } }
+        }
+        let ball = be([1, 2, 3, 4])
+        let stream = try packetStream(ball + be([2, 10, 20, 30, 40, 0, 0, 5, 6]) + be([1]) + [42]
+                                      + be([0, 0, 0, 0]) + be([0]) + be([1]) + [43])
+        let first = try #require(try readVisionPacket(from: stream, ballSearch: true, ocrHints: true))
+        #expect(first.ballSearch == CGRect(x: 1, y: 2, width: 3, height: 4))
+        #expect(first.ocrSkip == [CGRect(x: 10, y: 20, width: 30, height: 40), CGRect(x: 0, y: 0, width: 5, height: 6)])
+        #expect(first.image == Data([42]))
+        let second = try #require(try readVisionPacket(from: stream, ballSearch: true, ocrHints: true))
+        #expect(second.ballSearch == nil && second.ocrSkip.isEmpty && second.image == Data([43]))
+        #expect(try readVisionPacket(from: stream, ballSearch: true, ocrHints: true) == nil)
+        for bytes in [be([1, 0, 0, 0]), be([65]), be([1, 0, 0, 0, 1]) + be([1]) + [1], be([0])] {
+            #expect(throws: RecordingError.self) {
+                try readVisionPacket(from: packetStream(bytes), ocrHints: true)
+            }
+        }
+    }
+
+    @Test func ocrSkipNeedsHalfIntersectionOverUnion() {
+        let box = CGRect(x: 100, y: 100, width: 40, height: 80)
+        #expect(skipsOCR(box, hints: [CGRect(x: 104, y: 100, width: 40, height: 80)]))
+        #expect(!skipsOCR(box, hints: [CGRect(x: 125, y: 100, width: 40, height: 80)]))
+        #expect(!skipsOCR(box, hints: [CGRect(x: 140, y: 100, width: 40, height: 80)]))
+        #expect(!skipsOCR(box, hints: []))
     }
 
     @Test func croppedBallSearchOffsetsPixelsAndIgnoresPeople() throws {

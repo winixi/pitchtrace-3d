@@ -199,7 +199,7 @@ class BallSearch:
         top = min(max(0, round(y - side / 2)), height - side)
         return [left, top, side, side]
 
-    def observe(self, detector, version, row, image):
+    def observe(self, detector, version, row, image, ocr_skip=()):
         size = list(image.shape[1::-1])
         region = self.region(version, row, size)
         mode = "history" if region is not None else "cold"
@@ -211,7 +211,7 @@ class BallSearch:
         if region is None:
             region = cold_region(size, utc, candidates, moving)
         proposal_ns = perf_counter_ns() - start if start is not None else 0
-        result = detector.observe(image, region)
+        result = detector.observe(image, region, ocr_skip)
         now = perf_counter_ns() if self.timing else None
         ball = result["ball"]
         if ball is not None and ball.get("source") == "coreML-ROI":

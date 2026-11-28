@@ -68,6 +68,23 @@ test("全图漏球后从原图裁片召回，只追加球并保留原图框", ()
   assert.equal(invalid.stdout.length, 0);
 });
 
+test("免读号区域只跳过同一人框的读号，并按指定计算单元加载模型", () => {
+  const frame = packet("white", "64x64");
+  const hints = (...boxes) => {
+    const bytes = Buffer.alloc(4 + 16 * boxes.length);
+    bytes.writeUInt32BE(boxes.length);
+    boxes.flat().forEach((v, i) => bytes.writeUInt32BE(v, 4 + i * 4));
+    return bytes;
+  };
+  const input = Buffer.concat([hints([9, 24, 16, 16]), frame, hints(), frame, hints([40, 40, 16, 16]), frame]);
+  for (const units of ["cpuOnly", "all"]) {
+    const frames = observe(["--person-and-ball", "--ocr-hints", "--compute-units", units], input);
+    assert.deepEqual(frames.map(f => f.players[0].box), [[8, 24, 16, 16], [8, 24, 16, 16], [8, 24, 16, 16]]);
+    assert.deepEqual(frames.map(f => f.players[0].ocrSkipped), [true, undefined, undefined]);
+    assert.equal(frames[0].players[0].number, undefined);
+  }
+});
+
 test("既有单参数模型用法保留系统人体检测", () => {
   const [frame] = observe([], packet("white", "64x64"));
   assert.deepEqual(frame.players, []);

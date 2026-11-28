@@ -72,6 +72,7 @@ class SceneBuilder:
         self.previous_version, self.previous_cameras = version, cameras
         players, ball, sources = self.tracker.update(utc, cameras, inputs)
         players, events = self.analysis.update(utc, players, ball, cameras, sources)
+        self.sources = sources
         frame = {"v": 2, "matchId": self.config.match_id, "streamEpoch": self.config.stream_epoch,
                  "seq": self.seq, "captureUtcUs": str(utc), "matchTimeMs": (utc - self.config.start_us) // 1000,
                  "calibrationId": version, "players": players, "ball": ball, "events": events}
@@ -93,14 +94,21 @@ class SceneBuilder:
         self.seq += 1
         return frame
 
+    def confirmed_numbers(self):
+        return {track for track, (_, number) in self.analysis.votes.items() if number.confirmed is not None}
+
 
 def analyze_rows(config, rows, archive, media_root, detector_settings, model, executable, *, resume=False):
     from ball_search import BallSearch
-    from observations import Detector, validate_observation
+    from observations import Detector, OcrSchedule, validate_observation
+    from vision_model import ocr_refresh_us
     from replay_images import ReplayImages
 
     builder = SceneBuilder(config)
     replay = media_root is not None
+    refresh_us = ocr_refresh_us(detector_settings) if replay else None
+    schedule = OcrSchedule(refresh_us) if refresh_us is not None else None
+    ocr_skip = {}
     # 恢复仅保存起始高水位，避免跨帧持有 SQLite 读游标妨碍同时提交上传回执。
     last_seq = archive.last_seq(config.match_id, config.stream_epoch) if resume else None
     with ExitStack() as stack:
@@ -117,7 +125,9 @@ def analyze_rows(config, rows, archive, media_root, detector_settings, model, ex
             image = images.read(row)
             if list(image.shape[:2][::-1]) != cameras[row["cameraId"]]["imageSize"]:
                 raise ValueError(f'机位 {row["cameraId"]} 原片尺寸与当前标定不一致')
-            observed = search.observe(detector, version, row, image) if search else detector.observe(image, None)
+            skip = ocr_skip.get(row["cameraId"], ())
+            observed = (search.observe(detector, version, row, image, skip) if search
+                        else detector.observe(image, None, skip))
             # 性能采样里的墙钟耗时不参与比赛证据或幂等比较。
             observed.pop("timing", None)
             result = {**row, **observed}
@@ -125,6 +135,8 @@ def analyze_rows(config, rows, archive, media_root, detector_settings, model, ex
             return result
 
         for utc, version, cameras, group in config.groups(rows, replay=replay):
+            if schedule is not None:
+                ocr_skip = schedule.hints(utc)
             if last_seq is not None and builder.seq <= last_seq:
                 stored = archive.frame(config.match_id, config.stream_epoch, builder.seq)
                 if (stored["seq"], stored["captureUtcUs"], stored["calibrationId"]) != (builder.seq, str(utc), version):
@@ -148,7 +160,10 @@ def analyze_rows(config, rows, archive, media_root, detector_settings, model, ex
                     search = searches[workers.lane(row["cameraId"])]
                     if search:
                         search.record(version, row)
-            yield builder.append(archive, utc, version, cameras, group, inputs)
+            frame = builder.append(archive, utc, version, cameras, group, inputs)
+            if schedule is not None:
+                schedule.update(utc, builder.sources, builder.confirmed_numbers())
+            yield frame
         if last_seq is not None and builder.seq <= last_seq:
             raise ValueError("输入提前结束，无法恢复全部已提交场景")
 

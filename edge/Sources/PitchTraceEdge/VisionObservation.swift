@@ -12,6 +12,8 @@ struct ObservedPlayer: Encodable {
     var foot: [Double]?
     var number: Int?
     var shirtRGB: [Int]?
+    // 号码已稳定的轨迹本帧未送读号；与读号失败区分，number 仍为缺测。
+    var ocrSkipped: Bool?
 }
 
 struct ObservedBall: Encodable {
@@ -21,11 +23,20 @@ struct ObservedBall: Encodable {
     let source: String
 }
 
+// 配置名与比赛配置 detector.computeUnits 一致，便于对照 Xcode 性能报告。
+let modelComputeUnits: [String: MLComputeUnits] = [
+    "all": .all, "cpuAndNeuralEngine": .cpuAndNeuralEngine, "cpuAndGPU": .cpuAndGPU, "cpuOnly": .cpuOnly
+]
+
 struct VisionWorkerOptions {
     let modelURL: URL?
     let personAndBall: Bool
     let ballSearch: Bool
     let individualOCR: Bool
+    let ocrHints: Bool
+    let computeUnits: MLComputeUnits
+
+    static let usage = "用法：vision-worker [模型路径 [--person-and-ball] [--ball-search]] [--individual-ocr] [--ocr-hints] [--compute-units all|cpuAndNeuralEngine|cpuAndGPU|cpuOnly]"
 
     init(arguments: [String]) throws {
         var args = arguments[...]
@@ -41,8 +52,21 @@ struct VisionWorkerOptions {
         if ballSearch { args = args.dropFirst() }
         individualOCR = args.first == "--individual-ocr"
         if individualOCR { args = args.dropFirst() }
-        guard args.isEmpty, modelURL != nil || !(personAndBall || ballSearch) else {
-            throw RecordingError("用法：vision-worker [模型路径 [--person-and-ball] [--ball-search]] [--individual-ocr]")
+        ocrHints = args.first == "--ocr-hints"
+        if ocrHints { args = args.dropFirst() }
+        var units: MLComputeUnits?
+        if args.first == "--compute-units" {
+            args = args.dropFirst()
+            guard let name = args.first, let value = modelComputeUnits[name] else {
+                throw RecordingError(Self.usage)
+            }
+            units = value
+            args = args.dropFirst()
+        }
+        computeUnits = units ?? .all
+        // 计算单元只作用于 Core ML 检测器，系统 Vision 请求仍由 Vision 自行调度。
+        guard args.isEmpty, modelURL != nil || !(personAndBall || ballSearch || units != nil) else {
+            throw RecordingError(Self.usage)
         }
     }
 }
@@ -278,7 +302,9 @@ private final class ImageObserver {
             temporaryModel = compiled
         }
         do {
-            let model = try MLModel(contentsOf: compiled, configuration: MLModelConfiguration())
+            let configuration = MLModelConfiguration()
+            configuration.computeUnits = options.computeUnits
+            let model = try MLModel(contentsOf: compiled, configuration: configuration)
             // Vision 识别带 NMS 的模型需要框和各类置信度两组输出。
             let description = model.modelDescription
             guard description.predictedFeatureName == nil,
@@ -352,7 +378,7 @@ private final class ImageObserver {
         }
     }
 
-    func observe(_ data: Data, ballSearch: CGRect?) throws -> ImageObservation {
+    func observe(_ data: Data, ballSearch: CGRect?, ocrSkip: [CGRect] = []) throws -> ImageObservation {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               CGImageSourceGetType(source) as String? == UTType.jpeg.identifier,
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
@@ -409,9 +435,11 @@ private final class ImageObserver {
             let torso = CGRect(x: box.minX + 0.22 * box.width, y: box.minY + 0.18 * box.height,
                                width: 0.56 * box.width, height: 0.35 * box.height).integral
             let overlaps = boxes.indices.contains { $0 != i && boxes[$0].intersects(torso) }
+            let skipped = skipsOCR(box, hints: ocrSkip)
+            if skipped { player.ocrSkipped = true }
             if !overlaps, let shirt = image.cropping(to: torso) {
                 player.shirtRGB = shirtColor(shirt)
-                if shirt.width >= 12, shirt.height >= 12 {
+                if !skipped, shirt.width >= 12, shirt.height >= 12 {
                     shirts.append(ShirtCrop(player: players.count, image: shirt))
                 }
             }
@@ -425,44 +453,81 @@ private final class ImageObserver {
 struct VisionPacket {
     let image: Data
     let ballSearch: CGRect?
+    var ocrSkip: [CGRect] = []
 }
 
-func readVisionPacket(from input: FileHandle, ballSearch: Bool = false) throws -> VisionPacket? {
-    func read(_ size: Int, allowEOF: Bool = false) throws -> Data? {
+let maximumOCRHints = 64
+
+func readVisionPacket(from input: FileHandle, ballSearch: Bool = false, ocrHints: Bool = false) throws -> VisionPacket? {
+    var started = false
+    func read(_ size: Int) throws -> Data? {
         var bytes = Data()
         while bytes.count < size {
             guard let part = try input.read(upToCount: size - bytes.count), !part.isEmpty else {
-                if allowEOF && bytes.isEmpty { return nil }
+                // 只允许在帧边界结束输入。
+                if !started && bytes.isEmpty { return nil }
                 throw RecordingError("视觉输入在 JPEG 包中途截断")
             }
             bytes.append(part)
+            started = true
         }
         return bytes
     }
     func integer(_ bytes: Data) -> Int {
         bytes.reduce(0) { $0 * 256 + Int($1) }
     }
-    guard let header = try read(ballSearch ? 20 : 4, allowEOF: true) else { return nil }
-    var region: CGRect?
-    if ballSearch && header.prefix(16).contains(where: { $0 != 0 }) {
-        let x = integer(header[0..<4]), y = integer(header[4..<8])
-        let w = integer(header[8..<12]), h = integer(header[12..<16])
-        guard w > 0, h > 0 else { throw RecordingError("足球搜索裁片的宽高必须大于零") }
-        region = CGRect(x: x, y: y, width: w, height: h)
+    func box(_ bytes: Data) -> CGRect {
+        let base = bytes.startIndex
+        let v = (0..<4).map { integer(bytes[(base + 4 * $0)..<(base + 4 * $0 + 4)]) }
+        return CGRect(x: v[0], y: v[1], width: v[2], height: v[3])
     }
-    let count = integer(header.suffix(4))
+    var region: CGRect?
+    if ballSearch {
+        guard let header = try read(16) else { return nil }
+        if header.contains(where: { $0 != 0 }) {
+            region = box(header)
+            guard region!.width > 0, region!.height > 0 else { throw RecordingError("足球搜索裁片的宽高必须大于零") }
+        }
+    }
+    var skip: [CGRect] = []
+    if ocrHints {
+        guard let header = try read(4) else { return nil }
+        let hints = integer(header)
+        guard hints <= maximumOCRHints else { throw RecordingError("免读号区域数量超出上限 \(maximumOCRHints)") }
+        if hints > 0 {
+            let bytes = try read(16 * hints)!
+            skip = (0..<hints).map { box(bytes[(bytes.startIndex + 16 * $0)..<(bytes.startIndex + 16 * $0 + 16)]) }
+            guard skip.allSatisfy({ $0.width > 0 && $0.height > 0 }) else {
+                throw RecordingError("免读号区域的宽高必须大于零")
+            }
+        }
+    }
+    guard let length = try read(4) else { return nil }
+    let count = integer(length)
     guard count > 0, count <= 32 * 1024 * 1024 else { throw RecordingError("JPEG 包长度超出范围") }
     guard let image = try read(count) else { throw RecordingError("JPEG 包缺少图像") }
-    return VisionPacket(image: image, ballSearch: region)
+    return VisionPacket(image: image, ballSearch: region, ocrSkip: skip)
+}
+
+// 上一曝光中号码已稳定的人框与本帧人框交并比达到一半，才视为同一人并跳过读号。
+func skipsOCR(_ box: CGRect, hints: [CGRect]) -> Bool {
+    hints.contains { hint in
+        let overlap = hint.intersection(box)
+        guard !overlap.isNull, !overlap.isEmpty else { return false }
+        let shared = overlap.width * overlap.height
+        return shared / (box.width * box.height + hint.width * hint.height - shared) >= 0.5
+    }
 }
 
 func runVisionWorker(options: VisionWorkerOptions) throws {
     let observer = try ImageObserver(options: options)
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
-    while let packet = try readVisionPacket(from: .standardInput, ballSearch: options.ballSearch) {
+    while let packet = try readVisionPacket(from: .standardInput, ballSearch: options.ballSearch,
+                                            ocrHints: options.ocrHints) {
         try autoreleasepool {
-            var line = try encoder.encode(observer.observe(packet.image, ballSearch: packet.ballSearch))
+            var line = try encoder.encode(observer.observe(packet.image, ballSearch: packet.ballSearch,
+                                                           ocrSkip: packet.ocrSkip))
             line.append(0x0a)
             try FileHandle.standardOutput.write(contentsOf: line)
         }

@@ -26,7 +26,7 @@ enum PitchTraceEdge {
           pitchtrace-edge compare-scenes <场景库.sqlite> <比赛 ID> <旧周期> <新周期>
           pitchtrace-edge scene-evidence <场景库.sqlite> <比赛 ID> <场景周期> <seq>
           pitchtrace-edge match-info <场景库.sqlite> <比赛 ID> <场景周期>
-          pitchtrace-edge vision-worker [Core ML 检测模型 [--person-and-ball] [--ball-search]]
+          pitchtrace-edge vision-worker [Core ML 检测模型 [--person-and-ball] [--ball-search]] [--individual-ocr] [--ocr-hints] [--compute-units 计算单元]
           pitchtrace-edge publish-media <网关地址> <比赛 ID> <含 epochs 的机位目录>
           pitchtrace-edge publish-media <网关地址> <比赛 ID> <媒体周期> <平铺机位目录>
         """

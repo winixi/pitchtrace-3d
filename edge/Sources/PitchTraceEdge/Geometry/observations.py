@@ -10,6 +10,7 @@ import numpy as np
 
 from calibrate import is_identifier, vector
 from observation_quality import add_model_quality
+from vision_model import COMPUTE_UNITS, ocr_refresh_us
 
 
 def colour(value, maxima, name):
@@ -28,6 +29,10 @@ class Detector:
         ocr_mode = settings.get("ocrMode", "batch")
         if ocr_mode not in ("batch", "individual"):
             raise ValueError("detector.ocrMode 需要 batch 或 individual")
+        self.ocr_hints = ocr_refresh_us(settings) is not None
+        units = settings.get("computeUnits")
+        if units is not None and (units not in COMPUTE_UNITS or model is None):
+            raise ValueError("detector.computeUnits 需要 Core ML 模型和 " + "、".join(COMPUTE_UNITS) + " 之一")
         self.ball_search = settings.get("ballSearch", False)
         if self.backend not in ("vision", "color-ball"):
             raise ValueError("detector.backend 需要 vision 或 color-ball")
@@ -58,6 +63,10 @@ class Detector:
                 command.append("--ball-search")
             if ocr_mode == "individual":
                 command.append("--individual-ocr")
+            if self.ocr_hints:
+                command.append("--ocr-hints")
+            if units is not None:
+                command.extend(["--compute-units", units])
             self.worker = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
     def ball_by_colour(self, image):
@@ -79,7 +88,7 @@ class Detector:
                                    "confidence": min(roundness, 1), "source": "ballHSV"})
         return candidates[0] if len(candidates) == 1 else None
 
-    def observe(self, image, ball_roi=None):
+    def observe(self, image, ball_roi=None, ocr_skip=()):
         h, w = image.shape[:2]
         result = {"imageSize": [w, h], "players": [], "ball": None}
         if self.worker:
@@ -88,6 +97,11 @@ class Detector:
                 raise ValueError("无法编码选中的原帧")
             if self.ball_search:
                 self.worker.stdin.write(struct.pack(">4I", *(ball_roi or (0, 0, 0, 0))))
+            if self.ocr_hints:
+                boxes = [[round(v) for v in box] for box in ocr_skip][:64]
+                self.worker.stdin.write(struct.pack(">I", len(boxes)))
+                for box in boxes:
+                    self.worker.stdin.write(struct.pack(">4I", *box))
             self.worker.stdin.write(struct.pack(">I", jpeg.size))
             self.worker.stdin.write(jpeg.tobytes())
             self.worker.stdin.flush()
@@ -118,6 +132,41 @@ class Detector:
                 pass
             self.worker.stdout.close()
             self.worker.wait()
+
+
+class OcrSchedule:
+    """号码经多帧投票确认后，按重读间隔跳过该轨迹在各机位的读号。
+
+    状态只由已选原帧观测和投票结果推进，恢复时从归档观测重放可得到相同的免读号区域。
+    """
+
+    STALE_US = 250_000
+
+    def __init__(self, refresh_us):
+        self.refresh_us = refresh_us
+        self.last_read = {}
+        self.boxes = {}
+        self.utc = None
+
+    def hints(self, utc):
+        """返回本曝光组各机位的免读号人框；上一组过旧时全部重读。"""
+        if self.utc is None or utc - self.utc > self.STALE_US:
+            return {}
+        return {camera: [box for track, box in rows if utc - self.last_read[track] < self.refresh_us]
+                for camera, rows in self.boxes.items()}
+
+    def update(self, utc, sources, confirmed):
+        self.boxes = {}
+        for track, rows in sources.items():
+            if track == "_ball":
+                continue
+            if any(not row["player"].get("ocrSkipped") for row in rows):
+                self.last_read[track] = utc
+            if track in confirmed and track in self.last_read:
+                for row in rows:
+                    self.boxes.setdefault(row["cameraId"], []).append((track, row["player"]["box"]))
+        self.last_read = {t: v for t, v in self.last_read.items() if t in sources}
+        self.utc = utc
 
 
 def validate_observation(row):
@@ -158,6 +207,8 @@ def validate_observation(row):
             raise ValueError("joints 必须是按关节名索引的对象")
         for point in joints.values():
             pixel(point)
+        if "ocrSkipped" in player and (player["ocrSkipped"] is not True or player.get("number") is not None):
+            raise ValueError("ocrSkipped 只能为 true，且免读号的观测不带号码")
         number = player.get("number")
         if number is not None and (type(number) is not int or not 0 <= number <= 99):
             raise ValueError("号码需为 0–99 或缺测")

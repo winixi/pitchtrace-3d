@@ -29,6 +29,10 @@ python3 edge/models/prepare-yolo11n.py "$match_dir/models"
 
 `detector.ocrMode` 默认使用 `batch`。同一画面中符合读号条件、宽高均不超过 96 px 的躯干裁片，每批最多 6 人拼成一张图，送入 Vision 的高精度文字识别。文字框须完整落入一个人的裁片才能归给该人。大裁片及短边至少 32 px、中央灰度第 90 与第 10 百分位差至少 128 的高反差裁片保留逐人识别。改为 `individual` 可对全部符合条件的裁片逐人精读。复算比较时应为不同配置分配不同的 `streamEpoch`。
 
+`detector.ocrRefreshMs` 可设为 100–10000 的整数毫秒，默认省略，表示每个入选帧都读号。设置后，某条轨迹的号码经多帧投票确认，Edge 会把它在上一曝光组各机位的人框作为免读号区域交给工作进程。本帧人框与该区域的交并比至少 0.5 时跳过读号，观测记录 `ocrSkipped: true`，不带 `number`。同一轨迹距上次实际读号满该间隔后重读一次。读到不同号码时撤销确认，恢复逐帧读号。上一曝光组超过 250 ms 或轨迹转为缺测时也全部重读。免读号区域只由已归档的观测和投票结果推出，恢复比赛时结果相同。
+
+`detector.computeUnits` 选择 Core ML 检测器的计算单元，取值为 `all`（默认）、`cpuAndNeuralEngine`、`cpuAndGPU` 或 `cpuOnly`，需要已配置模型。它对应 `MLModelConfiguration.computeUnits`，只作用于 Core ML 检测，系统 Vision 的姿态和读号仍由 Vision 调度。在目标机上比较不同取值时，可直接调用工作进程并设置环境变量 `PITCHTRACE_VISION_TIMING=1`，每帧输出的 `timing` 含检测、姿态和读号耗时。整场复算的每种取值使用不同的 `streamEpoch`。[Apple 计算单元配置](https://developer.apple.com/documentation/coreml/mlcomputeunits)
+
 `ballSearch` 默认关闭。开启后，每个机位用最近两次二维实测球心和曝光时刻预测原图搜索区域。只有一次观测时沿用该球心，最长沿用 0.3 秒。没有近期球心时，Edge 从当前原图寻找草地附近的小亮斑，并按曝光时隙轮换候选区域和画面分块。全图模型漏球时才在选中的原图裁片上额外运行一次模型。
 
 固定机位还可以用连续三个曝光中的实际亮斑找回运动的球。每帧最多保留 48 个紧致亮斑。候选须有相符的尺寸与位移，并通过人框排除、整体平移和歧义检查。每个机位在 `ballSearch.candidates` 中单独保存候选，换标定、切换媒体周期或图像尺寸变化后重新开始。恢复比赛时从已归档的二维观测还原历史。暗色球、停住的球与镜头移动会影响这一方法。
@@ -63,4 +67,4 @@ ISSIA 实拍基准用四个同步机位的录像对比精搜开关，并在 M1 P
 
 ## 直接调用视觉工作进程
 
-`pitchtrace-edge vision-worker [模型路径 [--person-and-ball] [--ball-search]] [--individual-ocr]` 通过标准输入接收原尺寸、编码方向朝上的 JPEG。默认每帧由 4 字节大端无符号长度和 JPEG 数据组成。启用 `--ball-search` 后，每帧在长度之前增加 4 个大端 UInt32，表示原图搜索框 `[左, 上, 宽, 高]`，全零表示本帧只搜全图。比赛编排负责生成搜索框和运动候选。每次发送一帧，读回一行 UTF-8 JSON，再发送下一帧。最后在帧边界关闭标准输入。单个 JPEG 上限为 32 MiB、48 百万像素。解码失败、包截断、裁片越界、模型错误和 Vision 执行失败均通过标准错误报告并退出。
+`pitchtrace-edge vision-worker [模型路径 [--person-and-ball] [--ball-search]] [--individual-ocr] [--ocr-hints] [--compute-units 计算单元]` 通过标准输入接收原尺寸、编码方向朝上的 JPEG。默认每帧由 4 字节大端无符号长度和 JPEG 数据组成。启用 `--ball-search` 后，每帧在长度之前增加 4 个大端 UInt32，表示原图搜索框 `[左, 上, 宽, 高]`，全零表示本帧只搜全图。启用 `--ocr-hints` 后，在搜索框之后、长度之前增加 1 个大端 UInt32 的区域数 N（0–64），再接 N 组 `[左, 上, 宽, 高]`，宽高须大于零。`--compute-units` 需要模型路径。比赛编排负责生成搜索框和运动候选。每次发送一帧，读回一行 UTF-8 JSON，再发送下一帧。最后在帧边界关闭标准输入。单个 JPEG 上限为 32 MiB、48 百万像素。解码失败、包截断、裁片越界、模型错误和 Vision 执行失败均通过标准错误报告并退出。

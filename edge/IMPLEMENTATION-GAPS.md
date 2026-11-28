@@ -4,7 +4,7 @@
 **检查范围**: 对照 `docs/02-technical-design.md` 与 `docs/07-edge-development-plan.md`  
 **总体完成度**: 约 80–85%（核心离线处理与工具链就绪，实时采集与视觉模型需实拍迭代）
 
-> **复核说明**：下列条目与当前代码不符，以代码为准。2.1–2.2 的 Core ML 检测、Vision 姿态与 OCR 已在 `VisionObservation.swift` 实现；2.3 的 Laplacian 清晰度见 `observation_quality.py`；3.3 的 0.3 秒短时预测见 `tracking.py`；5.1 的场景待办持久化与限速补传见 `scene_archive.py` 与 `stream_match.py`；6.1 的按曝光切换标定见 `match_config.py`。第 7 节已按本次实现更新。
+> **复核说明**：下列条目与当前代码不符，以代码为准。2.1–2.2 的 Core ML 检测、Vision 姿态与 OCR 已在 `VisionObservation.swift` 实现；2.3 的 Laplacian 清晰度见 `observation_quality.py`；3.3 的 0.3 秒短时预测见 `tracking.py`；5.1 的场景待办持久化与限速补传见 `scene_archive.py` 与 `stream_match.py`；6.1 的按曝光切换标定见 `match_config.py`。第 7 节已按本次实现更新。Core ML 计算单元可由 `detector.computeUnits` 选择，号码确认后的降频读号由 `detector.ocrRefreshMs` 控制，见 [vision.md](vision.md)。
 
 ---
 

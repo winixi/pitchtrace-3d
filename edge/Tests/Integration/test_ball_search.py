@@ -98,7 +98,7 @@ class BallSearchTests(unittest.TestCase):
     def test_pixel_motion_result_passes_production_validation_before_json(self):
         search = BallSearch()
         detector = Mock()
-        detector.observe.side_effect = lambda image, roi: {"imageSize": [320, 240], "players": [], "ball": None}
+        detector.observe.side_effect = lambda image, roi, ocr_skip=(): {"imageSize": [320, 240], "players": [], "ball": None}
         for index in range(3):
             image = np.full((240, 320, 3), (45, 105, 50), np.uint8)
             cv2.circle(image, (90 + 8 * index, 90), 5, (246, 246, 246), -1)
@@ -191,7 +191,7 @@ class BallSearchTests(unittest.TestCase):
                     image[0, 0, 0] = frame["pts"]
                     return image
 
-                def observe(image, region):
+                def observe(image, region, ocr_skip=()):
                     regions.append(region)
                     index = int(image[0, 0, 0])
                     ball = {"pixel": [700 + 50 * index, 400]} if index < 2 else None

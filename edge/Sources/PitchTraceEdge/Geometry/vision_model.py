@@ -8,6 +8,21 @@ from pathlib import Path
 from calibrate import unique_object
 from camera_workers import validate_worker_count
 
+# 与 Swift 工作进程的 --compute-units 取值一致。
+COMPUTE_UNITS = ("all", "cpuAndNeuralEngine", "cpuAndGPU", "cpuOnly")
+
+
+def ocr_refresh_us(settings):
+    """号码确认后的同轨迹重读间隔；省略时每个入选帧都读号。"""
+    value = settings.get("ocrRefreshMs")
+    if value is None:
+        return None
+    if type(value) is not int or not 100 <= value <= 10_000:
+        raise ValueError("detector.ocrRefreshMs 需要 100–10000 的整数毫秒")
+    if settings.get("backend", "vision") != "vision":
+        raise ValueError("detector.ocrRefreshMs 需要 vision 后端")
+    return value * 1000
+
 
 def digest(path):
     result = hashlib.sha256()
@@ -61,6 +76,11 @@ def load_vision_model(settings, folder):
     validate_worker_count(settings.get("workers", 1))
     if settings.get("ocrMode", "batch") not in ("batch", "individual"):
         raise ValueError("detector.ocrMode 需要 batch 或 individual")
+    ocr_refresh_us(settings)
+    units = settings.get("computeUnits")
+    if units is not None and (units not in COMPUTE_UNITS or settings.get("backend", "vision") != "vision" or
+                              not ("model" in settings or "modelManifest" in settings)):
+        raise ValueError("detector.computeUnits 需要 vision 后端、Core ML 模型和 " + "、".join(COMPUTE_UNITS) + " 之一")
     ball_search = settings.get("ballSearch", False)
     if type(ball_search) is not bool:
         raise ValueError("detector.ballSearch 必须是布尔值")
