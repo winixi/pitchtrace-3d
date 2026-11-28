@@ -1,6 +1,6 @@
 # 采集、曝光映射和重放
 
-`capture` 为每台相机启动独立的 FFmpeg 进程。可从文件、RTSP 或 macOS AVFoundation 输入采集 1–4 路视频。默认以 H.264 编码，保留展示帧时序，以关键帧开始新的 fMP4 片段。对于关键帧间隔合适的 H.264 源可设置 `"videoMode": "copy"` 直接封装。采集需要 PATH 中的 `ffmpeg`，曝光核对还需要 `ffprobe`。默认编码使用 `libx264`。
+`capture` 为每台相机启动独立的 FFmpeg 进程。可从文件、RTSP 或 macOS AVFoundation 输入采集 1–8 路视频。默认以 H.264 编码，保留展示帧时序，以关键帧开始新的 fMP4 片段。对于关键帧间隔合适的 H.264 源可设置 `"videoMode": "copy"` 直接封装。采集需要 PATH 中的 `ffmpeg`，曝光核对还需要 `ffprobe`。默认编码使用 `libx264`。
 
 现场相机暂定海康机器人 **MV-CS050-10GC-PRO**。Edge 已有直采通路：`camera-capture` 子进程取未压缩原图，用 VideoToolbox 编码 H.264，自行写出分段 fMP4 与逐帧曝光映射。支持模拟相机和链接 MVS SDK 的海康相机，MVS 取图尚待实机联调，见[相机直采](#相机直采mvs-与模拟相机)。首轮双机采集模式、带宽和对时验收见[相机开发基线](../docs/05-hardware-selection.md#相机开发基线)。
 

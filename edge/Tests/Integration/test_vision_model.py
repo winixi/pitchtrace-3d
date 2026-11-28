@@ -15,7 +15,7 @@ import numpy as np
 EDGE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(EDGE / "Sources/PitchTraceEdge/Geometry"))
 from calibrate import calibrate
-from observations import Detector, OcrSchedule, validate_observation
+from observations import Degradation, Detector, OcrSchedule, validate_observation
 from process_match import process
 from scene_archive import SceneArchive
 from stream_match import stream_match
@@ -138,7 +138,7 @@ class VisionModelTests(unittest.TestCase):
             def __init__(self, settings, model, executable):
                 pass
 
-            def observe(self, image, region, ocr_skip=()):
+            def observe(self, image, region, ocr_skip=(), control=None):
                 camera, frame = chr(image[0, 0, 0]), int(image[0, 0, 1])
                 x, y = foot[camera]
                 box = [x - 20, y - 100, 40, 100]
@@ -158,6 +158,115 @@ class VisionModelTests(unittest.TestCase):
         # 第 0–2 帧三票确认号码；第 3、4 帧距上次读号不足 250 ms；第 5 帧重读后第 6 帧再跳过。
         self.assertEqual(skipped, [3, 4, 6])
         self.assertEqual([f["players"][0]["number"] for f in frames], [None, None, 7, 7, 7, 7, 7])
+
+    def test_degradation_levels_rise_by_backlog_and_fall_with_hysteresis(self):
+        now = [0.0]
+        policy = Degradation({"ocrAfterSeconds": 10, "poseAfterSeconds": 30, "secondaryAfterSeconds": 60,
+                              "secondaryCameras": ["B", "C"]}, clock=lambda: now[0])
+        levels = []
+        for backlog in (5, 12, 35, 70, 40, 25, 14, 4):
+            now[0] = 1000 + backlog
+            levels.append(policy.update(1000 * 1_000_000))
+        # 3 级在积压低于 30 秒才回到 2 级，2 级低于 15 秒才回到 1 级，1 级低于 5 秒才恢复。
+        self.assertEqual(levels, [0, 1, 2, 3, 3, 2, 1, 0])
+        self.assertEqual(policy.snapshot()["framesByLevel"], [2, 2, 2, 2])
+        now[0] = 1100
+        self.assertEqual(policy.update(1000 * 1_000_000), 3)
+        rows = [{"cameraId": c} for c in "ABC"]
+        self.assertEqual(policy.skipped_cameras(rows), ["B", "C"])
+        self.assertEqual(policy.skipped_cameras(rows[1:]), [])
+        self.assertEqual(policy.control("A", 1_000_000, 1920), {"skipOCR": True, "poseCenter": (0, 0), "poseRadius": 0})
+        policy.record(1_000_000, [{"cameraId": "A", "ball": {"pixel": [900, 500]}}, {"cameraId": "B", "ball": None}])
+        self.assertEqual(policy.control("A", 1_200_000, 1920),
+                         {"skipOCR": True, "poseCenter": [900, 500], "poseRadius": 480})
+        self.assertEqual(policy.control("A", 1_400_000, 1920)["poseRadius"], 0)
+        only_pose = Degradation({"poseAfterSeconds": 20}, clock=lambda: 25.0)
+        self.assertEqual(only_pose.update(0), 2)
+
+    def test_degradation_settings_and_worker_packets(self):
+        valid = dict(self.settings, degradation={"ocrAfterSeconds": 5, "poseAfterSeconds": 15})
+        load_vision_model(valid, self.root)
+        for bad in ({"ocrAfterSeconds": 5, "poseAfterSeconds": 5}, {"ocrAfterSeconds": 0}, {},
+                    {"secondaryAfterSeconds": 30}, {"ocrAfterSeconds": 5, "extra": 1},
+                    {"ocrAfterSeconds": 5, "poseRadiusFraction": 0}, {"ocrAfterSeconds": True}):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                load_vision_model(dict(self.settings, degradation=bad), self.root)
+        with self.assertRaises(ValueError):
+            load_vision_model({"backend": "color-ball", "ballHSV": {}, "degradation": {"ocrAfterSeconds": 5}}, self.root)
+        image = np.zeros((24, 32, 3), dtype=np.uint8)
+        with patch("observations.subprocess") as worker:
+            detector = Detector(valid, load_vision_model(valid, self.root), "edge")
+            self.assertEqual(worker.Popen.call_args.args[0][-1], "--frame-control")
+            detector.worker.stdin = io.BytesIO()
+            detector.worker.stdout = io.BytesIO(b'{"imageSize":[32,24],"players":[],"ball":null}\n' * 3)
+            detector.observe(image)
+            detector.observe(image, control={"skipOCR": True})
+            detector.observe(image, control={"skipOCR": True, "poseCenter": [10.4, 7.6], "poseRadius": 8.2})
+            data = detector.worker.stdin.getvalue()
+            blocks = []
+            while data:
+                blocks.append(struct.unpack(">4I", data[:16]))
+                length = struct.unpack(">I", data[16:20])[0]
+                data = data[20 + length:]
+            self.assertEqual(blocks, [(0, 0, 0, 0), (1, 0, 0, 0), (3, 10, 8, 8)])
+            detector.close()
+
+    def test_stream_degradation_skips_secondary_cameras_and_records_evidence(self):
+        from match_config import MatchConfig
+        from process_match import analyze_rows
+
+        sample = json.loads((EDGE / "samples/calibration.json").read_text())
+        (self.root / "report.json").write_text(json.dumps(calibrate(sample)))
+        config = MatchConfig({"matchId": "trial", "streamEpoch": "one", "startUtcUs": "0", "sampleSource": "synthetic",
+                              "calibrations": [{"calibrationId": "pitch", "fromUtcUs": "0", "report": "report.json"}]},
+                             self.root)
+        rows = [{"cameraId": c, "captureUtcUs": str(n * 100_000), "segment": 0, "pts": n} for n in range(3) for c in "AB"]
+        calls = []
+
+        class Reader:
+            def __init__(self, root):
+                pass
+
+            def read(self, row):
+                image = np.zeros((1080, 1920, 3), np.uint8)
+                image[0, 0, :2] = ord(row["cameraId"]), row["pts"]
+                return image
+
+            def close(self):
+                pass
+
+        class FakeDetector:
+            def __init__(self, *_):
+                pass
+
+            def observe(self, image, region, ocr_skip=(), control=None):
+                camera, frame = chr(image[0, 0, 0]), int(image[0, 0, 1])
+                calls.append((frame, camera, control))
+                return {"imageSize": [1920, 1080], "players": [], "ball": {"pixel": [100, 200], "confidence": 0.9}}
+
+            def close(self):
+                pass
+
+        policy = Degradation({"ocrAfterSeconds": 1, "poseAfterSeconds": 2, "secondaryAfterSeconds": 3,
+                              "secondaryCameras": ["B"]}, clock=lambda: 4.0)
+        with SceneArchive(self.root / "shed.sqlite") as archive, patch("observations.Detector", FakeDetector), \
+                patch("replay_images.ReplayImages", Reader):
+            list(analyze_rows(config, rows, archive, self.root, {}, None, None, degradation=policy))
+            evidence = [archive.evidence("trial", "one", seq) for seq in range(3)]
+        self.assertEqual([c[:2] for c in calls], [(0, "A"), (1, "A"), (2, "A")])
+        self.assertEqual(calls[0][2], {"skipOCR": True, "poseCenter": (0, 0), "poseRadius": 0})
+        self.assertEqual(calls[1][2], {"skipOCR": True, "poseCenter": [100, 200], "poseRadius": 480.0})
+        self.assertEqual(evidence[0]["degraded"], {"level": 3, "backlogSeconds": 4.0, "skippedCameras": ["B"]})
+        self.assertEqual([r["cameraId"] for r in evidence[2]["observations"]], ["A"])
+
+    def test_skipped_pose_has_no_joints_and_box_foot_is_labelled(self):
+        row = {"cameraId": "A", "pts": 0, "segment": 0, "imageSize": [64, 64], "ball": None,
+               "players": [{"box": [1, 1, 10, 20], "poseSkipped": True, "foot": [6, 20], "footSource": "box"}]}
+        validate_observation(row)
+        for player in ({"box": [1, 1, 10, 20], "poseSkipped": True, "joints": {"nose": [2, 2]}},
+                       {"box": [1, 1, 10, 20], "poseSkipped": False}, {"box": [1, 1, 10, 20], "footSource": "guess"}):
+            with self.subTest(player=player), self.assertRaises(ValueError):
+                validate_observation(dict(row, players=[player]))
 
     def test_skipped_ocr_must_not_carry_a_number(self):
         row = {"cameraId": "A", "pts": 0, "segment": 0, "imageSize": [64, 64], "ball": None,

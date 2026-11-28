@@ -7,7 +7,7 @@ enum PitchTraceEdge {
         let usage = """
         用法：
           pitchtrace-edge web-ui [--bind 地址:端口] [--match-dir 目录]
-          pitchtrace-edge replay <2–4 机位录像目录> <新输出目录> [--metrics]
+          pitchtrace-edge replay <2–8 机位录像目录> <新输出目录> [--metrics]
           pitchtrace-edge audit-sync <frames.ndjson> <闪光标注.json>
           pitchtrace-edge audit-visibility <frames.ndjson> <可见性标注.json>
           pitchtrace-edge calibrate-intrinsics <棋盘格照片清单.json>
@@ -27,7 +27,7 @@ enum PitchTraceEdge {
           pitchtrace-edge compare-scenes <场景库.sqlite> <比赛 ID> <旧周期> <新周期>
           pitchtrace-edge scene-evidence <场景库.sqlite> <比赛 ID> <场景周期> <seq>
           pitchtrace-edge match-info <场景库.sqlite> <比赛 ID> <场景周期>
-          pitchtrace-edge vision-worker [Core ML 检测模型 [--person-and-ball] [--ball-search]] [--individual-ocr] [--ocr-hints] [--compute-units 计算单元]
+          pitchtrace-edge vision-worker [Core ML 检测模型 [--person-and-ball] [--ball-search]] [--individual-ocr] [--ocr-hints] [--frame-control] [--compute-units 计算单元]
           pitchtrace-edge publish-media <网关地址> <比赛 ID> <含 epochs 的机位目录>
           pitchtrace-edge publish-media <网关地址> <比赛 ID> <媒体周期> <平铺机位目录>
         """

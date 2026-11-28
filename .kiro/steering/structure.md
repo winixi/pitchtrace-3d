@@ -17,7 +17,7 @@ pitchtrace-3d/
 │   ├── Package.swift            SwiftPM 配置（macOS 14+，Swift 6.0+）
 │   ├── Sources/PitchTraceEdge/
 │   │   ├── PitchTraceEdge.swift        CLI 总入口，分发所有子命令
-│   │   ├── RecordingExport.swift       2–4 机位录像重放与 fMP4 导出
+│   │   ├── RecordingExport.swift       2–8 机位录像重放与 fMP4 导出
 │   │   ├── RecordingTiming.swift       曝光映射、时序与缺口校验
 │   │   ├── CameraMediaPeriod.swift     机位媒体周期目录结构
 │   │   ├── ExposureAudit.swift         闪光对时报告

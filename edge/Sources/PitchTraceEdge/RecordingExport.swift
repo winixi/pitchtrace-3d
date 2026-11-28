@@ -304,10 +304,10 @@ func exportRecording(from input: URL, to output: URL) throws -> (frames: Int, ga
         at: input, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]
     ).filter { try $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true }
         .sorted { $0.lastPathComponent < $1.lastPathComponent }
-    guard (2...4).contains(cameras.count), cameras.allSatisfy({
+    guard (2...maximumCameras).contains(cameras.count), cameras.allSatisfy({
         isMediaCameraID($0.lastPathComponent)
     }) else {
-        throw RecordingError("录像目录需要 2–4 个以 v2 机位 ID 命名的子目录")
+        throw RecordingError("录像目录需要 2–\(maximumCameras) 个以 v2 机位 ID 命名的子目录")
     }
 
     let stage = output.deletingLastPathComponent().appendingPathComponent(".pitchtrace-\(UUID())")

@@ -67,7 +67,7 @@ class ParallelInferenceTest(unittest.TestCase):
                     def __init__(self, settings, model, executable):
                         opened.append(self)
 
-                    def observe(self, image, region, ocr_skip=()):
+                    def observe(self, image, region, ocr_skip=(), control=None):
                         camera, frame = chr(image[0, 0, 0]), int(image[0, 0, 1])
                         with lock:
                             assignments[camera].add((self, threading.get_ident()))

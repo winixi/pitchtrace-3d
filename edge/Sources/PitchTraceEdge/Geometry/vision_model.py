@@ -70,6 +70,39 @@ def required_text(data, key):
     return value
 
 
+DEGRADATION_KEYS = {"ocrAfterSeconds", "poseAfterSeconds", "secondaryAfterSeconds", "poseRadiusFraction",
+                    "secondaryCameras"}
+
+
+def validate_degradation(settings):
+    """连续处理的过载降级门槛：积压超过各级秒数依次停读号、只算球附近姿态、停次要机位。"""
+    value = settings.get("degradation")
+    if value is None:
+        return None
+    if not isinstance(value, dict) or set(value) - DEGRADATION_KEYS:
+        raise ValueError("detector.degradation 需要对象，字段为 " + "、".join(sorted(DEGRADATION_KEYS)))
+    if settings.get("backend", "vision") != "vision":
+        raise ValueError("detector.degradation 需要 vision 后端")
+    previous = 0
+    for key in ("ocrAfterSeconds", "poseAfterSeconds", "secondaryAfterSeconds"):
+        if key in value:
+            seconds = value[key]
+            if type(seconds) not in (int, float) or not previous < seconds <= 3600:
+                raise ValueError(f"detector.degradation.{key} 须为大于上一级、不超过 3600 的秒数")
+            previous = seconds
+    if not {"ocrAfterSeconds", "poseAfterSeconds", "secondaryAfterSeconds"} & set(value):
+        raise ValueError("detector.degradation 至少需要一级门槛")
+    fraction = value.get("poseRadiusFraction", 0.25)
+    if type(fraction) not in (int, float) or not 0 < fraction <= 1:
+        raise ValueError("detector.degradation.poseRadiusFraction 须在 0–1 内")
+    cameras = value.get("secondaryCameras", [])
+    if not isinstance(cameras, list) or not all(isinstance(c, str) and c for c in cameras) or len(set(cameras)) != len(cameras):
+        raise ValueError("detector.degradation.secondaryCameras 需要不重复的机位 ID 数组")
+    if "secondaryAfterSeconds" in value and not cameras:
+        raise ValueError("detector.degradation.secondaryAfterSeconds 需要 secondaryCameras")
+    return value
+
+
 def load_vision_model(settings, folder):
     if not isinstance(settings, dict):
         raise ValueError("detector 必须是配置对象")
@@ -77,6 +110,7 @@ def load_vision_model(settings, folder):
     if settings.get("ocrMode", "batch") not in ("batch", "individual"):
         raise ValueError("detector.ocrMode 需要 batch 或 individual")
     ocr_refresh_us(settings)
+    validate_degradation(settings)
     units = settings.get("computeUnits")
     if units is not None and (units not in COMPUTE_UNITS or settings.get("backend", "vision") != "vision" or
                               not ("model" in settings or "modelManifest" in settings)):

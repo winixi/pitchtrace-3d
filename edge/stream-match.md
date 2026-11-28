@@ -31,5 +31,29 @@ swift run --package-path edge pitchtrace-edge stream-match match.json ./capture-
 | `processedFramesPerSecond` | 本次启动以来处理的场景数除以单调时钟耗时，包含恢复时核对的已有帧。与发布目标频率、积压变化一起观察。 |
 | `status`、`pendingDelivery` | 本地运行状态和退出时仍待处理的上行错误。 |
 | `pendingUploads` | 配置网关时给出，`scenes` 为该网关尚未确认的场景帧数，`mediaSegments` 为尚未三件全部确认的媒体段数。归档读取失败时为 `null`。 |
+| `degradation` | 配置 `detector.degradation` 时给出：当前降级级别 `level`、最近一组的曝光积压 `backlogSeconds` 和各级已处理的组数 `framesByLevel`。 |
+
+## 过载降级
+
+推理长期跟不上输入时，可在比赛配置的 `detector` 中加入 `degradation`，按「当前时刻减本组曝光时刻」的积压秒数逐级减负。只在 `stream-match` 中生效；`process-match`、`run-match` 复算总是完整观测，便于与直播结果对照。
+
+```json
+{
+  "detector": {
+    "backend": "vision",
+    "modelManifest": "models/yolo11n.json",
+    "degradation": {"ocrAfterSeconds": 30, "poseAfterSeconds": 90, "secondaryAfterSeconds": 180,
+                    "poseRadiusFraction": 0.25, "secondaryCameras": ["C", "D"]}
+  }
+}
+```
+
+| 级别 | 触发条件 | 处理 |
+| --- | --- | --- |
+| 1 | 积压 ≥ `ocrAfterSeconds` | 全部机位停读号，观测记 `ocrSkipped: true`。 |
+| 2 | 积压 ≥ `poseAfterSeconds` | 只为离本机位最近 0.3 秒内二维球心不超过 `poseRadiusFraction` × 原图宽的人估计姿态。其余人记 `poseSkipped: true`，不带关节；人框完整落在画面内时用框下沿中点近似鞋底，记 `footSource: "box"`。没有近期球心时本帧不估计姿态。 |
+| 3 | 积压 ≥ `secondaryAfterSeconds` | 不再解码和推理 `secondaryCameras` 列出的机位，按缺机位融合，至少保留一路。 |
+
+三个门槛须递增，可省略任一级；省略的级别与下一级同时触发。积压降到当前级别门槛的一半以下才回退一级，避免在门槛附近反复切换。降级组的复核证据记录 `degraded`（级别、积压秒数、被跳过的机位），原片照常录制和上行，赛后可用 `process-match` 以新的 `streamEpoch` 完整复算。降级状态目前只写入本地证据和 `stream-state.json`，场景快照契约未增加字段。
 
 运行 `swift build --package-path edge` 后，验证命令为 `python3 -B edge/Tests/Integration/test_stream_match.py`。回归在两个机位分段到达时先让网关返回 503，检查原片和场景仍然落盘，再恢复真实本地网关，核对历史快照、按曝光 UTC 定位的原片，以及第三次运行的幂等回执。

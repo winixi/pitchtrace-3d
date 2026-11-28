@@ -14,6 +14,9 @@ struct ObservedPlayer: Encodable {
     var shirtRGB: [Int]?
     // 号码已稳定的轨迹本帧未送读号；与读号失败区分，number 仍为缺测。
     var ocrSkipped: Bool?
+    // 过载降级时本帧未估计姿态；foot 改由人框下沿估计并标注来源。
+    var poseSkipped: Bool?
+    var footSource: String?
 }
 
 struct ObservedBall: Encodable {
@@ -34,9 +37,10 @@ struct VisionWorkerOptions {
     let ballSearch: Bool
     let individualOCR: Bool
     let ocrHints: Bool
+    let frameControl: Bool
     let computeUnits: MLComputeUnits
 
-    static let usage = "用法：vision-worker [模型路径 [--person-and-ball] [--ball-search]] [--individual-ocr] [--ocr-hints] [--compute-units all|cpuAndNeuralEngine|cpuAndGPU|cpuOnly]"
+    static let usage = "用法：vision-worker [模型路径 [--person-and-ball] [--ball-search]] [--individual-ocr] [--ocr-hints] [--frame-control] [--compute-units all|cpuAndNeuralEngine|cpuAndGPU|cpuOnly]"
 
     init(arguments: [String]) throws {
         var args = arguments[...]
@@ -54,6 +58,8 @@ struct VisionWorkerOptions {
         if individualOCR { args = args.dropFirst() }
         ocrHints = args.first == "--ocr-hints"
         if ocrHints { args = args.dropFirst() }
+        frameControl = args.first == "--frame-control"
+        if frameControl { args = args.dropFirst() }
         var units: MLComputeUnits?
         if args.first == "--compute-units" {
             args = args.dropFirst()
@@ -378,7 +384,8 @@ private final class ImageObserver {
         }
     }
 
-    func observe(_ data: Data, ballSearch: CGRect?, ocrSkip: [CGRect] = []) throws -> ImageObservation {
+    func observe(_ data: Data, ballSearch: CGRect?, ocrSkip: [CGRect] = [],
+                 control: FrameControl = FrameControl()) throws -> ImageObservation {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               CGImageSourceGetType(source) as String? == UTType.jpeg.identifier,
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
@@ -417,25 +424,34 @@ private final class ImageObserver {
             guard let crop = image.cropping(to: box) else { continue }
             var player = ObservedPlayer(box: [box.minX, box.minY, box.width, box.height],
                                         confidence: person.confidence)
-            try performVision([pose], on: crop, stage: .pose, timing: timing)
-            if let poses = pose.results, poses.count == 1 {
-                let points = try poses[0].recognizedPoints(.all)
-                for (key, name) in bodyJoints {
-                    if let point = points[key], point.confidence >= 0.3 {
-                        player.joints[name] = originalPixel(point.location, in: box)
-                    }
+            if !control.estimatesPose(for: box) {
+                player.poseSkipped = true
+                // 降级时以人框下沿中点近似鞋底；画面截脚时仍保留缺测。
+                if box.maxY < Double(h) {
+                    player.foot = [box.midX, box.maxY - 1]
+                    player.footSource = "box"
                 }
-                // 脚踝须落在人体框下端才用框底估计鞋底。身下留空或画面截脚时保留缺测。
-                let ankles = ["leftAnkle", "rightAnkle"].compactMap { player.joints[$0] }
-                if let ankle = ankles.max(by: { $0[1] < $1[1] }),
-                   box.maxY < Double(h), box.maxY - ankle[1] <= 0.15 * box.height {
-                    player.foot = [ankle[0], box.maxY - 1]
+            } else {
+                try performVision([pose], on: crop, stage: .pose, timing: timing)
+                if let poses = pose.results, poses.count == 1 {
+                    let points = try poses[0].recognizedPoints(.all)
+                    for (key, name) in bodyJoints {
+                        if let point = points[key], point.confidence >= 0.3 {
+                            player.joints[name] = originalPixel(point.location, in: box)
+                        }
+                    }
+                    // 脚踝须落在人体框下端才用框底估计鞋底。身下留空或画面截脚时保留缺测。
+                    let ankles = ["leftAnkle", "rightAnkle"].compactMap { player.joints[$0] }
+                    if let ankle = ankles.max(by: { $0[1] < $1[1] }),
+                       box.maxY < Double(h), box.maxY - ankle[1] <= 0.15 * box.height {
+                        player.foot = [ankle[0], box.maxY - 1]
+                    }
                 }
             }
             let torso = CGRect(x: box.minX + 0.22 * box.width, y: box.minY + 0.18 * box.height,
                                width: 0.56 * box.width, height: 0.35 * box.height).integral
             let overlaps = boxes.indices.contains { $0 != i && boxes[$0].intersects(torso) }
-            let skipped = skipsOCR(box, hints: ocrSkip)
+            let skipped = control.skipOCR || skipsOCR(box, hints: ocrSkip)
             if skipped { player.ocrSkipped = true }
             if !overlaps, let shirt = image.cropping(to: torso) {
                 player.shirtRGB = shirtColor(shirt)
@@ -450,15 +466,29 @@ private final class ImageObserver {
     }
 }
 
+/// 过载降级的逐帧控制。`poseCenter` 为空时全员估计姿态；半径为零表示本帧不估计姿态。
+struct FrameControl: Equatable {
+    var skipOCR = false
+    var poseCenter: CGPoint?
+    var poseRadius: Double = 0
+
+    func estimatesPose(for box: CGRect) -> Bool {
+        guard let poseCenter else { return true }
+        return hypot(box.midX - poseCenter.x, box.midY - poseCenter.y) <= poseRadius
+    }
+}
+
 struct VisionPacket {
     let image: Data
     let ballSearch: CGRect?
     var ocrSkip: [CGRect] = []
+    var control = FrameControl()
 }
 
 let maximumOCRHints = 64
 
-func readVisionPacket(from input: FileHandle, ballSearch: Bool = false, ocrHints: Bool = false) throws -> VisionPacket? {
+func readVisionPacket(from input: FileHandle, ballSearch: Bool = false, ocrHints: Bool = false,
+                      frameControl: Bool = false) throws -> VisionPacket? {
     var started = false
     func read(_ size: Int) throws -> Data? {
         var bytes = Data()
@@ -502,11 +532,24 @@ func readVisionPacket(from input: FileHandle, ballSearch: Bool = false, ocrHints
             }
         }
     }
+    var control = FrameControl()
+    if frameControl {
+        // [标志, 球心 x, 球心 y, 半径]：标志第 0 位停读号，第 1 位只为球附近的人估计姿态。
+        guard let block = try read(16) else { return nil }
+        let base = block.startIndex
+        let v = (0..<4).map { integer(block[(base + 4 * $0)..<(base + 4 * $0 + 4)]) }
+        guard v[0] & ~3 == 0 else { throw RecordingError("逐帧控制含未知标志") }
+        control.skipOCR = v[0] & 1 != 0
+        if v[0] & 2 != 0 {
+            control.poseCenter = CGPoint(x: v[1], y: v[2])
+            control.poseRadius = Double(v[3])
+        }
+    }
     guard let length = try read(4) else { return nil }
     let count = integer(length)
     guard count > 0, count <= 32 * 1024 * 1024 else { throw RecordingError("JPEG 包长度超出范围") }
     guard let image = try read(count) else { throw RecordingError("JPEG 包缺少图像") }
-    return VisionPacket(image: image, ballSearch: region, ocrSkip: skip)
+    return VisionPacket(image: image, ballSearch: region, ocrSkip: skip, control: control)
 }
 
 // 上一曝光中号码已稳定的人框与本帧人框交并比达到一半，才视为同一人并跳过读号。
@@ -524,10 +567,10 @@ func runVisionWorker(options: VisionWorkerOptions) throws {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
     while let packet = try readVisionPacket(from: .standardInput, ballSearch: options.ballSearch,
-                                            ocrHints: options.ocrHints) {
+                                            ocrHints: options.ocrHints, frameControl: options.frameControl) {
         try autoreleasepool {
             var line = try encoder.encode(observer.observe(packet.image, ballSearch: packet.ballSearch,
-                                                           ocrSkip: packet.ocrSkip))
+                                                           ocrSkip: packet.ocrSkip, control: packet.control))
             line.append(0x0a)
             try FileHandle.standardOutput.write(contentsOf: line)
         }

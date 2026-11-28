@@ -1,5 +1,8 @@
 import Foundation
 
+/// 一场比赛可同时处理的机位上限。与 detector.workers 上限一致，带宽估算见技术设计第 2 节。
+let maximumCameras = 8
+
 struct RecordingError: LocalizedError {
     let errorDescription: String?
 

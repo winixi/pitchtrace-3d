@@ -10,7 +10,7 @@ import numpy as np
 
 from calibrate import is_identifier, vector
 from observation_quality import add_model_quality
-from vision_model import COMPUTE_UNITS, ocr_refresh_us
+from vision_model import COMPUTE_UNITS, ocr_refresh_us, validate_degradation
 
 
 def colour(value, maxima, name):
@@ -30,6 +30,7 @@ class Detector:
         if ocr_mode not in ("batch", "individual"):
             raise ValueError("detector.ocrMode 需要 batch 或 individual")
         self.ocr_hints = ocr_refresh_us(settings) is not None
+        self.frame_control = validate_degradation(settings) is not None
         units = settings.get("computeUnits")
         if units is not None and (units not in COMPUTE_UNITS or model is None):
             raise ValueError("detector.computeUnits 需要 Core ML 模型和 " + "、".join(COMPUTE_UNITS) + " 之一")
@@ -65,6 +66,8 @@ class Detector:
                 command.append("--individual-ocr")
             if self.ocr_hints:
                 command.append("--ocr-hints")
+            if self.frame_control:
+                command.append("--frame-control")
             if units is not None:
                 command.extend(["--compute-units", units])
             self.worker = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
@@ -88,7 +91,7 @@ class Detector:
                                    "confidence": min(roundness, 1), "source": "ballHSV"})
         return candidates[0] if len(candidates) == 1 else None
 
-    def observe(self, image, ball_roi=None, ocr_skip=()):
+    def observe(self, image, ball_roi=None, ocr_skip=(), control=None):
         h, w = image.shape[:2]
         result = {"imageSize": [w, h], "players": [], "ball": None}
         if self.worker:
@@ -102,6 +105,11 @@ class Detector:
                 self.worker.stdin.write(struct.pack(">I", len(boxes)))
                 for box in boxes:
                     self.worker.stdin.write(struct.pack(">4I", *box))
+            if self.frame_control:
+                control = control or {}
+                flags = (1 if control.get("skipOCR") else 0) | (2 if "poseCenter" in control else 0)
+                cx, cy = (round(max(0, v)) for v in control.get("poseCenter", (0, 0)))
+                self.worker.stdin.write(struct.pack(">4I", flags, cx, cy, round(control.get("poseRadius", 0))))
             self.worker.stdin.write(struct.pack(">I", jpeg.size))
             self.worker.stdin.write(jpeg.tobytes())
             self.worker.stdin.flush()
@@ -132,6 +140,74 @@ class Detector:
                 pass
             self.worker.stdout.close()
             self.worker.wait()
+
+
+class Degradation:
+    """按曝光积压秒数逐级降级，回落到本级门槛一半以下才降回，避免在门槛附近抖动。
+
+    1 级停读号，2 级只为距最近球心不超过 poseRadiusFraction × 原图宽的人估计姿态（无近期球心时不估计），
+    3 级不再观测 secondaryCameras，按缺机位处理。离线复算不使用降级。
+    """
+
+    BALL_FRESH_US = 300_000
+
+    def __init__(self, settings, clock=None):
+        import time
+
+        self.thresholds = [settings.get(key) for key in ("ocrAfterSeconds", "poseAfterSeconds", "secondaryAfterSeconds")]
+        self.radius_fraction = settings.get("poseRadiusFraction", 0.25)
+        self.secondary = set(settings.get("secondaryCameras", []))
+        self.clock = clock or time.time
+        self.level = 0
+        self.backlog_seconds = 0.0
+        self.frames_by_level = [0, 0, 0, 0]
+        self.balls = {}
+
+    def update(self, utc_us):
+        self.backlog_seconds = max(0.0, self.clock() - utc_us / 1e6)
+        while self.level < 3:
+            nxt = self.thresholds[self.level]
+            if nxt is None:
+                # 未配置的一级视同门槛与下一级相同。
+                nxt = next((t for t in self.thresholds[self.level + 1:] if t is not None), None)
+            if nxt is None or self.backlog_seconds < nxt:
+                break
+            self.level += 1
+        while self.level > 0:
+            current = next((t for t in reversed(self.thresholds[:self.level]) if t is not None))
+            if self.backlog_seconds >= current / 2:
+                break
+            self.level -= 1
+        self.frames_by_level[self.level] += 1
+        return self.level
+
+    def skipped_cameras(self, rows):
+        if self.level < 3:
+            return []
+        skipped = [row["cameraId"] for row in rows if row["cameraId"] in self.secondary]
+        # 至少保留一路，避免整组按空场输出。
+        return skipped if len(skipped) < len(rows) else []
+
+    def control(self, camera, utc_us, image_width):
+        if self.level == 0:
+            return None
+        result = {"skipOCR": True}
+        if self.level >= 2:
+            seen = self.balls.get(camera)
+            fresh = seen is not None and utc_us - seen[0] <= self.BALL_FRESH_US
+            result["poseCenter"] = seen[1] if fresh else (0, 0)
+            result["poseRadius"] = self.radius_fraction * image_width if fresh else 0
+        return result
+
+    def record(self, utc_us, rows):
+        for row in rows:
+            ball = row.get("ball")
+            if ball is not None and ball.get("pixel") is not None:
+                self.balls[row["cameraId"]] = (utc_us, ball["pixel"])
+
+    def snapshot(self):
+        return {"level": self.level, "backlogSeconds": round(self.backlog_seconds, 3),
+                "framesByLevel": list(self.frames_by_level)}
 
 
 class OcrSchedule:
@@ -207,6 +283,10 @@ def validate_observation(row):
             raise ValueError("joints 必须是按关节名索引的对象")
         for point in joints.values():
             pixel(point)
+        if "poseSkipped" in player and player["poseSkipped"] is not True or player.get("poseSkipped") and player.get("joints"):
+            raise ValueError("poseSkipped 只能为 true，且未估计姿态的观测不带关节")
+        if player.get("footSource", "pose") not in ("pose", "box"):
+            raise ValueError("footSource 需要 pose 或 box")
         if "ocrSkipped" in player and (player["ocrSkipped"] is not True or player.get("number") is not None):
             raise ValueError("ocrSkipped 只能为 true，且免读号的观测不带号码")
         number = player.get("number")

@@ -68,6 +68,27 @@ class NativeCaptureTest(unittest.TestCase):
         utc = [int(r["captureUtcUs"]) for r in merged]
         self.assertEqual(utc, sorted(utc))
 
+    def test_eight_cameras_capture_and_replay_nine_are_rejected(self):
+        names = "ABCDEFGH"
+        cameras = {}
+        for i, name in enumerate(names):
+            cameras[name] = {**simulated(frames=30), "mediaEpoch": "eight"}
+            cameras[name]["simulate"]["startUtcUs"] = START_US + i * 1000
+        finished = self.capture(cameras)
+        self.assertTrue(all(finished[n]["attached"] for n in names), finished)
+        output = self.base / "replay"
+        result = subprocess.run([BINARY, "replay", self.root / "recordings", output], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        merged = [json.loads(line) for line in (output / "frames.ndjson").read_text().splitlines()]
+        self.assertEqual(len(merged), 240)
+        self.assertEqual({r["cameraId"] for r in merged}, set(names))
+        path = self.base / "nine.json"
+        path.write_text(json.dumps({"matchId": "trial", "cameras": {
+            name: {**simulated(frames=30), "mediaEpoch": "nine"} for name in names + "I"}}))
+        result = subprocess.run([BINARY, "capture", path, self.base / "nine"], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("1 至 8 个机位", result.stderr)
+
     def test_host_fit_warms_up_and_stays_out_of_recordings(self):
         camera = {**simulated(frames=45), "clock": {"mode": "host-fit"}, "mediaEpoch": "low"}
         state = self.capture({"A": camera})["A"]

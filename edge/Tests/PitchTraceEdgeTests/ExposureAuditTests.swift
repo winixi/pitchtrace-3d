@@ -158,13 +158,13 @@ struct ExposureAuditTests {
         #expect(report.events[2].spanUs == nil)
     }
 
-    @Test(arguments: [["A"], ["A", "B", "B"], ["A", "B", "C", "D", "E"]])
+    @Test(arguments: [["A"], ["A", "B", "B"], ["A", "B", "C", "D", "E", "F", "G", "H", "I"]])
     func rejectsInvalidCameraLists(cameras: [String]) async {
         do {
             _ = try await audit([], rows: [], cameras: cameras)
             Issue.record("应拒绝机位列表 \(cameras)")
         } catch {
-            #expect(error.localizedDescription.contains("2 至 4 个不同的 v2 机位 ID"))
+            #expect(error.localizedDescription.contains("2 至 8 个不同的 v2 机位 ID"))
         }
     }
 

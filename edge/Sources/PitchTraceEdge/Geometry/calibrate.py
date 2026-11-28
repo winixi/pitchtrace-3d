@@ -6,6 +6,10 @@ import re
 import sys
 from pathlib import Path
 
+# 一场比赛的机位上限，与 Swift 侧 maximumCameras 及 detector.workers 上限一致。
+MAX_CAMERAS = 8
+
+
 
 def unique_object(pairs):
     value = {}
@@ -56,8 +60,8 @@ def read_lens(camera, name, source, directory):
 
 
 def load_cameras(cameras, source, directory):
-    if not isinstance(cameras, dict) or not 2 <= len(cameras) <= 4:
-        raise ValueError("需要 2 至 4 个机位")
+    if not isinstance(cameras, dict) or not 2 <= len(cameras) <= MAX_CAMERAS:
+        raise ValueError(f"需要 2 至 {MAX_CAMERAS} 个机位")
     loaded = {}
     for name, camera in cameras.items():
         if not is_identifier(name) or not isinstance(camera, dict):

@@ -242,6 +242,10 @@ def stream_match(path, capture, run, executable):
             write_json(marker, identity)
         processing = {k: v for k, v in settings.items() if k not in ("gateway", "backfillBytesPerSecond")}
         versions, model = inference_inputs(processing, path.parent, Path(executable))
+        from observations import Degradation
+        from vision_model import validate_degradation
+        shedding = validate_degradation(settings.get("detector", {}))
+        degradation = Degradation(shedding) if shedding is not None else None
         provenance = dict(identity, command="stream-match", sampleSource=config.sample_source,
                           configuration=processing, versions=versions,
                           python=platform.python_version(), opencv=cv2.__version__, numpy=np.__version__)
@@ -291,6 +295,8 @@ def stream_match(path, capture, run, executable):
                 return {"scenes": scenes, "mediaSegments": media_parts}
 
             def save_status():
+                if degradation is not None:
+                    state["degradation"] = degradation.snapshot()
                 snapshot = {**state, **journal.metrics(), "updatedUnix": time.time(),
                             "processedFramesPerSecond": state["frames"] / max(.001, time.monotonic() - started)}
                 if gateway:
@@ -313,7 +319,7 @@ def stream_match(path, capture, run, executable):
                     uploads = {name: pool.submit(publish, name) for name in ("场景", "原片")} if gateway else {}
                     try:
                         for frame in analyze_rows(config, journal.rows(), archive, media, settings.get("detector", {}),
-                                                  model, executable, resume=True):
+                                                  model, executable, resume=True, degradation=degradation):
                             state.update(frames=frame["seq"] + 1, lastSceneUtcUs=frame["captureUtcUs"])
                         producer.result()
                     finally:

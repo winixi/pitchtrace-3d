@@ -85,6 +85,26 @@ test("免读号区域只跳过同一人框的读号，并按指定计算单元�
   }
 });
 
+test("过载降级的逐帧控制跳过姿态与读号，并以人框下沿近似鞋底", () => {
+  const frame = packet("white", "64x64");
+  const control = (...values) => {
+    const bytes = Buffer.alloc(16);
+    values.forEach((v, i) => bytes.writeUInt32BE(v, i * 4));
+    return bytes;
+  };
+  const input = Buffer.concat([control(0, 0, 0, 0), frame, control(3, 0, 0, 0), frame, control(2, 16, 32, 40), frame]);
+  const [full, shed, near] = observe(["--person-and-ball", "--frame-control"], input);
+  assert.equal(full.players[0].poseSkipped, undefined);
+  assert.equal(full.players[0].ocrSkipped, undefined);
+  assert.equal(shed.players[0].poseSkipped, true);
+  assert.equal(shed.players[0].ocrSkipped, true);
+  assert.deepEqual(shed.players[0].foot, [16, 39]);
+  assert.equal(shed.players[0].footSource, "box");
+  assert.deepEqual(shed.players[0].joints, {});
+  assert.equal(near.players[0].poseSkipped, undefined);
+  assert.equal(near.players[0].ocrSkipped, undefined);
+});
+
 test("既有单参数模型用法保留系统人体检测", () => {
   const [frame] = observe([], packet("white", "64x64"));
   assert.deepEqual(frame.players, []);

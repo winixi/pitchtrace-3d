@@ -62,7 +62,7 @@ class SceneBuilder:
         self.previous_utc = None
         self.seq = 0
 
-    def append(self, archive, utc, version, cameras, group, inputs):
+    def append(self, archive, utc, version, cameras, group, inputs, degraded=None):
         if self.previous_version is not None and self.previous_version != version:
             affected = {name for name in self.previous_cameras.keys() | cameras.keys()
                         if self.previous_cameras.get(name) != cameras.get(name)}
@@ -81,6 +81,8 @@ class SceneBuilder:
                                 if k in row} for row in group],
                     "activeCameras": sorted(cameras), "observations": inputs,
                     "tracks": sources, "measurements": self.analysis.measurements}
+        if degraded:
+            evidence["degraded"] = degraded
         if self.previous_utc is not None:
             interval = self.config.frame_interval_us
             previous_slot = (self.previous_utc - self.config.start_us) // interval
@@ -98,7 +100,9 @@ class SceneBuilder:
         return {track for track, (_, number) in self.analysis.votes.items() if number.confirmed is not None}
 
 
-def analyze_rows(config, rows, archive, media_root, detector_settings, model, executable, *, resume=False):
+def analyze_rows(config, rows, archive, media_root, detector_settings, model, executable, *, resume=False,
+                 degradation=None):
+    """degradation 仅由连续处理传入；离线复算总是完整观测，以便与直播结果对照。"""
     from ball_search import BallSearch
     from observations import Detector, OcrSchedule, validate_observation
     from vision_model import ocr_refresh_us
@@ -109,6 +113,7 @@ def analyze_rows(config, rows, archive, media_root, detector_settings, model, ex
     refresh_us = ocr_refresh_us(detector_settings) if replay else None
     schedule = OcrSchedule(refresh_us) if refresh_us is not None else None
     ocr_skip = {}
+    controls = {}
     # 恢复仅保存起始高水位，避免跨帧持有 SQLite 读游标妨碍同时提交上传回执。
     last_seq = archive.last_seq(config.match_id, config.stream_epoch) if resume else None
     with ExitStack() as stack:
@@ -126,8 +131,9 @@ def analyze_rows(config, rows, archive, media_root, detector_settings, model, ex
             if list(image.shape[:2][::-1]) != cameras[row["cameraId"]]["imageSize"]:
                 raise ValueError(f'机位 {row["cameraId"]} 原片尺寸与当前标定不一致')
             skip = ocr_skip.get(row["cameraId"], ())
-            observed = (search.observe(detector, version, row, image, skip) if search
-                        else detector.observe(image, None, skip))
+            control = controls.get(row["cameraId"])
+            observed = (search.observe(detector, version, row, image, skip, control=control) if search
+                        else detector.observe(image, None, skip, control=control))
             # 性能采样里的墙钟耗时不参与比赛证据或幂等比较。
             observed.pop("timing", None)
             result = {**row, **observed}
@@ -143,8 +149,20 @@ def analyze_rows(config, rows, archive, media_root, detector_settings, model, ex
                     raise ValueError("恢复时原帧顺序或标定改变，请指定新的场景周期")
                 proof = archive.evidence(config.match_id, config.stream_epoch, builder.seq)
                 inputs = proof["observations"]
+                degraded = proof.get("degraded")
             else:
                 enabled = [row for row in group if row["cameraId"] in cameras]
+                degraded = None
+                if replay and degradation is not None and degradation.update(utc):
+                    skipped = degradation.skipped_cameras(enabled)
+                    enabled = [row for row in enabled if row["cameraId"] not in skipped]
+                    controls = {row["cameraId"]: degradation.control(row["cameraId"], utc,
+                                                                     cameras[row["cameraId"]]["imageSize"][0])
+                                for row in enabled}
+                    degraded = {"level": degradation.level, "backlogSeconds": round(degradation.backlog_seconds, 3),
+                                "skippedCameras": skipped}
+                else:
+                    controls = {}
                 # 已归档的观测足以重建历史；第一组新原帧到来时再启动模型和解码器。
                 if replay and enabled and not observers:
                     for _ in range(workers.worker_count):
@@ -160,7 +178,9 @@ def analyze_rows(config, rows, archive, media_root, detector_settings, model, ex
                     search = searches[workers.lane(row["cameraId"])]
                     if search:
                         search.record(version, row)
-            frame = builder.append(archive, utc, version, cameras, group, inputs)
+            if degradation is not None:
+                degradation.record(utc, inputs)
+            frame = builder.append(archive, utc, version, cameras, group, inputs, degraded)
             if schedule is not None:
                 schedule.update(utc, builder.sources, builder.confirmed_numbers())
             yield frame

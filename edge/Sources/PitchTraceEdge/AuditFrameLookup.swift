@@ -22,9 +22,9 @@ struct CameraFrameReference: Hashable {
 }
 
 func validateAuditCameras(_ cameras: [String]) throws {
-    guard (2...4).contains(cameras.count), Set(cameras).count == cameras.count,
+    guard (2...maximumCameras).contains(cameras.count), Set(cameras).count == cameras.count,
           cameras.allSatisfy(isMediaCameraID) else {
-        throw RecordingError("审计标注需要 2 至 4 个不同的 v2 机位 ID")
+        throw RecordingError("审计标注需要 2 至 \(maximumCameras) 个不同的 v2 机位 ID")
     }
 }
 

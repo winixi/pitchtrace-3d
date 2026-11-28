@@ -58,7 +58,7 @@ node --test edge/Tests/Integration/{calibration,intrinsics,match-pipeline,media-
 
 ## 离线录像输入
 
-运行时需要 PATH 中的 `ffprobe`，用于读取 H.264/fMP4 中实际解出的展示帧、PTS、时基及帧时长。输入目录包含 2–4 个以机位 ID 命名的子目录。每路可独立使用多个媒体周期，只有一个周期的旧录像可沿用以下平铺布局。
+运行时需要 PATH 中的 `ffprobe`，用于读取 H.264/fMP4 中实际解出的展示帧、PTS、时基及帧时长。输入目录包含 2–8 个以机位 ID 命名的子目录。每路可独立使用多个媒体周期，只有一个周期的旧录像可沿用以下平铺布局。
 
 ```text
 recordings/
@@ -126,7 +126,7 @@ swift run --package-path edge pitchtrace-edge calibrate-intrinsics "$trial_dir/l
 
 ### 用场地点标定多机位外参
 
-`calibrate` 使用各机位的镜头参数和场地点的像素标注，为 2–4 台相机估计世界坐标到相机坐标的外参，再从多个视角重建独立检查点。从仓库根目录运行双机位合成样例。[标定样例](samples/calibration.json)
+`calibrate` 使用各机位的镜头参数和场地点的像素标注，为 2–8 台相机估计世界坐标到相机坐标的外参，再从多个视角重建独立检查点。从仓库根目录运行双机位合成样例。[标定样例](samples/calibration.json)
 
 ```sh
 swift run --package-path edge pitchtrace-edge calibrate edge/samples/calibration.json > calibration-report.json
@@ -261,7 +261,7 @@ node edge/Tests/Integration/verify-long-replay.mjs "$run_dir/media" > "$run_dir/
 swift run --package-path edge pitchtrace-edge audit-sync "$trial_dir/media/frames.ndjson" flashes.json > sync-report.json
 ```
 
-同一命令支持 2–4 路，`cameras` 列出本次重放的所有机位。各事件保留原帧引用、曝光 UTC 和 `missingCameras`。全部机位都拍到时，`spanUs` 为最晚与最早曝光之差。双机位完整事件还保留有符号的 `signedSkewUs`（第二机位减第一机位）。报告用完整组的跨度计算最大值和最近秩 P95，`pairedCount` 计完整组，`unpairedCount` 计缺测组。没有完整组时省略偏差统计与阈值判定。P95 超过 5,000 µs 时仍正常输出报告。无效帧引用或重复使用同一帧会报错。
+同一命令支持 2–8 路，`cameras` 列出本次重放的所有机位。各事件保留原帧引用、曝光 UTC 和 `missingCameras`。全部机位都拍到时，`spanUs` 为最晚与最早曝光之差。双机位完整事件还保留有符号的 `signedSkewUs`（第二机位减第一机位）。报告用完整组的跨度计算最大值和最近秩 P95，`pairedCount` 计完整组，`unpairedCount` 计缺测组。没有完整组时省略偏差统计与阈值判定。P95 超过 5,000 µs 时仍正常输出报告。无效帧引用或重复使用同一帧会报错。
 
 生成样例预期为 2 次标注，其中 1 次配对、1 次未配对，P95 和最大值均为 0 µs。现场评审还要核对实拍证据、样本量、未配对数、双视角可见率和独立检查点。[G1 放行条件](../docs/03-development-plan.md#3-按周实施与放行条件)
 
@@ -282,7 +282,7 @@ swift run --package-path edge pitchtrace-edge audit-visibility \
 | 中圈 | 脚踝 | 0/1 | 两路同曝光，仅 A 能看清左脚踝。 |
 | 远端禁区 | 高球 | 0/1 | 两路都能看清球，曝光相差 6,667 µs，超出样例的 5,000 µs 上限。 |
 
-制作现场标注时，先约定场区名称、取样时刻和允许的最大曝光差 `maxSkewUs`（微秒），列出所有计划样本。`sampleSource` 填 `field`，`cameras` 填重放清单内全部 2–4 个机位。每个 `id` 唯一标识一次取样的一个目标，`region` 填场区，`target` 取 `groundBall`（地滚球）、`highBall`（高球）或 `ankle`（脚踝）。标脚踝时，各机位应看同一球员的同侧脚踝，可在 ID 中记下球员和左右侧。球与脚踝可以分别引用同一原帧。需单列拼抢或特定光照时，可按场景分别准备标注文件、生成报告。
+制作现场标注时，先约定场区名称、取样时刻和允许的最大曝光差 `maxSkewUs`（微秒），列出所有计划样本。`sampleSource` 填 `field`，`cameras` 填重放清单内全部 2–8 个机位。每个 `id` 唯一标识一次取样的一个目标，`region` 填场区，`target` 取 `groundBall`（地滚球）、`highBall`（高球）或 `ankle`（脚踝）。标脚踝时，各机位应看同一球员的同侧脚踝，可在 ID 中记下球员和左右侧。球与脚踝可以分别引用同一原帧。需单列拼抢或特定光照时，可按场景分别准备标注文件、生成报告。
 
 在 `views` 内为有对应原帧的机位填写片段号、PTS，以及显式周期录像的 `mediaEpoch`。能看清指定目标填 `visible: true`，有原帧但目标被挡或无法辨认填 `false`。缺帧时省略该机位，所有机位均缺帧时保留 `"views": {}`。每个计划样本都进入该组的分母。任意两路可见帧的曝光 UTC 相差不超过 `maxSkewUs` 时，该样本计入分子一次。
 

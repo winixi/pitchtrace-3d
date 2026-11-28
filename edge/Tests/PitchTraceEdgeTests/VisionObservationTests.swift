@@ -150,6 +150,32 @@ struct VisionObservationTests {
         }
     }
 
+    @Test func frameControlPacketsFollowOCRHints() throws {
+        func be(_ values: [Int]) -> [UInt8] {
+            values.flatMap { v in (0..<4).map { UInt8((v >> (8 * (3 - $0))) & 0xff) } }
+        }
+        let stream = try packetStream(be([0]) + be([3, 900, 500, 480]) + be([1]) + [42]
+                                      + be([0]) + be([1, 0, 0, 0]) + be([1]) + [43])
+        let first = try #require(try readVisionPacket(from: stream, ocrHints: true, frameControl: true))
+        #expect(first.control == FrameControl(skipOCR: true, poseCenter: CGPoint(x: 900, y: 500), poseRadius: 480))
+        let second = try #require(try readVisionPacket(from: stream, ocrHints: true, frameControl: true))
+        #expect(second.control == FrameControl(skipOCR: true) && second.image == Data([43]))
+        for bytes in [be([4, 0, 0, 0]) + be([1]) + [1], be([1, 0])] {
+            #expect(throws: RecordingError.self) { try readVisionPacket(from: packetStream(bytes), frameControl: true) }
+        }
+        #expect(try VisionWorkerOptions(arguments: ["m", "--ocr-hints", "--frame-control"]).frameControl)
+        #expect(throws: RecordingError.self) { try VisionWorkerOptions(arguments: ["m", "--frame-control", "--ocr-hints"]) }
+    }
+
+    @Test func poseRadiusSelectsPlayersNearTheBall() {
+        let box = CGRect(x: 100, y: 100, width: 20, height: 40)
+        #expect(FrameControl().estimatesPose(for: box))
+        let near = FrameControl(poseCenter: CGPoint(x: 110, y: 170), poseRadius: 50)
+        #expect(near.estimatesPose(for: box))
+        #expect(!FrameControl(poseCenter: CGPoint(x: 110, y: 171), poseRadius: 50).estimatesPose(for: box))
+        #expect(!FrameControl(poseCenter: .zero, poseRadius: 0).estimatesPose(for: box))
+    }
+
     @Test func ocrSkipNeedsHalfIntersectionOverUnion() {
         let box = CGRect(x: 100, y: 100, width: 40, height: 80)
         #expect(skipsOCR(box, hints: [CGRect(x: 104, y: 100, width: 40, height: 80)]))

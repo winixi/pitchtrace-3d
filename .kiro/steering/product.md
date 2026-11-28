@@ -23,7 +23,7 @@ inclusion: always
 | v2 场景归档与订阅（SQLite、分页历史、重启恢复）| ✅ 已实现 |
 | v2 原片归档与同步复核（fMP4 三件校验、按曝光定位）| ✅ 已实现 |
 | Edge CLI（replay、audit-sync、audit-visibility、calibrate、publish-media 等）| ✅ 已实现 |
-| Edge 录像重放（2–4 机位，跨周期，ffprobe 校验）| ✅ 已实现 |
+| Edge 录像重放（2–8 机位，跨周期，ffprobe 校验）| ✅ 已实现 |
 | Edge 闪光对时审计（`audit-sync`）| ✅ 已实现 |
 | Edge 分区双视角可见率（`audit-visibility`）| ✅ 已实现 |
 | Edge 离线镜头与场地标定（`calibrate-intrinsics`、`calibrate`）| ✅ 已实现 |

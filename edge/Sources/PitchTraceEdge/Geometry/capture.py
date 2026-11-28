@@ -17,7 +17,7 @@ import threading
 import time
 import uuid
 
-from calibrate import is_identifier, unique_object
+from calibrate import MAX_CAMERAS, is_identifier, unique_object
 
 SAFE_INT = 2**53 - 1
 MAX_MEDIA = 128 * 1024 * 1024
@@ -73,8 +73,8 @@ def load_config(path):
         raise ValueError("采集配置需要 JSON 对象")
     identifier(config.get("matchId"), "比赛")
     cameras = config.get("cameras")
-    if not isinstance(cameras, dict) or not 1 <= len(cameras) <= 4:
-        raise ValueError("需要 1 至 4 个机位")
+    if not isinstance(cameras, dict) or not 1 <= len(cameras) <= MAX_CAMERAS:
+        raise ValueError(f"需要 1 至 {MAX_CAMERAS} 个机位")
     if len({name.lower() for name in cameras}) != len(cameras):
         raise ValueError("机位目录名不能仅大小写不同")
     integer(config.get("minFreeBytes", 0), 0, SAFE_INT, "磁盘保留字节")
