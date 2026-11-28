@@ -114,6 +114,27 @@ def number(value, minimum, maximum, label):
     return value
 
 
+def validate_trigger(name, trigger, clock_mode, framerate):
+    if not isinstance(trigger, dict):
+        raise ValueError(f"机位 {name} 的 mvs.trigger 需要对象")
+    extra = set(trigger) - {"source", "activation", "selector", "actionDeviceKey", "actionGroupKey", "actionGroupMask"}
+    if extra:
+        raise ValueError(f"机位 {name} 的 mvs.trigger 含未知字段：{', '.join(sorted(extra))}")
+    source = trigger.get("source", "free")
+    if source not in ("free", "Line0", "Line2", "action"):
+        raise ValueError(f"机位 {name} 的 mvs.trigger.source 需要 free、Line0、Line2 或 action")
+    if source != "free" and trigger.get("activation", "RisingEdge") not in ("RisingEdge", "FallingEdge"):
+        raise ValueError(f"机位 {name} 的 mvs.trigger.activation 需要 RisingEdge 或 FallingEdge")
+    if "selector" in trigger and trigger["selector"] not in ("FrameStart", "FrameBurstStart"):
+        raise ValueError(f"机位 {name} 的 mvs.trigger.selector 需要 FrameStart 或 FrameBurstStart")
+    for key in ("actionDeviceKey", "actionGroupKey", "actionGroupMask"):
+        if key in trigger:
+            integer(trigger[key], 0, 0xFFFFFFFF, f"mvs.trigger.{key}")
+    if source == "action":
+        if clock_mode != "ptp-utc":
+            raise ValueError(f"机位 {name} 的动作命令触发需要 clock.mode 为 ptp-utc")
+        if type(framerate) is not int:
+            raise ValueError(f"机位 {name} 的动作命令触发需要整数帧率")
 def validate_native_camera(name, camera):
     allowed = {"type", "source", "mediaEpoch", "reconnectAttempts", "width", "height", "pixelFormat",
                "framerate", "bitrate", "clock", "simulate" if camera["type"] == "simulated" else "mvs"}
@@ -158,7 +179,10 @@ def validate_native_camera(name, camera):
             number(section["gainDb"], 0, 48, "mvs.gainDb")
         if "ptpLockTimeoutSeconds" in section:
             integer(section["ptpLockTimeoutSeconds"], 1, 600, "mvs.ptpLockTimeoutSeconds")
-        extra = set(section) - {"offsetX", "offsetY", "exposureUs", "gainDb", "packetSize", "ptpLockTimeoutSeconds"}
+        if "trigger" in section:
+            validate_trigger(name, section["trigger"], clock["mode"], camera.get("framerate", 30))
+        extra = set(section) - {"offsetX", "offsetY", "exposureUs", "gainDb", "packetSize", "ptpLockTimeoutSeconds",
+                                "trigger"}
         if extra:
             raise ValueError(f"机位 {name} 的 mvs 含未知字段：{', '.join(sorted(extra))}")
 

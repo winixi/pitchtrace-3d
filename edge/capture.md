@@ -90,7 +90,7 @@ swift run --package-path edge pitchtrace-edge replay "$trial_dir/session/recordi
 | `bitrate` | H.264 平均码率，默认 8000000 bit/s。 |
 | `clock.mode` | `ptp-utc`：设备时间戳为锁定后的 PTP 时间，减去 `taiUtcOffsetSeconds`（默认 37）得 UTC。开始时未锁定或采集中失锁都结束本周期。`host-fit`：用前 15 帧中主机收帧与曝光中心的最小差值对齐 UTC，整周期冻结该偏移，这 15 帧不录入。 |
 | `clock.timestampEvent` | 设备时间戳对应的事件。`exposureStart`（默认）加半个曝光时长得曝光中心，`exposureCenter` 原样使用。海康机型待实机核对。 |
-| `mvs` | `offsetX`、`offsetY`（省略时 ROI 居中）、`exposureUs`、`gainDb`、`packetSize`、`ptpLockTimeoutSeconds`。曝光与增益省略时保留相机当前设置。 |
+| `mvs` | `offsetX`、`offsetY`（省略时 ROI 居中）、`exposureUs`、`gainDb`、`packetSize`、`ptpLockTimeoutSeconds`。曝光与增益省略时保留相机当前设置。`trigger` 选择曝光触发方式，见[曝光触发](#曝光触发)。 |
 | `simulate` | 仅模拟相机：`frames` 送完即正常结束，`realtime: false` 尽快送帧，`startUtcUs` 固定时钟起点，`dropFrames`、`clockResetAtFrame`、`ptpUnlockAtFrame`、`failAtFrame` 注入故障。 |
 
 `ptp-utc` 周期结束后自动执行与 `attach-exposures` 相同的逐段核对并登记到 `recordings/`。`host-fit` 的清单头行以「低精度」开头，周期只留在 `raw/`，不进入精确三维融合；确需使用时由场务手工登记。时间戳回退（按时钟重置处理）、失锁、5 秒收不到图像或设备断开时，已封口的片段和曝光行保持有效并照常登记，`capture` 按 `reconnectAttempts` 以新周期重连。
@@ -112,7 +112,7 @@ swift run --package-path edge pitchtrace-edge replay "$trial_dir/session/recordi
 
 有丢包的帧直接丢弃，计入 `deviceFrameGaps`。`ptp-utc` 换算出的曝光 UTC 与主机收帧时刻相差超过 5 秒时结束本周期，这通常说明相机自任主时钟而主时钟未授时到 UTC。清单头行记录型号、序列号、实际 ROI、设定帧率、相机报告的 `ResultingFrameRate` 和时间戳频率。
 
-目前相机以自由运行方式出图，各机位的曝光相位不对齐，只靠 PTP 时间戳记录真实曝光时刻。按预定时刻触发（Action Command）尚未接入。以下几项须实机确认：
+默认相机自由连拍，各机位曝光相位不对齐，只靠 PTP 时间戳记录真实曝光时刻。要对齐曝光，使用下一节的触发方式。以下几项须实机确认：
 
 - 设备时间戳对应的曝光事件，确认后填 `timestampEvent`。
 - `MV-CS050-10GC-PRO` 交付固件的 PTP 节点名与锁定角色。
@@ -120,6 +120,25 @@ swift run --package-path edge pitchtrace-edge replay "$trial_dir/session/recordi
 - 两路 1080p30 的持续帧率与丢包。
 
 已用 MVS V5.0.0 macOS SDK 编译，并在无相机的机器上验证了 SDK 初始化、设备枚举和「未找到相机」报错。
+
+### 曝光触发
+`mvs.trigger` 决定曝光时刻由谁给出。清单头行的 `clockSource` 记录实际触发方式，G1 取证时须随报告保存。
+
+| `trigger.source` | 说明 |
+| --- | --- |
+| `free`（默认） | 关闭触发，相机按 `framerate` 自由连拍。 |
+| `Line0`、`Line2` | 共用外触发。各相机接同一信号源，`activation` 取 `RisingEdge`（默认）或 `FallingEdge`。触发时相机端帧率控制关闭，帧率由信号源决定，须与配置的 `framerate` 一致。固件不支持定时动作命令时用它做 G1 对照测试。 |
+| `action` | GigE Vision 动作命令定时触发。需要 `clock.mode` 为 `ptp-utc` 且 `framerate` 为整数。相机按 `actionDeviceKey`、`actionGroupKey`、`actionGroupMask`（均默认 1）匹配命令。 |
+
+`selector` 省略时 Line 触发用 `FrameStart`，动作命令用 `FrameBurstStart` 并将 `AcquisitionBurstFrameCount` 设为 1（海康手册 14.4）。固件不接受该选择器时可显式改为 `FrameStart`。
+
+动作命令由单独进程广播，避免每路采集各发一份：
+```sh
+pitchtrace-edge trigger-scheduler 30 --interface-ip 192.168.1.10 --group-key 1 --group-mask 1
+```
+命令在 PTP 时间轴上按整秒对齐（第 k 帧为 `⌊k·10⁹/fps⌋` 纳秒，再加 TAI−UTC 偏移换成设备计数），并带 `--lead-ms`（默认 500）的提前量发出。各相机用自己的 PTP 时钟执行，因此曝光相位只取决于 PTP 同步质量，主机时钟只影响提前量。每 `fps` 条命令取一次应答，状态 `0x8013`（相机未同步 PTP）、`0x8015`（队列溢出）、`0x8016`（时间已过）会打印到标准错误，连续 5 次异常即退出。`--tick-hz` 默认 1 GHz，需按相机的 `GevTimestampTickFrequency` 核对。先启动 `trigger-scheduler` 再启动 `capture`，停止时反之；没有动作命令时相机收不到图像，5 秒后按断流处理。
+
+这条通路已编译并用独立样例核对时间表算法，**尚未在相机上验证**。上机时核对：`TriggerSelector` 取值、`ActionSelector` 是否为 1、动作队列深度、`nActionTime` 的单位是否与时间戳计数一致，并用共同闪光跑 `audit-sync` 得到 P95。
 
 ### 回归
 

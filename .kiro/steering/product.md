@@ -29,9 +29,9 @@ inclusion: always
 | Edge 离线镜头与场地标定（`calibrate-intrinsics`、`calibrate`）| ✅ 已实现 |
 | Edge Python 几何工具链（tracking、pose、scene_archive 等）| ✅ 已实现 |
 | Edge Swift 单元与集成测试 | ✅ 已实现 |
-| Edge 实机采集与对时（厂商 SDK／AVFoundation／RTSP）| ⏳ 设计中 |
-| Edge Core ML + Vision 单视角检测与姿态 | ⏳ 设计中 |
-| Edge C++/OpenCV 三维融合正式接入 | ⏳ 设计中 |
+| Edge 采集与对时（FFmpeg 文件／RTSP／AVFoundation、`camera-capture` 直采、MVS 取图层）| 文件源与模拟相机回归通过；MVS 实机联调待 G1；定时动作命令与外触发已接入未上机 |
+| Edge Core ML + Vision 单视角检测、姿态与 OCR（`vision-worker`）| 已有软件实现，实拍精度待测 |
+| Edge 三维融合（Python：跨视角关联、三角化、局部骨骼、五类候选）| 已有软件实现；C++/OpenCV 正式接入、卡尔曼与骨长约束设计中 |
 | 正式公网网关（Fastify、访问权限、HLS 分发）| ⏳ 设计中 |
 
 详细说明见 [AGENTS.md](../../AGENTS.md) 实现状态表。**不要假设「设计中」的能力已可用。**

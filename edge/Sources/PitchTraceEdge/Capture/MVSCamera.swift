@@ -10,6 +10,8 @@ struct MVSSettings: Decodable, Sendable {
     var packetSize: Int?
     /// ptp-utc 模式开启 IEEE 1588 后等待锁定的最长秒数。
     var ptpLockTimeoutSeconds: Int?
+    /// 曝光触发方式，省略时自由连拍。
+    var trigger: MVSTriggerSettings?
 
     init() {}
 }
@@ -172,12 +174,35 @@ final class MVSCamera: CameraFrameSource {
         return value
     }
 
+    private var trigger: MVSTriggerSettings { settings.trigger ?? MVSTriggerSettings() }
+    private func configureTrigger() throws {
+        let trigger = self.trigger
+        if trigger.source == .free {
+            try mvsCheck(MV_CC_SetEnumValue(handle, "TriggerMode", 0), "关闭触发模式")
+            return
+        }
+        guard isGigE || trigger.source != .action else { throw RecordingError("动作命令触发只适用于 GigE 相机") }
+        try setEnum("TriggerSelector", trigger.resolvedSelector)
+        try mvsCheck(MV_CC_SetEnumValue(handle, "TriggerMode", 1), "开启触发模式")
+        try setEnum("TriggerSource", trigger.triggerSourceNode)
+        if trigger.source == .action {
+            // 一次触发采一帧；ActionSelector 固定用 1，与 Action1 对应。
+            if trigger.resolvedSelector == "FrameBurstStart" { try setInteger("AcquisitionBurstFrameCount", 1) }
+            try setInteger("ActionSelector", 1)
+            try setInteger("ActionDeviceKey", Int(trigger.actionDeviceKey))
+            try setInteger("ActionGroupKey", Int(trigger.actionGroupKey))
+            try setInteger("ActionGroupMask", Int(trigger.actionGroupMask))
+        } else {
+            try setEnum("TriggerActivation", trigger.activation)
+        }
+        sourceDescription += "，触发：\(trigger.summary)"
+    }
     private func configure() throws {
         if isGigE {
             let packet = settings.packetSize ?? Int(MV_CC_GetOptimalPacketSize(handle))
             if packet > 0 { try setInteger("GevSCPSPacketSize", packet) }
         }
-        try mvsCheck(MV_CC_SetEnumValue(handle, "TriggerMode", 0), "关闭触发模式")
+        try configureTrigger()
         try setEnum("PixelFormat", pixelFormat.rawValue)
         // 先清零偏移，避免旧偏移与新宽高之和越界。
         try setInteger("OffsetX", 0)
@@ -186,8 +211,10 @@ final class MVSCamera: CameraFrameSource {
         try setInteger("Height", height)
         try setInteger("OffsetX", try offset(settings.offsetX, size: width, maximumKey: "WidthMax", key: "OffsetX"))
         try setInteger("OffsetY", try offset(settings.offsetY, size: height, maximumKey: "HeightMax", key: "OffsetY"))
-        try mvsCheck(MV_CC_SetBoolValue(handle, "AcquisitionFrameRateEnable", 1), "启用帧率控制")
-        try setFloat("AcquisitionFrameRate", framerate)
+        // 触发模式下帧率由触发源决定，相机端帧率控制不能同时启用。
+        let triggered = trigger.source != .free
+        try mvsCheck(MV_CC_SetBoolValue(handle, "AcquisitionFrameRateEnable", triggered ? 0 : 1), "设置帧率控制")
+        if !triggered { try setFloat("AcquisitionFrameRate", framerate) }
         if let exposure = settings.exposureUs {
             try setEnum("ExposureAuto", "Off")
             try setFloat("ExposureTime", exposure)

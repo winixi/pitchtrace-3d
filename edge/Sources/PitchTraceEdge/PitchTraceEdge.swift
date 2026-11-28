@@ -15,6 +15,7 @@ enum PitchTraceEdge {
           pitchtrace-edge audit-calibration <标定报告.json> <机位巡检.json>
           pitchtrace-edge capture <采集配置.json> <采集根目录>
           pitchtrace-edge camera-capture <媒体周期目录>
+          pitchtrace-edge trigger-scheduler <整数帧率> [--tai-offset 秒] [--tick-hz N] [--device-key N] [--group-key N] [--group-mask N] [--lead-ms 毫秒] [--broadcast 地址] [--interface-ip 地址]
           pitchtrace-edge attach-exposures <采集根目录> <机位> <媒体周期> <曝光清单.ndjson>
           pitchtrace-edge process-match <比赛配置.json> <replay 导出目录> <场景库.sqlite>
           pitchtrace-edge reconstruct-match <比赛配置.json> <二维观测.ndjson> <场景库.sqlite>
@@ -98,6 +99,11 @@ enum PitchTraceEdge {
                 let stop = StopFlag()
                 stop.installSignalHandlers()
                 try runCameraCapture(directory: URL(fileURLWithPath: arguments[1], isDirectory: true), stop: stop)
+            case ("trigger-scheduler", 2...):
+                operation = "定时动作命令触发"
+                let stop = StopFlag()
+                stop.installSignalHandlers()
+                try runTriggerScheduler(TriggerSchedulerOptions.parse(Array(arguments.dropFirst())), stop: stop)
             case ("audit-calibration", 3):
                 operation = "机位巡检"
                 try runPython("audit_calibration", Array(arguments.dropFirst()))

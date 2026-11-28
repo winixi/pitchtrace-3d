@@ -124,7 +124,7 @@ node live/server/server.cjs   # 需先在 live/web 执行过 npm run build
 | 浏览器三维观赛前端 | ✅ 已实现 | 内置 60 秒比赛，六机位、骨骼、暂停定格、HLS 实拍；支持 v1 与 v2 快照输入。 |
 | 本地 v1 试播网关 | ✅ 已实现 | `POST /frame`、`/live`、`/demo`，复用前端校验器。 |
 | Edge 离线录像输入与原片提交 | ✅ 已实现 | 2–8 路 H.264/fMP4 按曝光归并，导出缺口和 v2 索引，标注共同闪光生成对时报告。`publish-media` 按机位将已导出的原片和索引提交到网关。 |
-| Edge 采集与对时 | 文件源与模拟相机回归通过 | FFmpeg 分路接入文件、RTSP、AVFoundation，曝光清单逐帧核验与独立媒体周期。`camera-capture` 直采通路（去马赛克、VideoToolbox 编码、PTP／host-fit 曝光映射）已用模拟相机验证。MVS SDK 取图层已编译，待实机联调。 |
+| Edge 采集与对时 | 文件源与模拟相机回归通过 | FFmpeg 分路接入文件、RTSP、AVFoundation，曝光清单逐帧核验与独立媒体周期。`camera-capture` 直采通路（去马赛克、VideoToolbox 编码、PTP／host-fit 曝光映射）已用模拟相机验证。MVS SDK 取图层已编译，定时动作命令触发（`trigger-scheduler`）和 Line 外触发已接入，均待实机联调。 |
 | Edge 几何与视觉 | 已有软件实现 | 棋盘格内参、多机位外参、移机巡检、版本切换、Core ML 人球联合检测与原图小球精搜、Vision 姿态与 OCR。支持足球专用模型和受控球色检测。 |
 | Edge 重建与动作 | 已有软件实现 | 足点投影、跨视角轨迹、球与关节三角化、局部骨骼、名单关联和五类规则候选，实拍精度待测。 |
 | Edge 整场运行 | 可离线与连续运行 | `run-match`、`stream-match`、SQLite 证据、独立上行、重试、复算比较和真值评估。入口与测试见 [Edge README](edge/README.md)。 |
