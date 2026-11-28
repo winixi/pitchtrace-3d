@@ -1,389 +1,244 @@
 import Foundation
 
-/// 系统监控器
+/// Web UI 读取的采集配置摘要。完整校验仍由 `capture` 在启动时执行。
+struct CaptureSetup: Sendable, Equatable {
+    let configURL: URL
+    let matchId: String
+    let cameraIds: [String]
+    let minFreeBytes: Int64
+
+    static func load(_ url: URL) throws -> CaptureSetup {
+        let data = try Data(contentsOf: url)
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let matchId = object["matchId"] as? String, isEdgeIdentifier(matchId),
+              let cameras = object["cameras"] as? [String: Any], !cameras.isEmpty else {
+            throw ValidationError("采集配置需要 matchId 与 cameras 对象：\(url.path)")
+        }
+        guard cameras.keys.allSatisfy(isEdgeIdentifier) else {
+            throw ValidationError("采集配置中的机位名需要有效的 v2 标识")
+        }
+        let minFree = (object["minFreeBytes"] as? NSNumber)?.int64Value ?? 0
+        return CaptureSetup(configURL: url, matchId: matchId, cameraIds: cameras.keys.sorted(), minFreeBytes: minFree)
+    }
+}
+
+/// 与 Geometry/calibrate.py 的 `is_identifier` 一致，也用于拒绝路径穿越。
+func isEdgeIdentifier(_ value: String) -> Bool {
+    (1...64).contains(value.utf8.count) && value.utf8.allSatisfy { byte in
+        (48...57).contains(byte) || (65...90).contains(byte) || (97...122).contains(byte) || byte == 45 || byte == 95
+    }
+}
+
+/// Web UI 启动的采集子进程状态，由 `CaptureController` 提供。
+struct CaptureProcessState: Sendable, Equatable {
+    var running = false
+    var exitCode: Int32?
+    var stderrTail = ""
+}
+
+/// `capture` 每 0.5 秒刷新 health.json，超过该秒数仍有活动机位即视为采集进程已失联。
+let healthStaleSeconds: TimeInterval = 5
+/// 文档 08 第 5 节阶段 3 的磁盘告警阈值。
+let lowDiskWarningBytes: Int64 = 100_000_000_000
+
+/// 判断采集根目录下是否有正在运行的 `capture`（含 Web UI 之外启动的进程）。
+func captureIsLive(root: URL, now: Date) -> Bool {
+    guard let health = readJSONObject(root.appendingPathComponent("health.json")),
+          let active = health["active"] as? [String: Any], !active.isEmpty,
+          let updated = (health["updatedUnix"] as? NSNumber)?.doubleValue else { return false }
+    return now.timeIntervalSince1970 - updated < healthStaleSeconds
+}
+
+/// 从 `capture` 写出的 health.json 与 raw/<机位>/<周期>/status.json 汇总场务状态。
 ///
-/// 负责收集 Edge 运行时状态：
-/// - 读取 match-dir 下的 SQLite 数据库（场景归档）
-/// - 监控采集进程状态（通过 run-match/stream-match 进程）
-/// - 计算磁盘使用和预估剩余时间
-/// - 缓存状态数据，避免频繁查询
+/// 只报告磁盘上可核验的值：帧率、曝光偏差等采集层未记录的量不在此给出，
+/// 未知的码率或剩余时长保持为空，不用估计值填补。
+func readCaptureStatus(root: URL?, setup: CaptureSetup?, process: CaptureProcessState, now: Date) -> SystemStatus {
+    let timestamp = isoString(now)
+    let controlsEnabled = setup != nil && root != nil
+    guard let root else {
+        return SystemStatus(timestamp: timestamp, matchId: setup?.matchId, matchState: "idle",
+                            controlsEnabled: false, cameras: [], alerts: [], disk: diskStatus(at: nil, health: nil, setup: setup, cameras: []))
+    }
+    var alerts: [Alert] = []
+    let health = readJSONObject(root.appendingPathComponent("health.json"))
+    let active = health?["active"] as? [String: Any] ?? [:]
+    let finished = health?["finished"] as? [String: Any] ?? [:]
+    let updated = (health?["updatedUnix"] as? NSNumber)?.doubleValue
+    let healthAge = updated.map { now.timeIntervalSince1970 - $0 }
+    let healthLive = !active.isEmpty && (healthAge ?? .infinity) < healthStaleSeconds
+    let live = process.running || healthLive
+    let stopMarker = FileManager.default.fileExists(atPath: root.appendingPathComponent("STOP").path)
+
+    let matchState: String
+    if live {
+        matchState = stopMarker ? "stopping" : "capturing"
+    } else if !active.isEmpty {
+        matchState = "unresponsive"
+        alerts.append(Alert(level: "error", cameraId: nil,
+                            message: "Capture stopped updating health.json \(Int(healthAge ?? 0)) s ago; the process may have been killed. Sealed .m4s segments remain valid.",
+                            timestamp: timestamp))
+    } else if health != nil {
+        matchState = "stopped"
+    } else {
+        matchState = "idle"
+    }
+    if !process.running, let code = process.exitCode, code != 0 {
+        let detail = process.stderrTail.trimmingCharacters(in: .whitespacesAndNewlines)
+        alerts.append(Alert(level: "error", cameraId: nil,
+                            message: "Capture exited with status \(code)" + (detail.isEmpty ? "" : ": \(detail)"),
+                            timestamp: timestamp))
+    }
+
+    let rawRoot = root.appendingPathComponent("raw", isDirectory: true)
+    var ids = Set(setup?.cameraIds ?? [])
+    ids.formUnion(active.keys)
+    ids.formUnion(finished.keys)
+    ids.formUnion(directoryNames(rawRoot).filter(isEdgeIdentifier))
+
+    let cameras = ids.sorted().map { id -> CameraStatus in
+        let periods = periodStatuses(rawRoot.appendingPathComponent(id, isDirectory: true))
+        let latest = periods.last
+        let progress = active[id] as? [String: Any]
+        let periodStatus = latest?.status["status"] as? String
+        // health.json 的 active 项在重试间隔内保留上一次失败；周期 status.json 是逐路的最终记录。
+        let state: String
+        if live, let progressStatus = progress?["status"] as? String, progressStatus == "starting" || progressStatus == "failed" {
+            state = progressStatus == "starting" ? "starting" : "reconnecting"
+        } else if periodStatus == "recording" {
+            state = live ? "recording" : "interrupted"
+        } else if let periodStatus {
+            state = periodStatus
+        } else {
+            state = live ? "waiting" : "idle"
+        }
+        let error = latest?.status["error"] as? String
+        let segments = (latest?.status["segments"] as? NSNumber)?.intValue ?? 0
+        let camera = CameraStatus(
+            cameraId: id,
+            state: state,
+            mediaEpoch: latest?.status["mediaEpoch"] as? String,
+            sourceType: latest?.status["type"] as? String,
+            periods: periods.count,
+            segments: segments,
+            bytesPerVideoSecond: (latest?.status["bytesPerVideoSecond"] as? NSNumber)?.doubleValue,
+            clockSource: latest?.status["clockSource"] as? String,
+            startedAt: ((latest?.status["startedUnix"] as? NSNumber)?.doubleValue).map { isoString(Date(timeIntervalSince1970: $0)) },
+            endedAt: ((latest?.status["endedUnix"] as? NSNumber)?.doubleValue).map { isoString(Date(timeIntervalSince1970: $0)) },
+            error: error,
+            previewAvailable: segments > 0 && latest.map {
+                FileManager.default.fileExists(atPath: $0.directory.appendingPathComponent("init.mp4").path)
+            } == true
+        )
+        switch state {
+        case "failed":
+            alerts.append(Alert(level: "error", cameraId: id, message: "Camera \(id) failed: \(error ?? "unknown error")", timestamp: timestamp))
+        case "reconnecting":
+            alerts.append(Alert(level: "warning", cameraId: id, message: "Camera \(id) input ended, reconnecting in a new media period: \(error ?? "")", timestamp: timestamp))
+        case "interrupted":
+            alerts.append(Alert(level: "warning", cameraId: id, message: "Camera \(id) period \(camera.mediaEpoch ?? "?") was not closed; use only sealed .m4s segments", timestamp: timestamp))
+        default:
+            break
+        }
+        return camera
+    }
+
+    let disk = diskStatus(at: root, health: live ? health : nil, setup: setup, cameras: live ? cameras : [])
+    if health?["lowDisk"] as? Bool == true {
+        alerts.append(Alert(level: "critical", cameraId: nil, message: "Free disk space reached minFreeBytes; capture stopped all channels", timestamp: timestamp))
+    } else if disk.availableBytes < lowDiskWarningBytes {
+        alerts.append(Alert(level: "warning", cameraId: nil, message: "Less than 100 GB free on the capture volume", timestamp: timestamp))
+    }
+    if let seconds = disk.remainingRecordingSeconds, seconds < 3600 {
+        alerts.append(Alert(level: "warning", cameraId: nil, message: "About \(seconds / 60) min of recording left at the current bitrate", timestamp: timestamp))
+    }
+    let rank = ["critical": 0, "error": 1, "warning": 2, "info": 3]
+    alerts.sort { (rank[$0.level] ?? 4) < (rank[$1.level] ?? 4) }
+    return SystemStatus(timestamp: timestamp, matchId: matchId(root: root, setup: setup), matchState: matchState,
+                        controlsEnabled: controlsEnabled, cameras: cameras, alerts: alerts, disk: disk)
+}
+
+/// 机位最新媒体周期目录（按 status.json 的开始时刻排序）。
+func latestPeriodDirectory(root: URL, cameraId: String) -> URL? {
+    guard isEdgeIdentifier(cameraId) else { return nil }
+    return periodStatuses(root.appendingPathComponent("raw/\(cameraId)", isDirectory: true)).last?.directory
+}
+
+private struct PeriodStatus {
+    let directory: URL
+    let status: [String: Any]
+    let started: Double
+}
+
+private func periodStatuses(_ cameraDirectory: URL) -> [PeriodStatus] {
+    directoryNames(cameraDirectory).filter(isEdgeIdentifier).compactMap { name in
+        let directory = cameraDirectory.appendingPathComponent(name, isDirectory: true)
+        guard let status = readJSONObject(directory.appendingPathComponent("status.json")) else { return nil }
+        return PeriodStatus(directory: directory, status: status,
+                            started: (status["startedUnix"] as? NSNumber)?.doubleValue ?? 0)
+    }
+    .sorted { ($0.started, $0.directory.lastPathComponent) < ($1.started, $1.directory.lastPathComponent) }
+}
+
+private func matchId(root: URL, setup: CaptureSetup?) -> String? {
+    readJSONObject(root.appendingPathComponent("match.json"))?["matchId"] as? String ?? setup?.matchId
+}
+
+private func diskStatus(at root: URL?, health: [String: Any]?, setup: CaptureSetup?, cameras: [CameraStatus]) -> DiskStatus {
+    // 采集目录可能尚未创建，此时读取最近的已存在上级目录所在卷。
+    var path = root ?? URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    while !FileManager.default.fileExists(atPath: path.path), path.path != "/" {
+        path = path.deletingLastPathComponent()
+    }
+    let attributes = (try? FileManager.default.attributesOfFileSystem(forPath: path.path)) ?? [:]
+    let total = (attributes[.systemSize] as? NSNumber)?.int64Value ?? 0
+    let free = (attributes[.systemFreeSize] as? NSNumber)?.int64Value ?? 0
+    let recording = cameras.filter { $0.state == "recording" }
+    let rates = recording.compactMap(\.bytesPerVideoSecond)
+    return DiskStatus(
+        totalBytes: total,
+        usedBytes: total - free,
+        availableBytes: free,
+        minFreeBytes: setup?.minFreeBytes,
+        recordingBytesPerSecond: !recording.isEmpty && rates.count == recording.count ? rates.reduce(0, +) : nil,
+        remainingRecordingSeconds: (health?["remainingRecordingSeconds"] as? NSNumber)?.intValue
+    )
+}
+
+private func directoryNames(_ url: URL) -> [String] {
+    ((try? FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: [.isDirectoryKey])) ?? [])
+        .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+        .map(\.lastPathComponent)
+}
+
+func readJSONObject(_ url: URL) -> [String: Any]? {
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+
+func isoString(_ date: Date) -> String {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.string(from: date)
+}
+
+/// 系统监控器：串行汇总采集目录状态，供推送任务与 HTTP 路由共用。
 actor SystemMonitor {
     static let shared = SystemMonitor()
-    
-    private var matchDirectory: URL?
-    private var cachedStatus: SystemStatus?
-    private var lastUpdate: Date?
-    private let cacheInterval: TimeInterval = 2.0  // 2 秒缓存
-    
+
+    private var root: URL?
+    private var setup: CaptureSetup?
+    private var controller: CaptureController?
+
     private init() {}
-    
-    /// 配置监控目标
-    func configure(matchDirectory: URL?) {
-        self.matchDirectory = matchDirectory
-        self.cachedStatus = nil
-        self.lastUpdate = nil
-    }
-    
-    /// 获取当前系统状态
-    func currentStatus() async throws -> SystemStatus {
-        // 检查缓存
-        if let cached = cachedStatus,
-           let lastUpdate = lastUpdate,
-           Date().timeIntervalSince(lastUpdate) < cacheInterval {
-            return cached
-        }
-        
-        // 收集新状态
-        let status = try await collectStatus()
-        
-        // 更新缓存
-        self.cachedStatus = status
-        self.lastUpdate = Date()
-        
-        return status
-    }
-    
-    /// 收集系统状态
-    private func collectStatus() async throws -> SystemStatus {
-        let timestamp = ISO8601DateFormatter().string(from: Date())
-        
-        // 如果没有配置 match-dir，返回空闲状态
-        guard let matchDir = matchDirectory else {
-            return SystemStatus(
-                timestamp: timestamp,
-                matchId: "no-match",
-                matchState: "idle",
-                cameras: [],
-                alerts: [],
-                disk: try await collectDiskStatus(recordingDir: nil)
-            )
-        }
-        
-        // 读取比赛配置
-        let matchInfo = try await readMatchInfo(from: matchDir)
-        
-        // 收集机位状态
-        let cameras = try await collectCameraStatus(matchDir: matchDir, matchInfo: matchInfo)
-        
-        // 生成告警
-        let alerts = generateAlerts(cameras: cameras)
-        
-        // 收集磁盘状态
-        let disk = try await collectDiskStatus(recordingDir: matchDir)
-        
-        return SystemStatus(
-            timestamp: timestamp,
-            matchId: matchInfo.matchId,
-            matchState: matchInfo.state,
-            cameras: cameras,
-            alerts: alerts,
-            disk: disk
-        )
-    }
-    
-    /// 读取比赛信息
-    private func readMatchInfo(from matchDir: URL) async throws -> MatchInfo {
-        // 尝试读取 match-config.json
-        let configURL = matchDir.appendingPathComponent("match-config.json")
-        
-        if FileManager.default.fileExists(atPath: configURL.path) {
-            let data = try Data(contentsOf: configURL)
-            let config = try JSONDecoder().decode(MatchConfig.self, from: data)
-            
-            // 检查是否有 run-match 或 stream-match 进程在运行
-            let isRunning = await isMatchProcessRunning(matchId: config.matchId)
-            
-            return MatchInfo(
-                matchId: config.matchId,
-                state: isRunning ? "running" : "stopped",
-                cameraIds: config.cameras
-            )
-        }
-        
-        // 如果没有配置文件，尝试从目录名推断
-        let matchId = matchDir.lastPathComponent
-        
-        // 查找 camera_* 子目录
-        let cameraIds = try FileManager.default.contentsOfDirectory(
-            at: matchDir,
-            includingPropertiesForKeys: [.isDirectoryKey]
-        )
-        .filter { url in
-            url.lastPathComponent.hasPrefix("camera_") ||
-            url.lastPathComponent.hasPrefix("Camera")
-        }
-        .map { $0.lastPathComponent.replacingOccurrences(of: "camera_", with: "")
-            .replacingOccurrences(of: "Camera", with: "")
-            .uppercased()
-        }
-        .sorted()
-        
-        return MatchInfo(
-            matchId: matchId,
-            state: "idle",
-            cameraIds: cameraIds
-        )
-    }
-    
-    /// 检查是否有比赛进程在运行
-    private func isMatchProcessRunning(matchId: String) async -> Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["aux"]
-        
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        
-        do {
-            try process.run()
-            process.waitUntilExit()
-            
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let output = String(data: data, encoding: .utf8) ?? ""
-            
-            // 查找包含 matchId 的 pitchtrace-edge 进程
-            return output.contains("pitchtrace-edge") &&
-                   (output.contains("run-match") || output.contains("stream-match")) &&
-                   output.contains(matchId)
-        } catch {
-            return false
-        }
-    }
-    
-    /// 收集机位状态
-    private func collectCameraStatus(matchDir: URL, matchInfo: MatchInfo) async throws -> [CameraStatus] {
-        var cameras: [CameraStatus] = []
-        
-        for cameraId in matchInfo.cameraIds {
-            // 查找机位目录
-            let possibleDirs = [
-                matchDir.appendingPathComponent("camera_\(cameraId)"),
-                matchDir.appendingPathComponent("Camera\(cameraId)"),
-                matchDir.appendingPathComponent(cameraId)
-            ]
-            
-            guard let cameraDir = possibleDirs.first(where: { FileManager.default.fileExists(atPath: $0.path) }) else {
-                // 机位目录不存在，标记为未配置
-                cameras.append(CameraStatus(
-                    cameraId: cameraId,
-                    state: "not-configured",
-                    fps: 0,
-                    frameCount: 0,
-                    lastFrameUtcUs: "0",
-                    exposureDriftMs: nil,
-                    droppedFrames: 0,
-                    queueDepth: 0,
-                    calibrationId: nil,
-                    calibrationValid: false
-                ))
-                continue
-            }
-            
-            // 读取机位状态
-            let status = try await readCameraStatus(cameraDir: cameraDir, cameraId: cameraId)
-            cameras.append(status)
-        }
-        
-        return cameras.sorted { $0.cameraId < $1.cameraId }
-    }
-    
-    /// 读取单个机位状态
-    private func readCameraStatus(cameraDir: URL, cameraId: String) async throws -> CameraStatus {
-        // 查找最新的媒体周期目录
-        let epochs = try FileManager.default.contentsOfDirectory(
-            at: cameraDir,
-            includingPropertiesForKeys: [.isDirectoryKey, .creationDateKey]
-        )
-        .filter { url in
-            url.lastPathComponent.hasPrefix("epoch_") &&
-            url.hasDirectoryPath
-        }
-        .sorted { url1, url2 in
-            (try? url1.resourceValues(forKeys: [.creationDateKey]).creationDate ?? Date.distantPast) ?? Date.distantPast >
-            (try? url2.resourceValues(forKeys: [.creationDateKey]).creationDate ?? Date.distantPast) ?? Date.distantPast
-        }
-        
-        guard let latestEpoch = epochs.first else {
-            return CameraStatus(
-                cameraId: cameraId,
-                state: "idle",
-                fps: 0,
-                frameCount: 0,
-                lastFrameUtcUs: "0",
-                exposureDriftMs: nil,
-                droppedFrames: 0,
-                queueDepth: 0,
-                calibrationId: nil,
-                calibrationValid: false
-            )
-        }
-        
-        // 读取媒体索引获取帧数和最新时间戳
-        let indexURL = latestEpoch.appendingPathComponent("index.ndjson")
-        let frameInfo = try await readMediaIndex(indexURL: indexURL)
-        
-        // 计算 FPS（如果有足够的帧）
-        let fps = frameInfo.count > 10 ? calculateFPS(frames: frameInfo) : 0.0
-        
-        // 检查状态（根据最后一帧时间判断是否活跃）
-        let now = Date().timeIntervalSince1970 * 1_000_000  // 转为微秒
-        let lastFrameTime = Double(frameInfo.last?.utcUs ?? "0") ?? 0
-        let timeSinceLastFrame = now - lastFrameTime
-        let state: String
-        if timeSinceLastFrame < 5_000_000 {  // 5 秒内
-            state = "active"
-        } else if timeSinceLastFrame < 30_000_000 {  // 30 秒内
-            state = "stale"
-        } else {
-            state = "disconnected"
-        }
-        
-        return CameraStatus(
-            cameraId: cameraId,
-            state: state,
-            fps: fps,
-            frameCount: frameInfo.count,
-            lastFrameUtcUs: frameInfo.last?.utcUs ?? "0",
-            exposureDriftMs: nil,  // 需要从曝光审计报告读取
-            droppedFrames: 0,       // 需要从缺口报告读取
-            queueDepth: 0,          // 需要进程间通信获取
-            calibrationId: nil,     // 需要从标定报告读取
-            calibrationValid: false
-        )
-    }
-    
-    /// 读取媒体索引
-    private func readMediaIndex(indexURL: URL) async throws -> [FrameIndexEntry] {
-        guard FileManager.default.fileExists(atPath: indexURL.path) else {
-            return []
-        }
-        
-        let content = try String(contentsOf: indexURL, encoding: .utf8)
-        let lines = content.split(separator: "\n")
-        
-        var entries: [FrameIndexEntry] = []
-        for line in lines.prefix(1000) {  // 最多读 1000 帧（性能考虑）
-            if let data = line.data(using: .utf8),
-               let entry = try? JSONDecoder().decode(FrameIndexEntry.self, from: data) {
-                entries.append(entry)
-            }
-        }
-        
-        return entries
-    }
-    
-    /// 计算 FPS
-    private func calculateFPS(frames: [FrameIndexEntry]) -> Double {
-        guard frames.count >= 2 else { return 0.0 }
-        
-        let first = frames.first!
-        let last = frames.last!
-        
-        guard let firstTime = Double(first.utcUs),
-              let lastTime = Double(last.utcUs) else {
-            return 0.0
-        }
-        
-        let durationSeconds = (lastTime - firstTime) / 1_000_000.0
-        guard durationSeconds > 0 else { return 0.0 }
-        
-        return Double(frames.count) / durationSeconds
-    }
-    
-    /// 生成告警
-    private func generateAlerts(cameras: [CameraStatus]) -> [Alert] {
-        var alerts: [Alert] = []
-        let now = Date()
-        let formatter = ISO8601DateFormatter()
-        
-        for camera in cameras {
-            switch camera.state {
-            case "disconnected":
-                alerts.append(Alert(
-                    level: "error",
-                    cameraId: camera.cameraId,
-                    message: "Camera \(camera.cameraId) disconnected",
-                    timestamp: formatter.string(from: now)
-                ))
-            case "stale":
-                alerts.append(Alert(
-                    level: "warning",
-                    cameraId: camera.cameraId,
-                    message: "Camera \(camera.cameraId) not receiving frames",
-                    timestamp: formatter.string(from: now)
-                ))
-            case "not-configured":
-                alerts.append(Alert(
-                    level: "warning",
-                    cameraId: camera.cameraId,
-                    message: "Camera \(camera.cameraId) not configured",
-                    timestamp: formatter.string(from: now)
-                ))
-            default:
-                // 检查队列深度
-                if camera.queueDepth > 10 {
-                    alerts.append(Alert(
-                        level: "warning",
-                        cameraId: camera.cameraId,
-                        message: "Queue depth high: \(camera.queueDepth) frames",
-                        timestamp: formatter.string(from: now)
-                    ))
-                }
-            }
-        }
-        
-        return alerts.sorted { $0.level == "error" && $1.level != "error" }
-    }
-    
-    /// 收集磁盘状态
-    private func collectDiskStatus(recordingDir: URL?) async throws -> DiskStatus {
-        let targetPath = recordingDir?.path ?? FileManager.default.currentDirectoryPath
-        
-        let attributes = try FileManager.default.attributesOfFileSystem(
-            forPath: targetPath
-        )
-        
-        let totalBytes = (attributes[.systemSize] as? NSNumber)?.int64Value ?? 0
-        let freeBytes = (attributes[.systemFreeSize] as? NSNumber)?.int64Value ?? 0
-        let usedBytes = totalBytes - freeBytes
-        
-        // 估算录像速率（假设 4 机位，每机位 4 Mbps）
-        let estimatedRateBytesPerSecond = recordingDir != nil ? (4 * 4 * 1_000_000 / 8) : 0
-        
-        // 计算剩余时间
-        let hoursRemaining = estimatedRateBytesPerSecond > 0
-            ? Double(freeBytes) / Double(estimatedRateBytesPerSecond) / 3600.0
-            : 0.0
-        
-        return DiskStatus(
-            totalBytes: totalBytes,
-            usedBytes: usedBytes,
-            availableBytes: freeBytes,
-            recordingRateBytes: estimatedRateBytesPerSecond,
-            estimatedHoursRemaining: hoursRemaining
-        )
-    }
-}
 
-// MARK: - 辅助数据结构
+    func configure(root: URL?, setup: CaptureSetup?, controller: CaptureController?) {
+        self.root = root
+        self.setup = setup
+        self.controller = controller
+    }
 
-private struct MatchInfo {
-    let matchId: String
-    let state: String
-    let cameraIds: [String]
-}
-
-private struct MatchConfig: Codable {
-    let matchId: String
-    let cameras: [String]
-}
-
-private struct FrameIndexEntry: Codable {
-    let utcUs: String
-    let pts: Int
-    
-    enum CodingKeys: String, CodingKey {
-        case utcUs = "utc_us"
-        case pts
+    func currentStatus() -> SystemStatus {
+        readCaptureStatus(root: root, setup: setup, process: controller?.processState ?? CaptureProcessState(), now: Date())
     }
 }

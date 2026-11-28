@@ -2,7 +2,7 @@
 
 **版本**　v0.1 草案  
 **更新**　2025-01-20  
-**状态**　设计中
+**状态**　部分实现：状态、告警、开始／结束采集与预览已实现，暂停／恢复、性能指标与配置界面仍在设计中
 
 ## 1. 目标与范围
 
@@ -122,6 +122,8 @@ pitchtrace-edge web-ui --bind 127.0.0.1:8765 --match-dir /path/to/match
 
 ### 3.1 设备状态 API
 
+> **已实现的口径**（以 `edge/Sources/PitchTraceEdge/WebUI/` 为准）：状态从 `capture` 写出的 `health.json` 与 `raw/<机位>/<周期>/status.json` 汇总。机位字段为 `state`、`mediaEpoch`、`sourceType`、`periods`、`segments`、`bytesPerVideoSecond`、`clockSource`、`startedAt`、`endedAt`、`error`、`previewAvailable`；顶层另有 `controlsEnabled`，`matchState` 增加 `stopping` 与 `unresponsive`。采集层不记录帧率、曝光偏差、队列深度和标定版本，下例中的这些字段未实现，不以 0 或估计值填补。磁盘字段为 `minFreeBytes`、`recordingBytesPerSecond`、`remainingRecordingSeconds`，未知时省略。
+
 **GET /api/status**
 
 返回当前所有机位的状态摘要。
@@ -188,6 +190,8 @@ pitchtrace-edge web-ui --bind 127.0.0.1:8765 --match-dir /path/to/match
 - `alerts[].level`: `info` | `warning` | `error` | `critical`
 
 ### 3.2 控制 API
+
+> **已实现的口径**：采集配置只取自 `web-ui --capture-config`，忽略请求体中的路径，避免经 HTTP 让 Edge 读取任意文件。请求须带 `X-PitchTrace-Control: 1` 且同源，否则 403；未配置采集返回 501；已有采集或尚在启动时返回 409。停止通过写入采集目录的 `STOP` 标记完成。`pause`／`resume` 未实现。
 
 **POST /api/control/start**
 
@@ -407,7 +411,7 @@ pitchtrace-edge web-ui --bind 127.0.0.1:8765 --match-dir /path/to/match
 - [x] 创建 `SystemMonitor` actor 聚合采集模块的状态
 - [x] 实现 `LiveUpdateHandler.swift` 推送 WebSocket 消息
 - [x] 前端连接 WebSocket 并更新状态
-- [x] 实现 `POST /api/control/start` 和 `stop`，连接到采集模块
+- [x] 实现 `POST /api/control/start` 和 `stop`，连接到采集模块（`CaptureController`，状态读取改为 capture 的真实目录结构）
 
 **验收**：启动双机位录像重放，Web UI 实时显示帧率、曝光偏差、队列深度。点击 Stop 后采集停止，状态变为 `stopped`。
 
@@ -424,17 +428,17 @@ pitchtrace-edge web-ui --bind 127.0.0.1:8765 --match-dir /path/to/match
 ### 阶段 4：性能图表（W9，3 天）
 
 **交付物**：
-- [x] 实现 `MetricsCollector` 记录延迟、队列、资源时间序列
-- [x] 实现 `GET /api/metrics` 返回最近 5 分钟数据
-- [x] 前端集成 Chart.js（CDN），绘制折线图
-- [x] 自动刷新图表（每 5 秒）
+- [ ] 实现 `MetricsCollector` 记录延迟、队列、资源时间序列
+- [ ] 实现 `GET /api/metrics` 返回最近 5 分钟数据
+- [ ] 前端集成 Chart.js（CDN），绘制折线图
+- [ ] 自动刷新图表（每 5 秒）
 
 **验收**：连续运行 10 分钟，图表显示延迟 P95 和队列深度的变化趋势。模拟队列积压，图表立即反映。
 
 ### 阶段 5：预览画面（W10，2 天）
 
 **交付物**：
-- [x] 实现 `GET /api/preview/:cameraId` 编码最新帧为 JPEG
+- [x] 实现 `GET /api/preview/:cameraId` 编码最新已封口片段首帧为 JPEG
 - [x] 前端每秒拉取各机位预览图并更新
 - [x] 无可用帧时显示灰色占位图
 
@@ -443,9 +447,9 @@ pitchtrace-edge web-ui --bind 127.0.0.1:8765 --match-dir /path/to/match
 ### 阶段 6：配置界面（G7 之后，3 天）
 
 **交付物**：
-- [x] 实现 `GET /api/config` 和 `POST /api/config` 管理比赛配置
-- [x] 前端增加配置页面，表单填写比赛 ID、机位数量、标定文件路径
-- [x] 验证配置完整性，保存到指定目录
+- [ ] 实现 `GET /api/config` 和 `POST /api/config` 管理比赛配置
+- [ ] 前端增加配置页面，表单填写比赛 ID、机位数量、标定文件路径
+- [ ] 验证配置完整性，保存到指定目录
 
 **验收**：通过 Web UI 创建新比赛配置，`pitchtrace-edge run-match` 能直接加载该配置。
 

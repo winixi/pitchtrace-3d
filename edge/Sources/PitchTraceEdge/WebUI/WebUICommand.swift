@@ -5,114 +5,25 @@ import Foundation
 /// 由后台任务定期更新，HTTP 路由同步读取
 final class StatusCache: @unchecked Sendable {
     static let shared = StatusCache()
-    
+
     private var _current: SystemStatus
-    private var _lastUpdate: Date
     private let lock = NSLock()
-    
+
     var current: SystemStatus {
         lock.lock()
         defer { lock.unlock() }
         return _current
     }
-    
-    var lastUpdate: Date {
-        lock.lock()
-        defer { lock.unlock() }
-        return _lastUpdate
-    }
-    
+
     private init() {
-        // 初始值使用模拟数据
-        self._current = StatusCache.createMockStatus()
-        self._lastUpdate = Date()
+        // 首次汇总完成前不显示任何机位，避免把示例数据当成现场状态。
+        _current = readCaptureStatus(root: nil, setup: nil, process: CaptureProcessState(), now: Date())
     }
-    
+
     func update(_ status: SystemStatus) {
         lock.lock()
         defer { lock.unlock() }
-        self._current = status
-        self._lastUpdate = Date()
-    }
-    
-    /// 创建模拟状态数据
-    private static func createMockStatus() -> SystemStatus {
-        SystemStatus(
-            timestamp: ISO8601DateFormatter().string(from: Date()),
-            matchId: "mock-match-2025-01-20",
-            matchState: "idle",
-            cameras: [
-                CameraStatus(
-                    cameraId: "A",
-                    state: "active",
-                    fps: 29.97,
-                    frameCount: 12543,
-                    lastFrameUtcUs: "1737381135123456",
-                    exposureDriftMs: 0.8,
-                    droppedFrames: 2,
-                    queueDepth: 3,
-                    calibrationId: "field-a-v3",
-                    calibrationValid: true
-                ),
-                CameraStatus(
-                    cameraId: "B",
-                    state: "disconnected",
-                    fps: 0,
-                    frameCount: 12480,
-                    lastFrameUtcUs: "1737381133000000",
-                    exposureDriftMs: nil,
-                    droppedFrames: 65,
-                    queueDepth: 0,
-                    calibrationId: "field-a-v3",
-                    calibrationValid: true
-                ),
-                CameraStatus(
-                    cameraId: "C",
-                    state: "active",
-                    fps: 25.0,
-                    frameCount: 10452,
-                    lastFrameUtcUs: "1737381135200000",
-                    exposureDriftMs: 1.2,
-                    droppedFrames: 0,
-                    queueDepth: 2,
-                    calibrationId: "field-a-v3",
-                    calibrationValid: true
-                ),
-                CameraStatus(
-                    cameraId: "D",
-                    state: "active",
-                    fps: 30.0,
-                    frameCount: 12600,
-                    lastFrameUtcUs: "1737381135150000",
-                    exposureDriftMs: 0.5,
-                    droppedFrames: 1,
-                    queueDepth: 4,
-                    calibrationId: "field-a-v3",
-                    calibrationValid: true
-                )
-            ],
-            alerts: [
-                Alert(
-                    level: "error",
-                    cameraId: "B",
-                    message: "Camera B disconnected since 2025-01-20T14:32:13Z",
-                    timestamp: ISO8601DateFormatter().string(from: Date().addingTimeInterval(-10))
-                ),
-                Alert(
-                    level: "warning",
-                    cameraId: "A",
-                    message: "Queue depth exceeded 10 frames",
-                    timestamp: ISO8601DateFormatter().string(from: Date().addingTimeInterval(-5))
-                )
-            ],
-            disk: DiskStatus(
-                totalBytes: 2_000_000_000_000,
-                usedBytes: 450_000_000_000,
-                availableBytes: 1_550_000_000_000,
-                recordingRateBytes: 4_000_000,
-                estimatedHoursRemaining: 107.6
-            )
-        )
+        _current = status
     }
 }
 
@@ -123,11 +34,13 @@ final class StatusCache: @unchecked Sendable {
 struct WebUICommand {
     let bindAddress: String
     let matchDir: String?
+    var captureConfig: String? = nil
     
     /// 解析命令行参数
     static func parse(arguments: [String]) throws -> WebUICommand {
         var bindAddress = "127.0.0.1:8765"
         var matchDir: String?
+        var captureConfig: String?
         
         var i = 0
         while i < arguments.count {
@@ -145,6 +58,12 @@ struct WebUICommand {
                 }
                 matchDir = arguments[i + 1]
                 i += 2
+            case "--capture-config":
+                guard i + 1 < arguments.count else {
+                    throw ValidationError("--capture-config requires a capture config path")
+                }
+                captureConfig = arguments[i + 1]
+                i += 2
             case "--help", "-h":
                 printHelp()
                 throw ExitSuccess()
@@ -153,7 +72,10 @@ struct WebUICommand {
             }
         }
         
-        return WebUICommand(bindAddress: bindAddress, matchDir: matchDir)
+        if captureConfig != nil && matchDir == nil {
+            throw ValidationError("--capture-config requires --match-dir (the capture root directory)")
+        }
+        return WebUICommand(bindAddress: bindAddress, matchDir: matchDir, captureConfig: captureConfig)
     }
     
     /// 执行命令，启动 Web UI 服务器
@@ -172,9 +94,21 @@ struct WebUICommand {
             throw ValidationError("Invalid bind address format. Expected host:port")
         }
         
-        // 配置系统监控器
-        let matchDirURL = matchDir.map { URL(fileURLWithPath: $0, isDirectory: true) }
-        await SystemMonitor.shared.configure(matchDirectory: matchDirURL)
+        // 配置系统监控器；--match-dir 是 capture 的输出根目录
+        let matchDirURL = matchDir.map { URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL }
+        let setup = try captureConfig.map {
+            try CaptureSetup.load(URL(fileURLWithPath: $0).standardizedFileURL)
+        }
+        var controller: CaptureController?
+        if let setup, let root = matchDirURL {
+            guard let executable = Bundle.main.executableURL else {
+                throw ValidationError("Cannot locate the pitchtrace-edge executable")
+            }
+            controller = CaptureController(executable: executable, configURL: setup.configURL, root: root)
+        }
+        let previews = matchDirURL.map { PreviewRenderer(root: $0) }
+        await SystemMonitor.shared.configure(root: matchDirURL, setup: setup, controller: controller)
+        StatusCache.shared.update(await SystemMonitor.shared.currentStatus())
         
         // 创建 WebSocket 连接管理器
         let wsManager = WebSocketConnectionManager()
@@ -185,30 +119,18 @@ struct WebUICommand {
         
         let updateTask = Task.detached {
             while !Task.isCancelled {
-                do {
-                    // 从 SystemMonitor 获取最新状态
-                    let status = try await SystemMonitor.shared.currentStatus()
-                    
-                    // 更新线程安全的缓存（供 HTTP 路由使用）
-                    StatusCache.shared.update(status)
-                    
-                    // 如果状态发生变化，广播到 WebSocket 客户端
-                    if status != lastBroadcastedStatus {
-                        let message = WebSocketMessage.update(status)
-                        await wsManager.broadcast(message)
-                        lastBroadcastedStatus = status
-                    }
-                } catch {
-                    // 如果获取失败，保持使用上一次的状态
-                    print("Warning: Failed to update status: \(error)")
-                    
-                    // 通知 WebSocket 客户端发生错误
-                    let errorMsg = WebSocketMessage.error("Failed to read match data: \(error.localizedDescription)")
-                    await wsManager.broadcast(errorMsg)
+                // 从采集目录汇总最新状态，更新线程安全的缓存（供 HTTP 路由使用）
+                let status = await SystemMonitor.shared.currentStatus()
+                StatusCache.shared.update(status)
+
+                // 时间戳之外有变化时才广播到 WebSocket 客户端
+                if status.ignoringTimestamp != lastBroadcastedStatus?.ignoringTimestamp {
+                    await wsManager.broadcast(WebSocketMessage.update(status))
+                    lastBroadcastedStatus = status
                 }
-                
-                // 每 2 秒更新一次
-                try? await Task.sleep(for: .seconds(2))
+
+                // 文档 08 第 3.5 节：每秒推送一次变化
+                try? await Task.sleep(for: .seconds(1))
             }
         }
         
@@ -239,6 +161,24 @@ struct WebUICommand {
         
         server["/api/health"] = { request in
             return .ok(.text("OK"))
+        }
+
+        server.POST["/api/control/start"] = { request in
+            Self.control(request, controller: controller) { try $0.start() }
+        }
+
+        server.POST["/api/control/stop"] = { request in
+            Self.control(request, controller: controller) { try $0.stop() }
+        }
+
+        server.GET["/api/preview/:cameraId"] = { request in
+            guard let cameraId = request.params[":cameraId"], isEdgeIdentifier(cameraId),
+                  let jpeg = previews?.jpeg(cameraId: cameraId) else {
+                return .notFound
+            }
+            return .raw(200, "OK", ["Content-Type": "image/jpeg", "Cache-Control": "no-store"]) {
+                try $0.write(jpeg)
+            }
         }
         
         // WebSocket 实时推送端点
@@ -292,18 +232,18 @@ struct WebUICommand {
         print("")
         
         do {
-            if hostname == "0.0.0.0" {
-                try server.start(in_port_t(port))
-            } else {
-                try server.start(in_port_t(port), forceIPv4: true, priority: .default)
-            }
+            // Swifter 未设监听地址时绑定全部网卡，需显式指定才能让默认值只在回环上监听。
+            server.listenAddressIPv4 = hostname
+            try server.start(in_port_t(port), forceIPv4: true, priority: .default)
             
             print("✓ Server is running")
             print("  → Open http://\(hostname):\(port) in your browser")
-            if matchDirURL != nil {
-                print("  → Monitoring: \(matchDir!)")
+            if let matchDirURL {
+                print("  → Monitoring: \(matchDirURL.path)")
+                print(controller == nil ? "  → Read-only (pass --capture-config to enable Start/Stop)"
+                                        : "  → Start/Stop runs capture with \(captureConfig!)")
             } else {
-                print("  → No match directory specified (using demo data)")
+                print("  → No match directory specified")
             }
             
             // 保持服务器运行
@@ -319,6 +259,42 @@ struct WebUICommand {
         }
     }
     
+    /// 执行控制请求。
+    ///
+    /// 控制接口无认证（文档 08 第 7.1 节）。要求自定义请求头，并拒绝与 Host 不同源的 Origin，
+    /// 使其他网页无法借场务浏览器发起跨站 POST。
+    static func control(_ request: HttpRequest, controller: CaptureController?,
+                        action: (CaptureController) throws -> String) -> HttpResponse {
+        func reply(_ status: Int, _ success: Bool, _ message: String) -> HttpResponse {
+            let body = (try? JSONSerialization.data(withJSONObject: ["success": success, "message": message])) ?? Data()
+            let reason = [200: "OK", 403: "Forbidden", 409: "Conflict", 500: "Internal Server Error", 501: "Not Implemented"][status] ?? ""
+            return .raw(status, reason, ["Content-Type": "application/json"]) { try $0.write(body) }
+        }
+        guard isSameOriginControl(headers: request.headers) else {
+            return reply(403, false, "Control requests need the X-PitchTrace-Control header from the Web UI origin")
+        }
+        guard let controller else {
+            return reply(501, false, "Start web-ui with --capture-config and --match-dir to enable capture control")
+        }
+        do {
+            let message = try action(controller)
+            print("Control: \(request.path) from \(request.address ?? "?") → \(message)")
+            return reply(200, true, message)
+        } catch let conflict as CaptureControlConflict {
+            return reply(409, false, conflict.description)
+        } catch {
+            return reply(500, false, "\(error)")
+        }
+    }
+
+    /// Swifter 已把请求头名转为小写。
+    static func isSameOriginControl(headers: [String: String]) -> Bool {
+        guard headers["x-pitchtrace-control"] == "1" else { return false }
+        guard let origin = headers["origin"] else { return true }
+        guard let host = headers["host"] else { return false }
+        return origin == "http://\(host)" || origin == "https://\(host)"
+    }
+
     /// 返回首页 HTML
     private func serveIndexHTML() -> HttpResponse {
         // 尝试多个可能的资源路径（SwiftPM 的 .copy() 会保留目录结构）
@@ -366,7 +342,8 @@ struct WebUICommand {
         OPTIONS:
             --bind <host:port>      Bind address (default: 127.0.0.1:8765)
                                     Use 0.0.0.0:8765 for LAN access
-            --match-dir <path>      Match directory to monitor (optional)
+            --match-dir <path>      Capture root directory to monitor (optional)
+            --capture-config <file> Capture config; enables Start/Stop (needs --match-dir)
             --help, -h              Show this help message
         
         EXAMPLES:
@@ -376,8 +353,11 @@ struct WebUICommand {
             # Allow LAN access
             pitchtrace-edge web-ui --bind 0.0.0.0:8765
             
-            # Monitor a specific match
-            pitchtrace-edge web-ui --match-dir /path/to/match
+            # Monitor a capture directory (read-only)
+            pitchtrace-edge web-ui --match-dir /path/to/session
+
+            # Monitor and control capture
+            pitchtrace-edge web-ui --match-dir /path/to/session --capture-config cameras.json
         """)
     }
 }
@@ -386,12 +366,22 @@ struct WebUICommand {
 
 struct SystemStatus: Codable, Equatable {
     let timestamp: String
-    let matchId: String
+    /// 采集目录 match.json 或采集配置中的比赛 ID，均缺省时为空。
+    let matchId: String?
+    /// idle | capturing | stopping | stopped | unresponsive
     let matchState: String
+    /// 是否提供了采集配置，可以开始／结束采集。
+    let controlsEnabled: Bool
     let cameras: [CameraStatus]
     let alerts: [Alert]
     let disk: DiskStatus
-    
+
+    var ignoringTimestamp: SystemStatus {
+        SystemStatus(timestamp: "", matchId: matchId, matchState: matchState, controlsEnabled: controlsEnabled,
+                     cameras: cameras, alerts: alerts.map { Alert(level: $0.level, cameraId: $0.cameraId, message: $0.message, timestamp: "") },
+                     disk: disk)
+    }
+
     /// 转换为 JSON 对象（用于 Swifter 响应）
     func toJSON() -> Any {
         let encoder = JSONEncoder()
@@ -404,17 +394,23 @@ struct SystemStatus: Codable, Equatable {
     }
 }
 
+/// 单机位的最新媒体周期状态，取自 raw/<机位>/<周期>/status.json。
 struct CameraStatus: Codable, Equatable {
     let cameraId: String
+    /// idle | waiting | starting | recording | reconnecting | interrupted | stopped | completed | failed
     let state: String
-    let fps: Double
-    let frameCount: Int
-    let lastFrameUtcUs: String
-    let exposureDriftMs: Double?
-    let droppedFrames: Int
-    let queueDepth: Int
-    let calibrationId: String?
-    let calibrationValid: Bool
+    let mediaEpoch: String?
+    let sourceType: String?
+    /// 本采集目录中该机位的媒体周期数，重连会新增周期。
+    let periods: Int
+    /// 最新周期已封口的片段数。
+    let segments: Int
+    let bytesPerVideoSecond: Double?
+    let clockSource: String?
+    let startedAt: String?
+    let endedAt: String?
+    let error: String?
+    let previewAvailable: Bool
 }
 
 struct Alert: Codable, Equatable {
@@ -428,8 +424,11 @@ struct DiskStatus: Codable, Equatable {
     let totalBytes: Int64
     let usedBytes: Int64
     let availableBytes: Int64
-    let recordingRateBytes: Int
-    let estimatedHoursRemaining: Double
+    let minFreeBytes: Int64?
+    /// 正在录制的机位均已有实测码率时的合计值，否则为空。
+    let recordingBytesPerSecond: Double?
+    /// capture 按最近一段码率与 minFreeBytes 估算的剩余录制秒数。
+    let remainingRecordingSeconds: Int?
 }
 
 // MARK: - 错误类型

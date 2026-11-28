@@ -4,6 +4,8 @@
 **检查范围**: 对照 `docs/02-technical-design.md` 与 `docs/07-edge-development-plan.md`  
 **总体完成度**: 约 80–85%（核心离线处理与工具链就绪，实时采集与视觉模型需实拍迭代）
 
+> **复核说明**：下列条目与当前代码不符，以代码为准。2.1–2.2 的 Core ML 检测、Vision 姿态与 OCR 已在 `VisionObservation.swift` 实现；2.3 的 Laplacian 清晰度见 `observation_quality.py`；3.3 的 0.3 秒短时预测见 `tracking.py`；5.1 的场景待办持久化与限速补传见 `scene_archive.py` 与 `stream_match.py`；6.1 的按曝光切换标定见 `match_config.py`。第 7 节已按本次实现更新。
+
 ---
 
 ## ✅ 已完整实现的核心模块
@@ -339,22 +341,20 @@
 ### 7. Web UI 控制功能
 
 #### 7.1 比赛控制
-**当前状态**: 实时监控已实现，但为只读
+**当前状态**: ✅ 已实现开始／结束采集（`POST /api/control/start`、`/stop`，需 `web-ui --capture-config`）
 
-- ❌ **缺少开始/停止采集的控制接口**
-  - 文档要求：场务可启动或结束采集
-  - 需要暴露 HTTP POST 端点触发状态变更
+- ✅ 状态改为读取 capture 的 `health.json` 与逐周期 `status.json`（原实现读取不存在的 `camera_*/epoch_*` 目录，对真实采集显示为空）
+- ❌ 暂停／恢复处理（需接管 stream-match）、`/api/metrics` 性能指标
 
-**阻塞**: G6（场务操作验收）
+**阻塞**: 无（G6 场务操作验收需现场执行）
 
 ---
 
 #### 7.2 通道预览
-- ❌ **缺少各机位实时预览流**
-  - 文档要求：现场可预览各路
-  - 需要 MJPEG 或 WebRTC 推流
+- ✅ `GET /api/preview/:cameraId` 返回最新已封口片段首帧的 320×180 JPEG，页面每秒刷新，画面滞后约一个片段时长
+- 连续画面仍可用 HLS 播放器打开 `raw/<机位>/<周期>/preview.m3u8`
 
-**阻塞**: G1（取景与帧率核验）
+**阻塞**: 无（G1 取景核验需现场执行）
 
 ---
 

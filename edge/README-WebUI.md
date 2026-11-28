@@ -36,7 +36,8 @@ open http://127.0.0.1:8765
     ↓ Actor
 SystemMonitor
     ↓ 读取
-磁盘数据 (camera_*/epoch_*)
+capture 输出目录 (health.json、raw/<机位>/<周期>/status.json、已封口 .m4s)
+    ↕ 开始：启动 `pitchtrace-edge capture`；结束：写入 STOP 标记
 ```
 
 ---
@@ -108,8 +109,10 @@ curl http://127.0.0.1:8765/api/status  # → JSON
 # 指定监听地址
 swift run pitchtrace-edge web-ui --bind 0.0.0.0:8765
 
-# 监控特定比赛目录
-swift run pitchtrace-edge web-ui --match-dir /path/to/match
+# 只读监控一个采集目录（capture 的输出根目录）
+swift run pitchtrace-edge web-ui --match-dir /path/to/session
+# 监控并允许场务开始／结束采集
+swift run pitchtrace-edge web-ui --match-dir /path/to/session --capture-config cameras.json
 
 # 显示帮助
 swift run pitchtrace-edge web-ui --help
@@ -125,6 +128,20 @@ swift run pitchtrace-edge web-ui --help
 | `/api/health` | HTTP | 健康检查 |
 | `/api/status` | HTTP | 状态查询 |
 | `/api/live` | WebSocket | 实时推送 |
+| `/api/control/start` | POST | 以 `--capture-config` 启动 `capture`，已有采集在写同一目录时返回 409 |
+| `/api/control/stop` | POST | 写入 `STOP` 标记有序停止，也能停止 Web UI 之外启动的采集；采集尚未写出首份 health.json 时返回 409 |
+| `/api/preview/:cameraId` | GET | 最新已封口片段首帧的 320×180 JPEG，无片段时 404 |
+
+### 采集控制
+
+- 控制请求须带 `X-PitchTrace-Control: 1`，带 `Origin` 时须与 `Host` 同源，否则返回 403。这样其他网页无法借场务浏览器发起跨站 POST。控制接口仍无认证，`--bind 0.0.0.0` 时局域网内任何人都能开始或结束采集。
+- 未提供 `--capture-config` 时控制接口返回 501，页面按钮保持禁用。
+- 开始前若目录里留有上一次的 `STOP`，且确认没有采集在运行，Web UI 会移走它。由 Web UI 启动的采集退出后，它写入的 `STOP` 也会被移走。
+- Web UI 退出不会结束它启动的采集；重启 Web UI 后按 health.json 识别正在运行的采集，仍可结束。终端里按 Ctrl-C 会同时向前台进程组发送 SIGINT，采集会有序封口退出。
+
+### 状态口径
+
+状态只来自 capture 写盘的文件。`matchState` 取 `idle`、`capturing`、`stopping`、`stopped`、`unresponsive`（health.json 超过 5 秒未刷新但仍有活动机位）。机位给出最新媒体周期、周期数、已封口段数、实测码率、输入类型、曝光时钟来源和失败原因。帧率、曝光偏差和推理积压不在采集层记录，状态中不提供；剩余录制时长只在 capture 已估算时给出。
 
 ---
 
@@ -183,7 +200,10 @@ swift run pitchtrace-edge web-ui --help
 
 ## 🔮 未来增强
 
-- [ ] 控制接口 (启动/停止)
+- [x] 控制接口 (启动/停止)
+- [x] 机位预览
+- [ ] 暂停/恢复处理（需接管 stream-match）
+- [ ] 性能指标 `/api/metrics`（可读 stream-state.json 的积压与处理速率）
 - [ ] 录像回放
 - [ ] 性能监控 (Prometheus)
 - [ ] 多比赛支持

@@ -204,6 +204,17 @@
             color: #c01048;
         }
         
+        .state-idle {
+            background: #f2f4f7;
+            color: #475467;
+        }
+
+        img.preview {
+            display: block;
+            object-fit: contain;
+            background: #000;
+        }
+        
         .state-error {
             background: #fee4e2;
             color: #c01048;
@@ -564,25 +575,82 @@
             });
             
             document.getElementById('startBtn').addEventListener('click', () => {
-                alert('Start control will be implemented in Phase 4');
+                sendControl('start');
             });
             
             document.getElementById('stopBtn').addEventListener('click', () => {
-                alert('Stop control will be implemented in Phase 4');
+                if (confirm('Stop capture? Every channel seals its current segment and exits.')) {
+                    sendControl('stop');
+                }
+            });
+
+            // 每秒刷新可预览机位的缩略图
+            setInterval(refreshPreviews, 1000);
+        }
+
+        // ===== 采集控制 =====
+
+        let controlPending = false;
+
+        async function sendControl(action) {
+            controlPending = true;
+            updateControls();
+            try {
+                const response = await fetch(`/api/control/${action}`, {
+                    method: 'POST',
+                    headers: { 'X-PitchTrace-Control': '1' }
+                });
+                const result = await response.json().catch(() => ({ message: `HTTP ${response.status}` }));
+                if (!response.ok || !result.success) {
+                    showError(result.message || `HTTP ${response.status}`);
+                }
+            } catch (error) {
+                showError(`Control request failed: ${error.message}`);
+            } finally {
+                controlPending = false;
+                await loadStatusHTTP();
+            }
+        }
+
+        function updateControls() {
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const status = currentStatus;
+            const enabled = !!(status && status.controlsEnabled) && !controlPending;
+            const state = status ? status.matchState : 'idle';
+            const running = state === 'capturing' || state === 'stopping';
+            startBtn.disabled = !enabled || running || state === 'unresponsive';
+            stopBtn.disabled = !enabled || state !== 'capturing';
+            startBtn.textContent = state === 'capturing' ? 'Running' : 'Start';
+            stopBtn.textContent = state === 'stopping' ? 'Stopping…' : 'Stop';
+            const hint = status && !status.controlsEnabled
+                ? 'Read-only: start web-ui with --capture-config to enable' : '';
+            startBtn.title = hint;
+            stopBtn.title = hint;
+        }
+
+        function refreshPreviews() {
+            document.querySelectorAll('img.preview[data-camera]').forEach(img => {
+                img.src = `/api/preview/${encodeURIComponent(img.dataset.camera)}?t=${Date.now()}`;
             });
         }
         
         // 渲染状态
         function renderStatus(status) {
+            currentStatus = status;
+            updateControls();
+
             // 更新状态栏
-            document.getElementById('matchId').textContent = status.matchId;
+            document.getElementById('matchId').textContent = status.matchId || '—';
             document.getElementById('matchState').textContent = capitalizeFirst(status.matchState);
             
             const diskUsedGB = Math.round(status.disk.usedBytes / 1e9);
             const diskTotalGB = Math.round(status.disk.totalBytes / 1e9);
-            const diskPercent = Math.round((status.disk.usedBytes / status.disk.totalBytes) * 100);
+            const diskPercent = status.disk.totalBytes ? Math.round((status.disk.usedBytes / status.disk.totalBytes) * 100) : 0;
+            const remaining = status.disk.remainingRecordingSeconds;
             document.getElementById('diskUsage').textContent = 
-                `${diskUsedGB}GB / ${diskTotalGB}GB (${diskPercent}%)`;
+                `${diskUsedGB}GB / ${diskTotalGB}GB (${diskPercent}%)` +
+                (remaining != null ? ` · ~${formatDuration(remaining)} left` : '');
             
             // 渲染相机
             renderCameras(status.cameras);
@@ -600,45 +668,51 @@
                 return;
             }
             
+            // 卡片重绘时保留已加载的缩略图，避免每秒闪烁
+            const previous = {};
+            grid.querySelectorAll('img.preview[data-camera]').forEach(img => { previous[img.dataset.camera] = img.src; });
+
             grid.innerHTML = cameras.map(camera => `
                 <div class="camera-card">
                     <div class="camera-header">
-                        <div class="camera-id">Camera ${camera.cameraId}</div>
-                        <div class="camera-state state-${camera.state}">
-                            ${camera.state === 'active' ? '✓' : '✗'} ${capitalizeFirst(camera.state)}
+                        <div class="camera-id">Camera ${escapeHtml(camera.cameraId)}</div>
+                        <div class="camera-state state-${stateClass(camera.state)}">
+                            ${camera.state === 'recording' ? '✓' : camera.state === 'failed' ? '✗' : '•'} ${capitalizeFirst(camera.state)}
                         </div>
                     </div>
                     
                     <div class="camera-metrics">
                         <div class="metric">
-                            <span class="metric-label">Frame Rate</span>
-                            <span class="metric-value">${camera.fps.toFixed(2)} fps</span>
+                            <span class="metric-label">Media Period</span>
+                            <span class="metric-value">${camera.mediaEpoch ? escapeHtml(camera.mediaEpoch.slice(0, 12)) : '—'}${camera.periods > 1 ? ` (${camera.periods})` : ''}</span>
                         </div>
                         <div class="metric">
-                            <span class="metric-label">Frame Count</span>
-                            <span class="metric-value">${camera.frameCount.toLocaleString()}</span>
+                            <span class="metric-label">Sealed Segments</span>
+                            <span class="metric-value">${camera.segments.toLocaleString()}</span>
                         </div>
                         <div class="metric">
-                            <span class="metric-label">Exposure Drift</span>
-                            <span class="metric-value">${camera.exposureDriftMs != null ? camera.exposureDriftMs.toFixed(1) + ' ms' : '—'}</span>
+                            <span class="metric-label">Bitrate</span>
+                            <span class="metric-value">${camera.bytesPerVideoSecond != null ? (camera.bytesPerVideoSecond * 8 / 1e6).toFixed(2) + ' Mbps' : '—'}</span>
                         </div>
                         <div class="metric">
-                            <span class="metric-label">Dropped Frames</span>
-                            <span class="metric-value">${camera.droppedFrames}</span>
+                            <span class="metric-label">Input</span>
+                            <span class="metric-value">${camera.sourceType ? escapeHtml(camera.sourceType) : '—'}</span>
                         </div>
                         <div class="metric">
-                            <span class="metric-label">Queue Depth</span>
-                            <span class="metric-value">${camera.queueDepth}</span>
+                            <span class="metric-label">Exposure Clock</span>
+                            <span class="metric-value">${camera.clockSource ? escapeHtml(camera.clockSource) : '—'}</span>
                         </div>
                         <div class="metric">
-                            <span class="metric-label">Calibration</span>
-                            <span class="metric-value">${camera.calibrationValid ? '✓' : '✗'} ${camera.calibrationId}</span>
+                            <span class="metric-label">Started</span>
+                            <span class="metric-value">${camera.startedAt ? formatTimestamp(camera.startedAt) : '—'}</span>
                         </div>
                     </div>
+                    ${camera.error ? `<div class="alert-message">${escapeHtml(camera.error)}</div>` : ''}
                     
-                    <div class="preview-placeholder">
-                        Preview (Phase 5)
-                    </div>
+                    ${camera.previewAvailable
+                        ? `<img class="preview preview-placeholder" data-camera="${escapeHtml(camera.cameraId)}" alt="Camera ${escapeHtml(camera.cameraId)} preview"
+                               src="${previous[camera.cameraId] || `/api/preview/${encodeURIComponent(camera.cameraId)}`}">`
+                        : `<div class="preview-placeholder">No sealed segment yet</div>`}
                 </div>
             `).join('');
         }
@@ -691,7 +765,21 @@
         
         // 首字母大写
         function capitalizeFirst(str) {
+            if (!str) return '—';
             return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        // 机位状态到已有配色的映射
+        function stateClass(state) {
+            if (state === 'recording') return 'active';
+            if (state === 'failed' || state === 'interrupted') return 'disconnected';
+            return 'idle';
+        }
+
+        function formatDuration(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
         }
         
         // HTML 转义
