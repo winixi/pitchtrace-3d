@@ -9,3 +9,5 @@ node_modules/
 /edge/benchmarks/runs/
 /edge/samples/four-camera-30min/
 /live/server/data/
+# 海康 MVS SDK 文档与示例为厂商资料，只在本地参考，不入库
+/docs/sdk/

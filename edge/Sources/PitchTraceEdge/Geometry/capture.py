@@ -21,6 +21,9 @@ from calibrate import is_identifier, unique_object
 
 SAFE_INT = 2**53 - 1
 MAX_MEDIA = 128 * 1024 * 1024
+# 由 Edge 的 camera-capture 子进程直接取图、编码并写出曝光清单的输入类型。
+NATIVE_TYPES = ("mvs", "simulated")
+FFMPEG_TYPES = ("file", "rtsp", "avfoundation")
 
 
 def read_json(path):
@@ -78,7 +81,7 @@ def load_config(path):
     integer(config.get("segmentSeconds", 2), 1, 60, "目标段长")
     for name, camera in cameras.items():
         identifier(name, "机位")
-        if not isinstance(camera, dict) or camera.get("type") not in ("file", "rtsp", "avfoundation"):
+        if not isinstance(camera, dict) or camera.get("type") not in FFMPEG_TYPES + NATIVE_TYPES:
             raise ValueError(f"机位 {name} 的输入类型无效")
         source = camera.get("source")
         if not isinstance(source, str) or not source.strip():
@@ -96,11 +99,104 @@ def load_config(path):
                 raise ValueError("预先提供曝光清单时需指定清单路径和 mediaEpoch")
             camera["exposures"] = (path.parent / camera["exposures"]).resolve()
         integer(camera.get("reconnectAttempts", 3), 0, 100, "重连次数")
+        if camera["type"] in NATIVE_TYPES:
+            validate_native_camera(name, camera)
         if camera["type"] == "avfoundation":
             integer(camera.get("framerate", 30), 1, 240, "采集帧率")
             if "videoSize" in camera and not re.fullmatch(r"[1-9]\d{0,4}x[1-9]\d{0,4}", str(camera["videoSize"])):
                 raise ValueError("videoSize 需要 宽x高")
     return config
+
+
+def number(value, minimum, maximum, label):
+    if type(value) not in (int, float) or not minimum <= value <= maximum:
+        raise ValueError(f"{label} 须在 {minimum} 至 {maximum} 之间")
+    return value
+
+
+def validate_native_camera(name, camera):
+    allowed = {"type", "source", "mediaEpoch", "reconnectAttempts", "width", "height", "pixelFormat",
+               "framerate", "bitrate", "clock", "simulate" if camera["type"] == "simulated" else "mvs"}
+    extra = set(camera) - allowed
+    if extra:
+        raise ValueError(f"机位 {name} 含不适用于 {camera['type']} 的字段：{', '.join(sorted(extra))}")
+    for key in ("width", "height"):
+        value = integer(camera.get(key, 1920 if key == "width" else 1080), 16, 8192, f"机位 {name} 的 {key}")
+        if value % 2:
+            raise ValueError(f"机位 {name} 的 {key} 须为偶数")
+    number(camera.get("framerate", 30), 1, 240, f"机位 {name} 的帧率")
+    integer(camera.get("bitrate", 8_000_000), 100_000, 100_000_000, f"机位 {name} 的码率")
+    if camera.get("pixelFormat", "BayerRG8") not in ("BayerRG8", "Mono8"):
+        raise ValueError(f"机位 {name} 的 pixelFormat 需要 BayerRG8 或 Mono8")
+    clock = camera.get("clock")
+    if not isinstance(clock, dict) or clock.get("mode") not in ("ptp-utc", "host-fit"):
+        raise ValueError(f"机位 {name} 需要 clock.mode：ptp-utc 或 host-fit")
+    if set(clock) - {"mode", "timestampEvent", "taiUtcOffsetSeconds"}:
+        raise ValueError(f"机位 {name} 的 clock 含未知字段")
+    if clock.get("timestampEvent", "exposureStart") not in ("exposureStart", "exposureCenter"):
+        raise ValueError(f"机位 {name} 的 clock.timestampEvent 需要 exposureStart 或 exposureCenter")
+    integer(clock.get("taiUtcOffsetSeconds", 37), 0, 100, f"机位 {name} 的 TAI−UTC 偏移")
+    section = camera.get("simulate" if camera["type"] == "simulated" else "mvs", {})
+    if not isinstance(section, dict):
+        raise ValueError(f"机位 {name} 的 {camera['type']} 参数需要对象")
+    if camera["type"] == "simulated":
+        if "frames" in section:
+            integer(section["frames"], 1, 10_000_000, "模拟帧数")
+        for key in ("clockResetAtFrame", "ptpUnlockAtFrame", "failAtFrame"):
+            if key in section:
+                integer(section[key], 0, 10_000_000, key)
+        if not isinstance(section.get("dropFrames", []), list) or not all(
+                type(v) is int and v >= 0 for v in section.get("dropFrames", [])):
+            raise ValueError("dropFrames 需要非负整数数组")
+    else:
+        for key in ("offsetX", "offsetY", "packetSize"):
+            if key in section:
+                integer(section[key], 0, 65535, f"mvs.{key}")
+        if "exposureUs" in section:
+            number(section["exposureUs"], 1, 10_000_000, "mvs.exposureUs")
+        if "gainDb" in section:
+            number(section["gainDb"], 0, 48, "mvs.gainDb")
+        if "ptpLockTimeoutSeconds" in section:
+            integer(section["ptpLockTimeoutSeconds"], 1, 600, "mvs.ptpLockTimeoutSeconds")
+        extra = set(section) - {"offsetX", "offsetY", "exposureUs", "gainDb", "packetSize", "ptpLockTimeoutSeconds"}
+        if extra:
+            raise ValueError(f"机位 {name} 的 mvs 含未知字段：{', '.join(sorted(extra))}")
+
+
+def native_command(root, period, match, name, epoch, camera, segment_seconds):
+    executable = os.environ.get("PITCHTRACE_EDGE_EXECUTABLE")
+    if not executable:
+        raise ValueError("MVS 与模拟相机需经 pitchtrace-edge capture 启动")
+    write_json(period / "camera.json", {"matchId": match, "cameraId": name, "mediaEpoch": epoch,
+                                        "segmentSeconds": segment_seconds, "camera": camera})
+    return [executable, "camera-capture", str(period)]
+
+
+def native_stats(period):
+    path = period / "capture-stats.json"
+    try:
+        return read_json(path) if path.exists() else None
+    except ValueError:
+        return None
+
+
+def attach_native(root, name, epoch, camera, state):
+    """camera-capture 自带逐帧曝光清单。仅 PTP 时钟登记为可融合周期，host-fit 留在 raw/ 供单独复核。"""
+    period = raw_period(root, name, epoch)
+    manifest = period / "exposures.ndjson"
+    if not manifest.exists():
+        return
+    with manifest.open(encoding="utf-8") as file:
+        header = mapping_row(file) or {}
+    state["clockSource"] = header.get("clockSource", "unknown")
+    if camera["clock"]["mode"] != "ptp-utc" or not state["segments"]:
+        return
+    try:
+        attach(root, name, epoch, manifest)
+        state["clockSource"] = read_json(root / "recordings" / name / "epochs" / epoch / "clock.json")["clockSource"]
+        state["attached"] = True
+    except (OSError, ValueError, KeyError) as error:
+        state["attachError"] = str(error)
 
 
 def capture_command(camera, segment_seconds):
@@ -290,8 +386,10 @@ def recording_rate(period, last_segment):
 
 
 def record_camera(root, match, name, camera, segment_seconds, stop, progress):
-    live = camera["type"] != "file"
-    retries = camera.get("reconnectAttempts", 3) if live else 0
+    native = camera["type"] in NATIVE_TYPES
+    # 设定帧数的模拟相机和文件一样可以正常读完；其余实时输入意外结束都按断流重连。
+    finite = camera["type"] == "file" or (camera["type"] == "simulated" and "frames" in camera.get("simulate", {}))
+    retries = camera.get("reconnectAttempts", 3) if camera["type"] != "file" else 0
     for attempt in range(retries + 1):
         epoch = camera.get("mediaEpoch") if attempt == 0 else None
         epoch = epoch or uuid.uuid4().hex
@@ -306,8 +404,10 @@ def record_camera(root, match, name, camera, segment_seconds, stop, progress):
                 state["status"] = "recording"
                 write_json(status_file, state)
                 progress[name] = dict(state)
+                command = (native_command(root, period, match, name, epoch, camera, segment_seconds) if native
+                           else capture_command(camera, segment_seconds))
                 # 只向状态文件写退出码，RTSP 鉴权信息可能出现在 FFmpeg 的诊断中。
-                with subprocess.Popen(capture_command(camera, segment_seconds), cwd=period, stdin=subprocess.DEVNULL,
+                with subprocess.Popen(command, cwd=period, stdin=subprocess.DEVNULL,
                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                       start_new_session=True, pass_fds=(active.fileno(),)) as process:
                     try:
@@ -324,6 +424,8 @@ def record_camera(root, match, name, camera, segment_seconds, stop, progress):
                             if count != state["segments"]:
                                 state["segments"] = count
                                 state["bytesPerVideoSecond"] = recording_rate(period, count - 1)
+                                if native:
+                                    state["capture"] = native_stats(period)
                                 write_json(status_file, state)
                                 progress[name] = dict(state)
                     finally:
@@ -332,13 +434,19 @@ def record_camera(root, match, name, camera, segment_seconds, stop, progress):
                         process.wait()
                 state["segments"] = sum(1 for _ in period.glob("*.m4s"))
                 state["bytesPerVideoSecond"] = recording_rate(period, state["segments"] - 1)
-                if stop.is_set():
+                if native:
+                    state["capture"] = native_stats(period)
+                # FFmpeg 收到 SIGINT 的退出码不固定；camera-capture 封口成功时总以 0 退出。
+                if stop.is_set() and (not native or process.returncode == 0):
                     state["status"] = "stopped"
-                elif process.returncode or live or not state["segments"]:
-                    raise ValueError(f"视频输入结束或写盘失败，FFmpeg 退出码 {process.returncode}")
+                elif process.returncode or not finite or not state["segments"]:
+                    detail = (state.get("capture") or {}).get("error") if native else None
+                    raise ValueError(detail or f"视频输入结束或写盘失败，采集进程退出码 {process.returncode}")
                 else:
                     state["status"] = "completed"
-            if attempt == 0 and "exposures" in camera and state["segments"]:
+            if native:
+                attach_native(root, name, epoch, camera, state)
+            elif attempt == 0 and "exposures" in camera and state["segments"]:
                 attach(root, name, epoch, camera["exposures"])
                 state["clockSource"] = read_json(root / "recordings" / name / "epochs" / epoch / "clock.json")["clockSource"]
             state["endedUnix"] = time.time()
@@ -346,6 +454,9 @@ def record_camera(root, match, name, camera, segment_seconds, stop, progress):
             return state
         except (OSError, ValueError, KeyError) as error:
             state.update(status="failed", error=str(error), endedUnix=time.time())
+            if native:
+                # 失锁、断流前已封口的片段和曝光行仍完整，照常登记。
+                attach_native(root, name, epoch, camera, state)
             write_json(status_file, state)
             progress[name] = dict(state)
             if attempt == retries or stop.wait(min(2**attempt, 10)):

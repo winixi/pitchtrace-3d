@@ -14,6 +14,7 @@ enum PitchTraceEdge {
           pitchtrace-edge calibrate <场地标定.json>
           pitchtrace-edge audit-calibration <标定报告.json> <机位巡检.json>
           pitchtrace-edge capture <采集配置.json> <采集根目录>
+          pitchtrace-edge camera-capture <媒体周期目录>
           pitchtrace-edge attach-exposures <采集根目录> <机位> <媒体周期> <曝光清单.ndjson>
           pitchtrace-edge process-match <比赛配置.json> <replay 导出目录> <场景库.sqlite>
           pitchtrace-edge reconstruct-match <比赛配置.json> <二维观测.ndjson> <场景库.sqlite>
@@ -92,6 +93,11 @@ enum PitchTraceEdge {
                 operation = "分机位采集与曝光映射"
                 let prefix = arguments[0] == "capture" ? [] : ["attach"]
                 try runPython("capture", prefix + arguments.dropFirst())
+            case ("camera-capture", 2):
+                operation = "单机位相机采集"
+                let stop = StopFlag()
+                stop.installSignalHandlers()
+                try runCameraCapture(directory: URL(fileURLWithPath: arguments[1], isDirectory: true), stop: stop)
             case ("audit-calibration", 3):
                 operation = "机位巡检"
                 try runPython("audit_calibration", Array(arguments.dropFirst()))
@@ -160,6 +166,12 @@ private func runPython(_ name: String, _ arguments: [String]) throws {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
     process.arguments = ["python3", "-B", script.path] + arguments
+    // capture.py 为 MVS 与模拟相机启动 camera-capture 子进程时使用同一程序。
+    if let executable = Bundle.main.executableURL {
+        var environment = ProcessInfo.processInfo.environment
+        environment["PITCHTRACE_EDGE_EXECUTABLE"] = executable.path
+        process.environment = environment
+    }
     try process.run()
     process.waitUntilExit()
     if process.terminationStatus != 0 { exit(1) }
