@@ -32,7 +32,12 @@ swift run --package-path edge pitchtrace-edge stream-match match.json ./capture-
 | `processedFramesPerSecond` | 本次启动以来处理的场景数除以单调时钟耗时，包含恢复时核对的已有帧。与发布目标频率、积压变化一起观察。 |
 | `status`、`pendingDelivery` | 本地运行状态和退出时仍待处理的上行错误。 |
 | `pendingUploads` | 配置网关时给出，`scenes` 为该网关尚未确认的场景帧数，`mediaSegments` 为尚未三件全部确认的媒体段数。归档读取失败时为 `null`。 |
+| `paused`、`pausedSinceUnix` | 运行目录存在 `PAUSE` 标记时 `paused` 为 true，后者为线程开始等待的 Unix 秒数，未暂停时为 `null`。 |
 | `degradation` | 配置 `detector.degradation` 时给出：当前降级级别 `level`、最近一组的曝光积压 `backlogSeconds` 和各级已处理的组数 `framesByLevel`。 |
+
+## 暂停与恢复
+
+在运行目录放置 `PAUSE` 文件（`touch <运行目录>/PAUSE`，或 Web UI 的 Pause 按钮）即暂停推理和上行；删除该文件即恢复。暂停期间采集与原片跟随照常，新行继续登记，积压保存在磁盘，恢复后按原顺序处理。分析与上行线程在当前帧或当前请求完成后才停下，`stream-state.json` 的 `paused` 表示已请求暂停，`pausedSinceUnix` 为线程实际开始等待的时刻。采集结束时若仍处于暂停，`stream-match` 会一直等待恢复，不会自行退出。可在首次启动前放置 `PAUSE`，以暂停状态开始。
 
 ## 过载降级
 

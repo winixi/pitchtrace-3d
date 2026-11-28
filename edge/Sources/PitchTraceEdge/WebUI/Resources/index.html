@@ -354,6 +354,10 @@
             <button class="btn btn-danger" id="stopBtn" disabled>
                 Stop
             </button>
+            <button class="btn btn-secondary" id="pauseBtn" disabled
+                    title="Pause inference and uploads; recording continues">
+                Pause
+            </button>
         </div>
     </div>
     
@@ -374,6 +378,10 @@
             <div class="status-item">
                 <span class="status-label">Disk:</span>
                 <span class="status-value" id="diskUsage">—</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Host:</span>
+                <span class="status-value" id="hostUsage">—</span>
             </div>
         </div>
         
@@ -594,6 +602,11 @@
                 sendControl('start');
             });
             
+            document.getElementById('pauseBtn').addEventListener('click', () => {
+                const paused = !!(currentStatus && currentStatus.processing && currentStatus.processing.paused);
+                sendControl(paused ? 'resume' : 'pause');
+            });
+
             document.getElementById('stopBtn').addEventListener('click', () => {
                 if (confirm('Stop capture? Every channel seals its current segment and exits.')) {
                     sendControl('stop');
@@ -602,8 +615,9 @@
 
             // 每秒刷新可预览机位的缩略图
             setInterval(refreshPreviews, 1000);
-            // 每 5 秒刷新推理积压曲线
+            // 每 5 秒刷新推理积压曲线和整机资源
             setInterval(loadMetrics, 5000);
+            loadMetrics();
         }
 
         // ===== 采集控制 =====
@@ -636,10 +650,19 @@
             const status = currentStatus;
             const enabled = !!(status && status.controlsEnabled) && !controlPending;
             const state = status ? status.matchState : 'idle';
-            const running = state === 'capturing' || state === 'stopping';
+            const capturing = state === 'capturing' || state === 'paused';
+            const running = capturing || state === 'stopping';
             startBtn.disabled = !enabled || running || state === 'unresponsive';
-            stopBtn.disabled = !enabled || state !== 'capturing';
-            startBtn.textContent = state === 'capturing' ? 'Running' : 'Start';
+            stopBtn.disabled = !enabled || !capturing;
+            startBtn.textContent = capturing ? 'Running' : 'Start';
+            // 暂停与恢复作用于 stream-match，只需 --run-dir，与采集控制相互独立。
+            const pauseBtn = document.getElementById('pauseBtn');
+            const processing = status && status.processing;
+            const paused = !!(processing && processing.paused);
+            pauseBtn.disabled = controlPending || !processing || processing.status !== 'running';
+            pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+            pauseBtn.title = processing ? (paused ? 'Resume inference and uploads' : 'Pause inference and uploads; recording continues')
+                                        : 'Start web-ui with --run-dir to pause stream-match';
             stopBtn.textContent = state === 'stopping' ? 'Stopping…' : 'Stop';
             const hint = status && !status.controlsEnabled
                 ? 'Read-only: start web-ui with --capture-config to enable' : '';
@@ -745,7 +768,7 @@
             if (!processing) return;
             const value = (v, format) => v == null ? '—' : format(v);
             const items = [
-                ['State', capitalizeFirst(processing.status)],
+                ['State', capitalizeFirst(processing.paused && processing.status === 'running' ? 'paused' : processing.status)],
                 ['Scene Frames', processing.frames.toLocaleString()],
                 ['Processed', value(processing.processedFramesPerSecond, v => v.toFixed(1) + ' fps')],
                 ['Backlog', value(processing.backlogRows, v => `${v} rows`)],
@@ -762,14 +785,22 @@
         }
 
         async function loadMetrics() {
-            if (document.getElementById('processingSection').hidden) return;
             try {
                 const response = await fetch('/api/metrics');
                 if (!response.ok) return;
-                renderBacklogChart(await response.json());
+                const report = await response.json();
+                renderResources(report.resources);
+                if (!document.getElementById('processingSection').hidden) renderBacklogChart(report);
             } catch (error) {
                 console.warn('Failed to load metrics:', error);
             }
+        }
+
+        function renderResources(resources) {
+            const target = document.getElementById('hostUsage');
+            if (!resources) { target.textContent = '—'; return; }
+            const cpu = resources.cpuPercent == null ? 'CPU —' : `CPU ${resources.cpuPercent.toFixed(0)}%`;
+            target.textContent = `${cpu} · RAM ${(resources.memoryUsedMB / 1024).toFixed(1)} / ${(resources.memoryTotalMB / 1024).toFixed(0)} GB`;
         }
 
         // 不依赖 CDN：场边 Mac 可能离线

@@ -207,9 +207,10 @@ swift run pitchtrace-edge web-ui --help
 
 - [x] 控制接口 (启动/停止)
 - [x] 机位预览
-- [ ] 暂停/恢复处理（需接管 stream-match）
+- [x] 暂停/恢复处理（`--run-dir`，运行目录 `PAUSE` 标记）
 - [x] 性能指标 `/api/metrics`（积压、队列年龄、待上传数）
-- [ ] CPU／内存／GPU 资源指标
+- [x] 整机 CPU／内存指标（`/api/metrics` 的 `resources`）
+- [ ] GPU 指标
 - [ ] 录像回放
 - [ ] 性能监控 (Prometheus)
 - [ ] 多比赛支持

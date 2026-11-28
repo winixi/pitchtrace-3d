@@ -249,10 +249,20 @@ actor SystemMonitor {
     func currentStatus(now: Date = Date()) -> SystemStatus {
         var status = readCaptureStatus(root: root, setup: setup, process: controller?.processState ?? CaptureProcessState(), now: now)
         if let runDir {
-            let (processing, alerts) = readProcessingStatus(runDir: runDir, now: now, timestamp: status.timestamp)
-            status.processing = processing
-            status.alerts = sortedAlerts(status.alerts + alerts)
+            status = mergeProcessing(status, runDir: runDir, now: now)
         }
         return status
     }
+}
+
+/// 把 stream-match 状态并入采集状态。录像中而处理已暂停时，比赛状态显示为 paused。
+func mergeProcessing(_ capture: SystemStatus, runDir: URL, now: Date) -> SystemStatus {
+    var status = capture
+    let (processing, alerts) = readProcessingStatus(runDir: runDir, now: now, timestamp: status.timestamp)
+    status.processing = processing
+    status.alerts = sortedAlerts(status.alerts + alerts)
+    if status.matchState == "capturing", processing?.status == "running", processing?.paused == true {
+        status.matchState = "paused"
+    }
+    return status
 }

@@ -30,7 +30,26 @@ class NativeStreamTest(unittest.TestCase):
         self.assertTrue(all(p["degraded"]["skippedCameras"] == ["B"] for p in proofs))
         self.assertTrue(all([r["cameraId"] for r in p["observations"]] == ["A"] for p in proofs))
 
-    def run_stream(self, detector=None):
+    def test_pause_holds_analysis_while_recording_continues(self):
+        def pause_then_resume(run, scenes, capture):
+            (run / "PAUSE").touch()
+            time.sleep(1)
+            held = scenes()
+            state = json.loads((run / "stream-state.json").read_text())
+            self.assertTrue(state["paused"])
+            time.sleep(1.5)
+            # 暂停期间不再入库，采集仍在运行、跟随线程照常登记新行。
+            self.assertEqual(scenes(), held)
+            self.assertIsNone(capture.poll())
+            later = json.loads((run / "stream-state.json").read_text())
+            self.assertGreater(later["committedRows"], state["committedRows"])
+            self.assertIsNotNone(later["pausedSinceUnix"])
+            (run / "PAUSE").unlink()
+
+        stats, _ = self.run_stream(during=pause_then_resume)
+        self.assertFalse(stats["paused"])
+
+    def run_stream(self, detector=None, during=None):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name)
@@ -74,6 +93,8 @@ class NativeStreamTest(unittest.TestCase):
         while capture.poll() is None and scenes() == 0:
             time.sleep(.1)
         self.assertIsNone(capture.poll(), "采集结束前没有任何场景入库")
+        if during:
+            during(run, scenes, capture)
         _, capture_error = capture.communicate(timeout=60)
         self.assertEqual(capture.returncode, 0, capture_error)
         output, error = stream.communicate(timeout=120)

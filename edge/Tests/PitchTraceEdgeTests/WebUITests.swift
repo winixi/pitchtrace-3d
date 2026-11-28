@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import PitchTraceEdge
+import Swifter
 
 /// Web UI 相关测试
 ///
@@ -335,6 +336,93 @@ struct WebUITests {
         #expect(percentile([], 0.5) == nil)
         #expect(percentile([1, 2, 3, 4], 0.95) == 4)
         #expect(percentile([1, 2, 3, 4], 0.5) == 2)
+    }
+
+    @Test("PAUSE 标记的暂停、恢复与冲突")
+    func pauseAndResumeProcessing() throws {
+        let run = try temporaryDirectory()
+        let controller = ProcessingController(runDir: run)
+        #expect(throws: CaptureControlConflict.self) { try controller.resume() }
+        try controller.pause()
+        #expect(FileManager.default.fileExists(atPath: run.appendingPathComponent("PAUSE").path))
+        #expect(throws: CaptureControlConflict.self) { try controller.pause() }
+        try controller.resume()
+        #expect(!controller.isPaused)
+        let missing = ProcessingController(runDir: run.appendingPathComponent("absent"))
+        #expect(throws: CaptureControlConflict.self) { try missing.pause() }
+    }
+
+    @Test("处理暂停时提示并把录像中的比赛显示为 paused")
+    func pausedProcessingStatus() throws {
+        let root = try temporaryDirectory(), run = try temporaryDirectory()
+        let now = Date()
+        try writeJSON(root, "match.json", ["matchId": "training"])
+        try writePeriod(root, "A", "first", ["cameraId": "A", "mediaEpoch": "first", "type": "mvs", "status": "recording",
+                                             "startedUnix": now.timeIntervalSince1970 - 10, "segments": 3])
+        try writeJSON(root, "health.json", ["matchId": "training", "freeBytes": 1, "lowDisk": false,
+                                            "active": ["A": ["status": "recording"]], "finished": [:],
+                                            "updatedUnix": now.timeIntervalSince1970 - 1])
+        try writeJSON(run, "stream-state.json", ["status": "running", "frames": 10, "paused": true,
+                                                 "pausedSinceUnix": 1_795_494_597.5, "updatedUnix": now.timeIntervalSince1970])
+        let capture = readCaptureStatus(root: root, setup: nil, process: CaptureProcessState(), now: now)
+        #expect(capture.matchState == "capturing")
+        let merged = mergeProcessing(capture, runDir: run, now: now)
+        #expect(merged.matchState == "paused")
+        #expect(merged.processing?.paused == true)
+        #expect(merged.processing?.pausedSince == isoString(Date(timeIntervalSince1970: 1_795_494_597.5)))
+        #expect(merged.alerts.contains { $0.level == "info" && $0.message.contains("paused") })
+        // 暂停与否属于可广播的变化。
+        var resumed = merged
+        resumed.processing?.paused = false
+        #expect(resumed.ignoringTimestamp != merged.ignoringTimestamp)
+        try writeJSON(run, "stream-state.json", ["status": "completed", "frames": 10, "paused": true,
+                                                 "updatedUnix": now.timeIntervalSince1970])
+        #expect(mergeProcessing(capture, runDir: run, now: now).matchState == "capturing")
+    }
+
+    @Test("暂停与恢复接口复用同源检查，未配置运行目录时返回 501")
+    func processingControlRoutes() throws {
+        let request = HttpRequest()
+        request.headers = ["x-pitchtrace-control": "1"]
+        let unavailable = WebUICommand.control(request, controller: nil as ProcessingController?,
+                                               unavailable: WebUICommand.processingUnavailable) { try $0.pause() }
+        #expect(unavailable.statusCode == 501)
+        let run = try temporaryDirectory()
+        let controller = ProcessingController(runDir: run)
+        let paused = WebUICommand.control(request, controller: controller,
+                                          unavailable: WebUICommand.processingUnavailable) { try $0.pause() }
+        #expect(paused.statusCode == 200)
+        let again = WebUICommand.control(request, controller: controller,
+                                         unavailable: WebUICommand.processingUnavailable) { try $0.pause() }
+        #expect(again.statusCode == 409)
+        let forged = HttpRequest()
+        forged.headers = ["x-pitchtrace-control": "1", "origin": "http://evil.example", "host": "127.0.0.1:8765"]
+        #expect(WebUICommand.control(forged, controller: controller,
+                                     unavailable: WebUICommand.processingUnavailable) { try $0.resume() }.statusCode == 403)
+        #expect(controller.isPaused)
+    }
+
+    @Test("整机 CPU 与内存采样及指标记录")
+    func resourceSampling() throws {
+        #expect(cpuBusyPercent(previous: nil, busy: 10, total: 20) == nil)
+        #expect(cpuBusyPercent(previous: (100, 400), busy: 130, total: 500) == 30)
+        #expect(cpuBusyPercent(previous: (100, 400), busy: 90, total: 500) == nil)
+        #expect(cpuBusyPercent(previous: (100, 400), busy: 100, total: 400) == nil)
+        let sampler = ResourceSampler()
+        let first = try #require(sampler.sample())
+        #expect(first.cpuPercent == nil)
+        #expect(first.memoryUsedMB > 0 && first.memoryUsedMB <= first.memoryTotalMB)
+        Thread.sleep(forTimeInterval: 0.2)
+        let second = try #require(sampler.sample())
+        let cpu = try #require(second.cpuPercent)
+        #expect((0...100).contains(cpu))
+        let history = MetricsHistory(windowSeconds: 10)
+        let status = readCaptureStatus(root: nil, setup: nil, process: CaptureProcessState(), now: Date())
+        history.record(status, now: Date(), resources: second)
+        let report = history.report(now: Date())
+        #expect(report.resources == second)
+        #expect(report.timeSeries.last?.cpuPercent == cpu)
+        #expect(report.timeSeries.last?.memoryUsedMB == second.memoryUsedMB)
     }
 
     @Test("告警按严重程度排序且同级保持顺序")

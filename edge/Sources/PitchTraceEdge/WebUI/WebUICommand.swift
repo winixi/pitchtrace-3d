@@ -116,6 +116,7 @@ struct WebUICommand {
         }
         let previews = matchDirURL.map { PreviewRenderer(root: $0) }
         let runDirURL = runDir.map { URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL }
+        let processingController = runDirURL.map { ProcessingController(runDir: $0) }
         await SystemMonitor.shared.configure(root: matchDirURL, setup: setup, controller: controller, runDir: runDirURL)
         StatusCache.shared.update(await SystemMonitor.shared.currentStatus())
         
@@ -132,7 +133,7 @@ struct WebUICommand {
                 let now = Date()
                 let status = await SystemMonitor.shared.currentStatus(now: now)
                 StatusCache.shared.update(status)
-                MetricsHistory.shared.record(status, now: now)
+                MetricsHistory.shared.record(status, now: now, resources: ResourceSampler.shared.sample())
 
                 // 时间戳之外有变化时才广播到 WebSocket 客户端
                 if status.ignoringTimestamp != lastBroadcastedStatus?.ignoringTimestamp {
@@ -184,11 +185,19 @@ struct WebUICommand {
         }
 
         server.POST["/api/control/start"] = { request in
-            Self.control(request, controller: controller) { try $0.start() }
+            Self.control(request, controller: controller, unavailable: Self.captureUnavailable) { try $0.start() }
         }
 
         server.POST["/api/control/stop"] = { request in
-            Self.control(request, controller: controller) { try $0.stop() }
+            Self.control(request, controller: controller, unavailable: Self.captureUnavailable) { try $0.stop() }
+        }
+
+        server.POST["/api/control/pause"] = { request in
+            Self.control(request, controller: processingController, unavailable: Self.processingUnavailable) { try $0.pause() }
+        }
+
+        server.POST["/api/control/resume"] = { request in
+            Self.control(request, controller: processingController, unavailable: Self.processingUnavailable) { try $0.resume() }
         }
 
         server.GET["/api/preview/:cameraId"] = { request in
@@ -286,8 +295,11 @@ struct WebUICommand {
     ///
     /// 控制接口无认证（文档 08 第 7.1 节）。要求自定义请求头，并拒绝与 Host 不同源的 Origin，
     /// 使其他网页无法借场务浏览器发起跨站 POST。
-    static func control(_ request: HttpRequest, controller: CaptureController?,
-                        action: (CaptureController) throws -> String) -> HttpResponse {
+    static let captureUnavailable = "Start web-ui with --capture-config and --match-dir to enable capture control"
+    static let processingUnavailable = "Start web-ui with --run-dir to pause and resume stream-match"
+
+    static func control<Controller>(_ request: HttpRequest, controller: Controller?, unavailable: String,
+                                    action: (Controller) throws -> String) -> HttpResponse {
         func reply(_ status: Int, _ success: Bool, _ message: String) -> HttpResponse {
             let body = (try? JSONSerialization.data(withJSONObject: ["success": success, "message": message])) ?? Data()
             let reason = [200: "OK", 403: "Forbidden", 409: "Conflict", 500: "Internal Server Error", 501: "Not Implemented"][status] ?? ""
@@ -297,7 +309,7 @@ struct WebUICommand {
             return reply(403, false, "Control requests need the X-PitchTrace-Control header from the Web UI origin")
         }
         guard let controller else {
-            return reply(501, false, "Start web-ui with --capture-config and --match-dir to enable capture control")
+            return reply(501, false, unavailable)
         }
         do {
             let message = try action(controller)
@@ -368,7 +380,8 @@ struct WebUICommand {
             --match-dir <path>      Capture root directory to monitor (optional)
             --capture-config <file> Capture config; enables Start/Stop (needs --match-dir)
             --run-dir <path>        stream-match run directory; shows inference backlog
-                                    and pending uploads, and records /api/metrics
+                                    and pending uploads, records /api/metrics, and
+                                    enables Pause/Resume of processing
             --help, -h              Show this help message
         
         EXAMPLES:
@@ -393,8 +406,8 @@ struct SystemStatus: Codable, Equatable {
     let timestamp: String
     /// 采集目录 match.json 或采集配置中的比赛 ID，均缺省时为空。
     let matchId: String?
-    /// idle | capturing | stopping | stopped | unresponsive
-    let matchState: String
+    /// idle | capturing | paused | stopping | stopped | unresponsive。paused 表示录像中而处理已暂停。
+    var matchState: String
     /// 是否提供了采集配置，可以开始／结束采集。
     let controlsEnabled: Bool
     let cameras: [CameraStatus]
@@ -407,11 +420,9 @@ struct SystemStatus: Codable, Equatable {
         SystemStatus(timestamp: "", matchId: matchId, matchState: matchState, controlsEnabled: controlsEnabled,
                      cameras: cameras, alerts: alerts.map { Alert(level: $0.level, cameraId: $0.cameraId, message: $0.message, timestamp: "") },
                      disk: disk, processing: processing.map {
-                         ProcessingStatus(status: $0.status, frames: $0.frames, processedFramesPerSecond: $0.processedFramesPerSecond,
-                                          committedRows: $0.committedRows, consumedRows: $0.consumedRows, backlogRows: $0.backlogRows,
-                                          backlogExposureSeconds: $0.backlogExposureSeconds, lastSceneUtcUs: $0.lastSceneUtcUs,
-                                          pendingScenes: $0.pendingScenes, pendingMediaSegments: $0.pendingMediaSegments,
-                                          error: $0.error, updatedAt: nil)
+                         var copy = $0
+                         copy.updatedAt = nil
+                         return copy
                      })
     }
 

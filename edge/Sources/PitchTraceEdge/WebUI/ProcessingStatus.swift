@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// stream-match 运行目录中 stream-state.json 的摘要。
@@ -16,7 +17,47 @@ struct ProcessingStatus: Codable, Equatable {
     let pendingScenes: Int?
     let pendingMediaSegments: Int?
     let error: String?
-    let updatedAt: String?
+    var updatedAt: String?
+    /// 运行目录存在 PAUSE 标记：推理与上行暂停，录像照常。
+    var paused: Bool? = nil
+    /// 分析或上行线程实际开始等待的时刻。
+    var pausedSince: String? = nil
+}
+
+/// 通过 stream-match 运行目录中的 PAUSE 标记暂停和恢复处理，与命令行 `touch PAUSE`／删除标记等价。
+final class ProcessingController: @unchecked Sendable {
+    let runDir: URL
+    private let lock = NSLock()
+
+    init(runDir: URL) {
+        self.runDir = runDir
+    }
+
+    private var marker: URL { runDir.appendingPathComponent("PAUSE") }
+    var isPaused: Bool { FileManager.default.fileExists(atPath: marker.path) }
+
+    @discardableResult
+    func pause() throws -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isPaused else { throw CaptureControlConflict(description: "Processing is already paused") }
+        guard FileManager.default.fileExists(atPath: runDir.path) else {
+            throw CaptureControlConflict(description: "Run directory \(runDir.path) does not exist")
+        }
+        guard FileManager.default.createFile(atPath: marker.path, contents: Data()) else {
+            throw ValidationError("Cannot write pause marker \(marker.path)")
+        }
+        return "Processing paused; recording continues and the backlog will grow"
+    }
+
+    @discardableResult
+    func resume() throws -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        guard isPaused else { throw CaptureControlConflict(description: "Processing is not paused") }
+        try FileManager.default.removeItem(at: marker)
+        return "Processing resumed"
+    }
 }
 
 /// stream-match 每 0.5 秒刷新状态，超过该秒数仍为 running 即视为失联。
@@ -54,9 +95,16 @@ func readProcessingStatus(runDir: URL, now: Date, timestamp: String) -> (Process
         pendingScenes: (pending?["scenes"] as? NSNumber)?.intValue,
         pendingMediaSegments: (pending?["mediaSegments"] as? NSNumber)?.intValue,
         error: error,
-        updatedAt: updated.map { isoString(Date(timeIntervalSince1970: $0)) }
+        updatedAt: updated.map { isoString(Date(timeIntervalSince1970: $0)) },
+        paused: (state["paused"] as? NSNumber)?.boolValue,
+        pausedSince: double("pausedSinceUnix").map { isoString(Date(timeIntervalSince1970: $0)) }
     )
     var alerts: [Alert] = []
+    if status == "running", processing.paused == true {
+        alerts.append(Alert(level: "info", cameraId: nil,
+                            message: "Processing is paused; recording continues and the inference backlog will grow until Resume",
+                            timestamp: timestamp))
+    }
     switch status {
     case "unresponsive":
         alerts.append(Alert(level: "error", cameraId: nil,
@@ -85,6 +133,57 @@ struct MetricsPoint: Codable, Equatable {
     let pendingScenes: Int?
     let pendingMediaSegments: Int?
     let recordingBytesPerSecond: Double?
+    var cpuPercent: Double? = nil
+    var memoryUsedMB: Double? = nil
+}
+
+/// 整机资源占用。CPU 取两次采样间全部核心的忙碌比例，内存按活跃、联动与压缩页计已用量。
+struct ResourceUsage: Codable, Equatable {
+    let cpuPercent: Double?
+    let memoryUsedMB: Double
+    let memoryTotalMB: Double
+}
+
+/// 每秒采样一次 Mach 主机统计。首次采样没有对照，CPU 为空。
+final class ResourceSampler: @unchecked Sendable {
+    static let shared = ResourceSampler()
+    private let lock = NSLock()
+    private var previous: (busy: UInt64, total: UInt64)?
+
+    func sample() -> ResourceUsage? {
+        lock.lock()
+        defer { lock.unlock() }
+        let host = mach_host_self()
+        var load = host_cpu_load_info()
+        var count = mach_msg_type_number_t(MemoryLayout<host_cpu_load_info>.stride / MemoryLayout<integer_t>.stride)
+        let cpuResult = withUnsafeMutablePointer(to: &load) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { host_statistics(host, HOST_CPU_LOAD_INFO, $0, &count) }
+        }
+        var cpu: Double?
+        if cpuResult == KERN_SUCCESS {
+            let ticks = load.cpu_ticks
+            let user = UInt64(ticks.0), system = UInt64(ticks.1), idle = UInt64(ticks.2), nice = UInt64(ticks.3)
+            let busy = user + system + nice, total = busy + idle
+            cpu = cpuBusyPercent(previous: previous, busy: busy, total: total)
+            previous = (busy, total)
+        }
+        var vm = vm_statistics64()
+        var vmCount = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.stride / MemoryLayout<integer_t>.stride)
+        let vmResult = withUnsafeMutablePointer(to: &vm) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(vmCount)) { host_statistics64(host, HOST_VM_INFO64, $0, &vmCount) }
+        }
+        guard vmResult == KERN_SUCCESS else { return nil }
+        let page = Double(getpagesize())
+        let used = Double(UInt64(vm.active_count) + UInt64(vm.wire_count) + UInt64(vm.compressor_page_count)) * page
+        return ResourceUsage(cpuPercent: cpu, memoryUsedMB: used / 1_048_576,
+                             memoryTotalMB: Double(ProcessInfo.processInfo.physicalMemory) / 1_048_576)
+    }
+}
+
+/// 两次累计 tick 之差的忙碌占比；计数回绕或无增量时为空。
+func cpuBusyPercent(previous: (busy: UInt64, total: UInt64)?, busy: UInt64, total: UInt64) -> Double? {
+    guard let previous, total > previous.total, busy >= previous.busy else { return nil }
+    return Double(busy - previous.busy) / Double(total - previous.total) * 100
 }
 
 struct MetricsSummary: Codable, Equatable {
@@ -97,6 +196,8 @@ struct MetricsSummary: Codable, Equatable {
 struct MetricsReport: Codable, Equatable {
     let timestamp: String
     let windowSeconds: Int
+    /// 最近一次整机资源采样。
+    let resources: ResourceUsage?
     let summary: MetricsSummary
     let timeSeries: [MetricsPoint]
 }
@@ -107,12 +208,13 @@ final class MetricsHistory: @unchecked Sendable {
     let windowSeconds: Int
     private let lock = NSLock()
     private var points: [MetricsPoint] = []
+    private var latestResources: ResourceUsage?
 
     init(windowSeconds: Int = 300) {
         self.windowSeconds = windowSeconds
     }
 
-    func record(_ status: SystemStatus, now: Date) {
+    func record(_ status: SystemStatus, now: Date, resources: ResourceUsage? = nil) {
         let processing = status.processing?.status == "running" ? status.processing : nil
         let point = MetricsPoint(
             timestampMs: Int64(now.timeIntervalSince1970 * 1000),
@@ -121,10 +223,13 @@ final class MetricsHistory: @unchecked Sendable {
             processedFramesPerSecond: processing?.processedFramesPerSecond,
             pendingScenes: processing?.pendingScenes,
             pendingMediaSegments: processing?.pendingMediaSegments,
-            recordingBytesPerSecond: status.disk.recordingBytesPerSecond
+            recordingBytesPerSecond: status.disk.recordingBytesPerSecond,
+            cpuPercent: resources?.cpuPercent,
+            memoryUsedMB: resources?.memoryUsedMB
         )
         lock.lock()
         defer { lock.unlock() }
+        if let resources { latestResources = resources }
         points.append(point)
         let oldest = point.timestampMs - Int64(windowSeconds) * 1000
         points.removeAll { $0.timestampMs <= oldest }
@@ -132,12 +237,13 @@ final class MetricsHistory: @unchecked Sendable {
 
     func report(now: Date) -> MetricsReport {
         lock.lock()
-        let series = points
+        let series = points, resources = latestResources
         lock.unlock()
         let ages = series.compactMap(\.backlogExposureSeconds).sorted()
         return MetricsReport(
             timestamp: isoString(now),
             windowSeconds: windowSeconds,
+            resources: resources,
             summary: MetricsSummary(samples: series.count,
                                     backlogExposureSecondsP50: percentile(ages, 0.50),
                                     backlogExposureSecondsP95: percentile(ages, 0.95),

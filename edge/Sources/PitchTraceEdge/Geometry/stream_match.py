@@ -40,8 +40,10 @@ def capture_done(root):
 class JournalReader:
     """采集跟随线程写磁盘日志，分析线程按已发布行数消费，积压只占磁盘。"""
 
-    def __init__(self, path):
+    def __init__(self, path, hold=None):
         self.path = path
+        # 暂停时分析线程在帧边界等待；跟随线程照常登记新行，积压留在磁盘。
+        self.hold = hold or (lambda: None)
         self.ready = threading.Condition()
         self.count = 0
         self.consumed = 0
@@ -83,6 +85,7 @@ class JournalReader:
                         if self.error:
                             raise self.error
                         return
+                self.hold()
                 line = journal.readline()
                 if not line.endswith(b"\n"):
                     raise ValueError("已提交直播原帧行不完整")
@@ -211,10 +214,12 @@ class MediaQueue:
         return 1
 
 
-def upload_loop(name, send, finished):
+def upload_loop(name, send, finished, hold=None):
     delay = .5
     last_error = None
     while True:
+        if hold:
+            hold()
         # 提前读取状态，确保退出前至少检查一次生产者的最终提交。
         final = finished.is_set()
         try:
@@ -270,6 +275,15 @@ def stream_match(path, capture, run, executable):
 
     run.mkdir(parents=True, exist_ok=True)
     db, media = run / "scenes.sqlite", run / "media"
+    pause_marker = run / "PAUSE"
+    paused_since = {}
+
+    def hold():
+        """存在 PAUSE 标记时暂停推理和上行，录制与原片跟随不受影响。删除标记即恢复。"""
+        while pause_marker.exists():
+            paused_since.setdefault("unix", time.time())
+            time.sleep(.25)
+        paused_since.clear()
     with lock(run / ".stream-match.lock"):
         marker = run / "stream-id.json"
         identity = {"matchId": config.match_id, "streamEpoch": config.stream_epoch,
@@ -278,7 +292,8 @@ def stream_match(path, capture, run, executable):
             if read_object(marker) != identity:
                 raise ValueError("直播运行目录已绑定另一输入或比赛周期")
         else:
-            if any(p.name != ".stream-match.lock" for p in run.iterdir()):
+            # 允许事先放置 PAUSE，以暂停状态开始。
+            if any(p.name not in (".stream-match.lock", "PAUSE") for p in run.iterdir()):
                 raise ValueError("首次直播运行需要新的或空的输出目录")
             write_json(marker, identity)
         processing = {k: v for k, v in settings.items() if k not in ("gateway", "backfillBytesPerSecond", "mediaBytesPerSecond")}
@@ -299,7 +314,7 @@ def stream_match(path, capture, run, executable):
                 media_queue.register(gateway)
 
             stop, finished = threading.Event(), threading.Event()
-            journal = JournalReader(media / "frames.ndjson")
+            journal = JournalReader(media / "frames.ndjson", hold)
 
             def ingest():
                 with SceneArchive(db) as local:
@@ -319,7 +334,7 @@ def stream_match(path, capture, run, executable):
                         queue = MediaQueue(local.db, media_rate)
                         def send():
                             return queue.send_one(gateway, config.match_id, media)
-                    upload_loop(which, send, finished)
+                    upload_loop(which, send, finished, hold)
 
             started = time.monotonic()
             state = {**identity, "status": "running", "frames": 0, "lastSceneUtcUs": None}
@@ -338,6 +353,8 @@ def stream_match(path, capture, run, executable):
             def save_status():
                 if degradation is not None:
                     state["degradation"] = degradation.snapshot()
+                state["paused"] = pause_marker.exists()
+                state["pausedSinceUnix"] = paused_since.get("unix") if state["paused"] else None
                 snapshot = {**state, **journal.metrics(), "updatedUnix": time.time(),
                             "processedFramesPerSecond": state["frames"] / max(.001, time.monotonic() - started)}
                 if gateway:

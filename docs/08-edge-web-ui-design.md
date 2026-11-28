@@ -2,7 +2,7 @@
 
 **版本**　v0.1 草案  
 **更新**　2025-01-20  
-**状态**　部分实现：状态、告警、开始／结束采集、预览与推理积压指标已实现，暂停／恢复、资源指标与配置界面仍在设计中
+**状态**　部分实现：状态、告警、开始／结束采集、暂停／恢复处理、预览、推理积压与整机 CPU／内存指标已实现，GPU 指标与配置界面仍在设计中
 
 ## 1. 目标与范围
 
@@ -191,7 +191,7 @@ pitchtrace-edge web-ui --bind 127.0.0.1:8765 --match-dir /path/to/match
 
 ### 3.2 控制 API
 
-> **已实现的口径**：采集配置只取自 `web-ui --capture-config`，忽略请求体中的路径，避免经 HTTP 让 Edge 读取任意文件。请求须带 `X-PitchTrace-Control: 1` 且同源，否则 403；未配置采集返回 501；已有采集或尚在启动时返回 409。停止通过写入采集目录的 `STOP` 标记完成。`pause`／`resume` 未实现。
+> **已实现的口径**：采集配置只取自 `web-ui --capture-config`，忽略请求体中的路径，避免经 HTTP 让 Edge 读取任意文件。请求须带 `X-PitchTrace-Control: 1` 且同源，否则 403；未配置采集返回 501；已有采集或尚在启动时返回 409。停止通过写入采集目录的 `STOP` 标记完成。`pause`／`resume` 需 `web-ui --run-dir`，分别在 stream-match 运行目录写入、删除 `PAUSE` 标记，未配置时返回 501，重复暂停或未暂停时恢复返回 409。暂停期间分析与上行在帧边界等待，采集与原片跟随照常，积压留在磁盘；`stream-state.json` 给出 `paused` 与 `pausedSinceUnix`，录像中且处理暂停时 `matchState` 为 `paused`。
 
 **POST /api/control/start**
 
@@ -235,7 +235,7 @@ pitchtrace-edge web-ui --bind 127.0.0.1:8765 --match-dir /path/to/match
 
 ### 3.3 性能指标 API
 
-> **已实现的口径**：需 `web-ui --run-dir <stream-match 运行目录>`。Edge 侧不测量曝光到浏览器首次绘制的延迟（由 Live 测时），因此不提供下例的 `latency`；改为报告 Edge 推理队列年龄 `backlogExposureSeconds` 的 P50／P95／最大值。`timeSeries` 每点含 `backlogRows`、`backlogExposureSeconds`、`processedFramesPerSecond`、`pendingScenes`、`pendingMediaSegments`、`recordingBytesPerSecond`，未知值省略。CPU、内存与 GPU 指标未实现。
+> **已实现的口径**：需 `web-ui --run-dir <stream-match 运行目录>`。Edge 侧不测量曝光到浏览器首次绘制的延迟（由 Live 测时），因此不提供下例的 `latency`；改为报告 Edge 推理队列年龄 `backlogExposureSeconds` 的 P50／P95／最大值。`timeSeries` 每点含 `backlogRows`、`backlogExposureSeconds`、`processedFramesPerSecond`、`pendingScenes`、`pendingMediaSegments`、`recordingBytesPerSecond`、`cpuPercent`、`memoryUsedMB`，未知值省略。`resources` 为最近一次整机采样：CPU 取相邻两次 Mach 主机统计间全部核心的忙碌比例（首次采样为空），内存按活跃、联动与压缩页计已用量，`memoryTotalMB` 为物理内存。资源指标不依赖 `--run-dir`。GPU 指标未实现。
 
 **GET /api/metrics**
 
