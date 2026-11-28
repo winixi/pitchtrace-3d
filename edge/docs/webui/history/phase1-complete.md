@@ -201,10 +201,10 @@ curl -s http://127.0.0.1:8765/api/status | \
 ## 📚 相关文档
 
 - **技术设计**: `docs/08-edge-web-ui-design.md`（11 章完整设计）
-- **实施检查清单**: `edge/WebUI-Implementation-Checklist.md`
-- **快速开始**: `edge/WebUI-Quick-Start.md`
-- **状态跟踪**: `edge/WebUI-Phase1-Status.md`（问题诊断记录）
-- **本完成报告**: `edge/WebUI-Phase1-Complete.md`
+- **实施检查清单**: `edge/implementation-checklist.md`
+- **快速开始**: `edge/quick-start.md`
+- **状态跟踪**: `edge/phase1-status.md`（问题诊断记录）
+- **本完成报告**: `edge/phase1-complete.md`
 
 ---
 

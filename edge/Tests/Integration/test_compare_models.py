@@ -3,7 +3,7 @@ import importlib.util
 from pathlib import Path
 import unittest
 
-path = Path(__file__).resolve().parents[2] / "benchmarks/compare-models.py"
+path = Path(__file__).resolve().parents[2] / "scripts/benchmarks/compare-models.py"
 spec = importlib.util.spec_from_file_location("compare_models", path)
 compare = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(compare)

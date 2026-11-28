@@ -2,7 +2,7 @@
 /**
  * WebSocket 测试客户端
  * 
- * 用法：node test-websocket.mjs
+ * 用法：node edge/scripts/webui/test-websocket.mjs
  */
 
 import WebSocket from 'ws';

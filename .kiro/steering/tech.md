@@ -15,7 +15,7 @@ swift run  --package-path edge pitchtrace-edge --help
 
 - CLI 子命令覆盖：`replay`（录像重放）、`audit-sync`、`audit-visibility`、`calibrate-intrinsics`、`calibrate`、`audit-calibration`、`capture`／`attach-exposures`、`process-match`／`reconstruct-match`／`run-match`／`stream-match`、`evaluate-match`、`retention`、`export-scenes`／`publish-scenes`／`compare-scenes`／`scene-evidence`／`match-info`、`vision-worker`、`publish-media`。入口见 `edge/Sources/PitchTraceEdge/PitchTraceEdge.swift`。
 - 几何、采集编排与场景归档由随包分发的 Python 脚本实现（`edge/Sources/PitchTraceEdge/Geometry/`），经 `runPython` 调用，需 Python 3.10+、OpenCV（FFmpeg 后端）、NumPy、ffprobe。
-- 完整用法与样例生成见 `edge/README.md` 及 `edge/*.md` 各专题文档（capture、run-match、stream-match、scene-archive、vision、tracking、analysis、evaluation、calibration-audit、match-config）。
+- 完整用法与样例生成见 `edge/README.md` 及 `edge/docs/*.md` 各专题文档（capture、run-match、stream-match、scene-archive、vision-detection-models、player-ball-tracking、identity-pose-events、ground-truth-evaluation、calibration-audit、match-config）。
 - 仍为设计中：厂商 SDK／AVFoundation／RTSP 的实机采集对时、Core ML+Vision 单视角检测、C++/OpenCV 三维融合的正式接入（见 AGENTS.md 实现状态表）。
 
 ## PitchTrace Live · 浏览器前端（`live/web/`，Vite + Three.js + hls.js）

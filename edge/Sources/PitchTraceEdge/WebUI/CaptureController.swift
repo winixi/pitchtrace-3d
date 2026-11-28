@@ -7,7 +7,7 @@ struct CaptureControlConflict: Error, CustomStringConvertible {
 
 /// 为场务启动和结束 `capture`。
 ///
-/// 结束采集只写入采集目录的 STOP 标记，与 `capture.md` 记载的有序停止方式相同，
+/// 结束采集只写入采集目录的 STOP 标记，与 `edge/docs/capture.md` 记载的有序停止方式相同，
 /// 因此也能结束 Web UI 之外启动的采集。Web UI 进程退出不会结束采集。
 final class CaptureController: @unchecked Sendable {
     let executable: URL

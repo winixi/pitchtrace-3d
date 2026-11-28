@@ -186,7 +186,7 @@ $ swift test --package-path edge --disable-xctest
 ### 集成测试
 
 ```bash
-$ ./edge/verify-webui-complete.sh
+$ ./edge/scripts/webui/verify-webui.sh
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   ✅ 完整验证通过
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -248,14 +248,14 @@ $ ./edge/verify-webui-complete.sh
 
 | 文件 | 页数 | 说明 |
 |-----|------|------|
-| WebUI-Phase1-2-Summary.md | 2 页 | 阶段 1-2 过程记录 |
-| WebUI-Final-Report.md | 3 页 | 阶段 1 交付报告 |
-| WebUI-Phase2-Complete.md | 5 页 | 阶段 2 完成报告 |
-| WebUI-Phase3-Plan.md | 4 页 | 阶段 3 实施计划 |
-| WebUI-Phase3-Complete.md | 8 页 | 阶段 3 完成报告 |
-| WebUI-Phase3.5-Complete.md | 7 页 | 阶段 3.5 完成报告 |
-| WebUI-Summary.md | 6 页 | 三阶段总览 |
-| WebUI-FINAL.md | 本文件 | 最终交付报告 |
+| phase1-2-summary.md | 2 页 | 阶段 1-2 过程记录 |
+| final-report.md | 3 页 | 阶段 1 交付报告 |
+| phase2-complete.md | 5 页 | 阶段 2 完成报告 |
+| phase3-plan.md | 4 页 | 阶段 3 实施计划 |
+| phase3-complete.md | 8 页 | 阶段 3 完成报告 |
+| phase3.5-complete.md | 7 页 | 阶段 3.5 完成报告 |
+| summary-three-phases.md | 6 页 | 三阶段总览 |
+| final-delivery.md | 本文件 | 最终交付报告 |
 | **总计** | **~35 页** | **完整文档** |
 
 ---
@@ -352,13 +352,13 @@ http://127.0.0.1:8765
 
 ```bash
 # 完整验证（推荐）
-./edge/verify-webui-complete.sh
+./edge/scripts/webui/verify-webui.sh
 
 # Phase 2 验证（实时数据）
-./edge/verify-webui-phase2.sh
+./edge/scripts/webui/verify-webui-phase2.sh
 
 # Phase 3 验证（WebSocket）
-./edge/verify-webui-phase3.sh
+./edge/scripts/webui/verify-webui-phase3.sh
 ```
 
 ### 浏览器开发者工具
@@ -570,14 +570,14 @@ edge/
 
 ```
 edge/
-├── WebUI-Phase1-2-Summary.md         阶段 1-2 过程记录
-├── WebUI-Final-Report.md             阶段 1 交付报告
-├── WebUI-Phase2-Complete.md          阶段 2 完成报告
-├── WebUI-Phase3-Plan.md              阶段 3 实施计划
-├── WebUI-Phase3-Complete.md          阶段 3 完成报告
-├── WebUI-Phase3.5-Complete.md        阶段 3.5 完成报告
-├── WebUI-Summary.md                  三阶段总览
-└── WebUI-FINAL.md                    本文件（最终报告）
+├── phase1-2-summary.md         阶段 1-2 过程记录
+├── final-report.md             阶段 1 交付报告
+├── phase2-complete.md          阶段 2 完成报告
+├── phase3-plan.md              阶段 3 实施计划
+├── phase3-complete.md          阶段 3 完成报告
+├── phase3.5-complete.md        阶段 3.5 完成报告
+├── summary-three-phases.md                  三阶段总览
+└── final-delivery.md                    本文件（最终报告）
 ```
 
 ### 工具脚本
@@ -586,7 +586,7 @@ edge/
 edge/
 ├── verify-webui-phase2.sh            阶段 2 验证
 ├── verify-webui-phase3.sh            阶段 3 验证
-├── verify-webui-complete.sh          完整验证
+├── verify-webui.sh          完整验证
 ├── test-websocket.py                 Python 测试客户端
 └── test-websocket.mjs                Node.js 测试客户端
 ```
@@ -619,13 +619,13 @@ http://127.0.0.1:8765
 
 **运行验证**:
 ```bash
-./edge/verify-webui-complete.sh
+./edge/scripts/webui/verify-webui.sh
 ```
 
 **查看文档**:
 ```bash
-cat edge/WebUI-Summary.md
-cat edge/WebUI-Phase3.5-Complete.md
+cat edge/summary-three-phases.md
+cat edge/phase3.5-complete.md
 ```
 
 ---

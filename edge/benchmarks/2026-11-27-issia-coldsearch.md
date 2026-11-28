@@ -64,14 +64,14 @@ swift build --package-path edge -c release
 inputs=edge/benchmarks/runs/2026-11-27-issia-inputs
 videos="$inputs/dataset/issia"
 out=$(mktemp -d)
-python3 -B edge/benchmarks/profile-vision-stages.py "$videos" "$out/stages-individual.ndjson" \
+python3 -B edge/scripts/benchmarks/profile-vision-stages.py "$videos" "$out/stages-individual.ndjson" \
   --ball-search --ocr-mode individual
-python3 -B edge/benchmarks/profile-vision-stages.py "$videos" "$out/stages-batch.ndjson" \
+python3 -B edge/scripts/benchmarks/profile-vision-stages.py "$videos" "$out/stages-batch.ndjson" \
   --ball-search --ocr-mode batch
-python3 -B edge/benchmarks/four-camera-inference.py \
+python3 -B edge/scripts/benchmarks/four-camera-inference.py \
   --video "$videos/cam3.avi" "$videos/cam4.avi" "$videos/cam5.avi" "$videos/cam6.avi" \
   --start 16 16 16 16 --seconds 30 --hz 10 --workers 1 4 --production-groups --stage-times \
   --output "$out/performance.json" --traces "$out/timing"
-python3 -B edge/benchmarks/ball-search-recall.py "$inputs/issia-recall/dataset.json" \
+python3 -B edge/scripts/benchmarks/ball-search-recall.py "$inputs/issia-recall/dataset.json" \
   "$out/recall" --parallel-clips 2
 ```

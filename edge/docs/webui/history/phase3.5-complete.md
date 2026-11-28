@@ -437,7 +437,7 @@ const worker = new SharedWorker('ws-worker.js');
 | 文件 | 状态 | 说明 |
 |-----|------|------|
 | `index.html` | ✅ 修改 | +165 行 WebSocket 客户端，+30 行 CSS |
-| `WebUI-Phase3.5-Complete.md` | ✅ 新建 | 本文件 |
+| `phase3.5-complete.md` | ✅ 新建 | 本文件 |
 | `verify-webui-phase3.5.sh` | ✅ 新建 | 自动化验证脚本 |
 
 ## 验收标准

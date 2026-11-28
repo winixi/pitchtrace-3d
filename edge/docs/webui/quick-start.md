@@ -122,8 +122,8 @@ swift build
 
 ### 开发者文档
 
-完整设计文档：[docs/08-edge-web-ui-design.md](../docs/08-edge-web-ui-design.md)
+完整设计文档：[docs/08-edge-web-ui-design.md](../../../docs/08-edge-web-ui-design.md)
 
-实施检查清单：[WebUI-Implementation-Checklist.md](WebUI-Implementation-Checklist.md)
+实施检查清单：[implementation-checklist.md](history/implementation-checklist.md)
 
-进展报告：[WebUI-Phase1-Progress.md](WebUI-Phase1-Progress.md)
+进展报告：[phase1-progress.md](history/phase1-progress.md)

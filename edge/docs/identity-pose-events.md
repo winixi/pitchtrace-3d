@@ -1,6 +1,6 @@
 # 离线比赛的身份、骨骼与动作候选
 
-比赛重建按曝光时刻更新每条场地轨迹。网络快照使用 v2 的 `teamId`、`number`、`rosterId`、`yawRad`、`bones`、`events`。Edge 归档可按同一帧键取回测量、参与机位、原始二维标注、媒体周期及原帧 PTS。[场景契约](../schemas/v2/scene-frame.schema.json)
+比赛重建按曝光时刻更新每条场地轨迹。网络快照使用 v2 的 `teamId`、`number`、`rosterId`、`yawRad`、`bones`、`events`。Edge 归档可按同一帧键取回测量、参与机位、原始二维标注、媒体周期及原帧 PTS。[场景契约](../../schemas/v2/scene-frame.schema.json)
 
 ## 球队、背号与换人
 

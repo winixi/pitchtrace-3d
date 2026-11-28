@@ -36,10 +36,19 @@ pitchtrace-3d/
 │   │   ├── PitchTraceEdgeTests/        Swift Testing 单元测试（录像、曝光、媒体、可见性等）
 │   │   └── Integration/                集成测试脚本（.mjs 与 .py）
 │   ├── samples/                 样例录像与四路 30 分钟基准数据
-│   ├── benchmarks/              实测耗时与内存数据
-│   └── *.md                     专题说明（capture / run-match / stream-match /
-│                                vision / tracking / analysis / evaluation /
-│                                calibration-audit / match-config / scene-archive）
+│   ├── benchmarks/              实测报告与数据（.md／.json，不含脚本）
+│   ├── models/                  模型准备脚本与清单（prepare-yolo11n.py）
+│   ├── scripts/
+│   │   ├── package-preview.sh   预览包打包（edge-release 工作流调用）
+│   │   ├── benchmarks/          基准与对照脚本（ball-search-recall、compare-models 等）
+│   │   └── webui/               Web UI 验证与 WebSocket 联调脚本
+│   └── docs/                    专题说明
+│       ├── capture / run-match / stream-match / scene-archive / match-config /
+│       │   calibration-audit / vision-detection-models / player-ball-tracking /
+│       │   identity-pose-events / ground-truth-evaluation（.md）
+│       ├── implementation-gaps.md   实现缺口
+│       ├── preview-release-readme.md  预览包随附 README
+│       └── webui/               Web UI 使用文档；history/ 为各阶段历史记录
 └── live/                        PitchTrace Live · 直播与观赛
     ├── web/                     浏览器前端（Vite + Three.js + hls.js）
     │   ├── src/                 app / match / receiver / live-frame / pitch / rig /

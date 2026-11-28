@@ -80,10 +80,10 @@ capture 输出目录 (health.json、raw/<机位>/<周期>/status.json、已封�
 
 | 文档 | 说明 |
 |-----|------|
-| [WebUI-FINAL.md](WebUI-FINAL.md) | 最终交付报告 |
-| [WebUI-Demo-Guide.md](WebUI-Demo-Guide.md) | 演示指南 |
-| [WebUI-Summary.md](WebUI-Summary.md) | 三阶段总览 |
-| [WebUI-Phase3.5-Complete.md](WebUI-Phase3.5-Complete.md) | Phase 3.5 详情 |
+| [final-delivery.md](history/final-delivery.md) | 最终交付报告 |
+| [demo-guide.md](demo-guide.md) | 演示指南 |
+| [summary-three-phases.md](history/summary-three-phases.md) | 三阶段总览 |
+| [phase3.5-complete.md](history/phase3.5-complete.md) | Phase 3.5 详情 |
 
 ---
 
@@ -91,7 +91,7 @@ capture 输出目录 (health.json、raw/<机位>/<周期>/status.json、已封�
 
 ```bash
 # 完整验证
-./verify-webui-complete.sh
+./edge/scripts/webui/verify-webui.sh
 
 # 单元测试
 swift test --package-path edge --disable-xctest
@@ -254,12 +254,12 @@ swift run pitchtrace-edge web-ui --help
 
 **验证功能**:
 ```bash
-./verify-webui-complete.sh
+./edge/scripts/webui/verify-webui.sh
 ```
 
 **查看文档**:
 ```bash
-cat WebUI-FINAL.md
+cat final-delivery.md
 ```
 
 ---

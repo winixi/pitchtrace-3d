@@ -8,6 +8,7 @@ Complete documentation for PitchTrace 3D, covering requirements, design, develop
 - [01-requirements.md](01-requirements.md) — Detailed requirements (R01–R12) and acceptance criteria (Chinese)
 - [04-performance-requirements.md](04-performance-requirements.md) — Performance targets and measurement methods (Chinese)
 - [05-hardware-selection.md](05-hardware-selection.md) — Camera and compute hardware selection criteria (Chinese)
+- [09-eight-camera-hardware-architecture.md](09-eight-camera-hardware-architecture.md) — 8-camera network & distributed edge hardware architecture options (Chinese)
 
 ### Technical Design
 - [02-technical-design.md](02-technical-design.md) — System architecture, module boundaries, data contracts (Chinese)

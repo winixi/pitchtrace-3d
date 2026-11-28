@@ -12,7 +12,7 @@ import time
 
 import cv2
 
-EDGE = Path(__file__).resolve().parents[1]
+EDGE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(EDGE / "Sources/PitchTraceEdge/Geometry"))
 from ball_search import BallSearch
 from observations import Detector, validate_observation

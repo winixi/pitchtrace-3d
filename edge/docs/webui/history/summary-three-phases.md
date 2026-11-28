@@ -254,22 +254,22 @@ nc 127.0.0.1 8765 < /tmp/ws-handshake.txt
 
 **方法 2: Python**（需 `pip3 install websockets`）
 ```bash
-python3 edge/test-websocket.py
+python3 edge/scripts/webui/test-websocket.py
 ```
 
 **方法 3: Node.js**（需 `npm install ws`）
 ```bash
-node edge/test-websocket.mjs
+node edge/scripts/webui/test-websocket.mjs
 ```
 
 ### 验证脚本
 
 ```bash
 # Phase 2 验证（实时数据）
-./edge/verify-webui-phase2.sh
+./edge/scripts/webui/verify-webui-phase2.sh
 
 # Phase 3 验证（WebSocket）
-./edge/verify-webui-phase3.sh
+./edge/scripts/webui/verify-webui-phase3.sh
 ```
 
 ---
@@ -289,12 +289,12 @@ edge/
 ├── Tests/PitchTraceEdgeTests/
 │   ├── WebUITests.swift                     8 个测试用例
 │   └── ...（其他 30 个测试）
-├── WebUI-Phase1-2-Summary.md                阶段 1-2 过程记录
-├── WebUI-Final-Report.md                    阶段 1 交付报告
-├── WebUI-Phase2-Complete.md                 阶段 2 完成报告
-├── WebUI-Phase3-Plan.md                     阶段 3 实施计划
-├── WebUI-Phase3-Complete.md                 阶段 3 完成报告
-├── WebUI-Summary.md                         本文件（总览）
+├── phase1-2-summary.md                阶段 1-2 过程记录
+├── final-report.md                    阶段 1 交付报告
+├── phase2-complete.md                 阶段 2 完成报告
+├── phase3-plan.md                     阶段 3 实施计划
+├── phase3-complete.md                 阶段 3 完成报告
+├── summary-three-phases.md                         本文件（总览）
 ├── verify-webui-phase2.sh                   阶段 2 验证脚本
 ├── verify-webui-phase3.sh                   阶段 3 验证脚本
 ├── test-websocket.py                        Python WebSocket 客户端
@@ -506,7 +506,7 @@ http://127.0.0.1:8765
 ### 4. 验证
 ```bash
 # 完整验证
-./edge/verify-webui-phase3.sh
+./edge/scripts/webui/verify-webui-phase3.sh
 
 # 手动测试 WebSocket
 nc 127.0.0.1 8765 < /tmp/ws-handshake.txt

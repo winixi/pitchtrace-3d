@@ -324,6 +324,6 @@ func makeMVSCamera(serial: String, width: Int, height: Int, pixelFormat: CameraP
 /// 未链接 MVS SDK 的构建只能使用模拟相机和 FFmpeg 输入。
 func makeMVSCamera(serial: String, width: Int, height: Int, pixelFormat: CameraPixelFormat,
                    framerate: Double, settings: MVSSettings, requirePTP: Bool) throws -> CameraFrameSource {
-    throw RecordingError("此 Edge 构建未包含海康 MVS SDK。安装 MvCameraControl.framework 后按 edge/capture.md 重新构建")
+    throw RecordingError("此 Edge 构建未包含海康 MVS SDK。安装 MvCameraControl.framework 后按 edge/docs/capture.md 重新构建")
 }
 #endif

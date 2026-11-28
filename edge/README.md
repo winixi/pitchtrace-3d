@@ -15,7 +15,7 @@ swift test --package-path edge --disable-xctest
 
 ## 发布离线 CLI 预览版
 
-在包含[发布工作流](../.github/workflows/edge-release.yml)的待发布提交上创建并推送新的预发布标签，例如 `edge-v0.1.0-alpha.2` 或 `edge-v0.2.0-rc.1`。GitHub Actions 会在 Apple Silicon 运行器上构建 Release CLI，将资源包、许可证和样例一同压缩，再从解压目录运行双机位样例。通过后，对应的 GitHub 预发布将提供 ZIP 和同名的 `.zip.sha256` 校验文件。[包内使用说明与已知限制](preview.md)
+在包含[发布工作流](../.github/workflows/edge-release.yml)的待发布提交上创建并推送新的预发布标签，例如 `edge-v0.1.0-alpha.2` 或 `edge-v0.2.0-rc.1`。GitHub Actions 会在 Apple Silicon 运行器上构建 Release CLI，将资源包、许可证和样例一同压缩，再从解压目录运行双机位样例。通过后，对应的 GitHub 预发布将提供 ZIP 和同名的 `.zip.sha256` 校验文件。[包内使用说明与已知限制](docs/preview-release-readme.md)
 
 预发布公开后，工作流会更新 `main` 上两份根 README 的下载链接、校验链接和离线快速开始命令，并提交这两份文件。重跑较早的标签时，首页会继续指向较新的预发布。
 
@@ -38,13 +38,13 @@ edge/.build/debug/pitchtrace-edge evaluate-match "$trial_dir/run/scenes.sqlite" 
 
 | 环节 | 命令与输入 |
 | --- | --- |
-| 采集和对时 | `capture` 独立运行各机位，`attach-exposures` 核验设备逐帧时钟，`replay` 导出原片。见[采集与健康状态](capture.md)。 |
-| 配置与标定 | `calibrate-intrinsics`、`calibrate` 估计参数，`audit-calibration` 复查移机和几何覆盖。比赛按曝光选取有效机位。见[巡检](calibration-audit.md)和[比赛配置](match-config.md)。 |
-| 视觉与重建 | `process-match` 从录像解码并观测；`reconstruct-match` 接受按曝光排序的二维 NDJSON。见[检测与模型](vision.md)、[轨迹融合](tracking.md)和[身份、姿态与动作](analysis.md)。 |
-| 编排、上行与恢复 | `run-match` 处理已有录像或启动采集，可分别提交场景及原片。`stream-match` 跟随正在采集的媒体段。见[离线运行](run-match.md)、[连续处理](stream-match.md)和[场景归档](scene-archive.md)。 |
-| 复核与留存 | `scene-evidence` 取原帧和关节证据，`match-info` 取运行版本，`export-scenes` 过滤导出，`compare-scenes` 比对复算结果，`evaluate-match` 计量独立真值，`retention` 预览到期清理。见[真值评估](evaluation.md)和[场景归档](scene-archive.md)。 |
+| 采集和对时 | `capture` 独立运行各机位，`attach-exposures` 核验设备逐帧时钟，`replay` 导出原片。见[采集与健康状态](docs/capture.md)。 |
+| 配置与标定 | `calibrate-intrinsics`、`calibrate` 估计参数，`audit-calibration` 复查移机和几何覆盖。比赛按曝光选取有效机位。见[巡检](docs/calibration-audit.md)和[比赛配置](docs/match-config.md)。 |
+| 视觉与重建 | `process-match` 从录像解码并观测；`reconstruct-match` 接受按曝光排序的二维 NDJSON。见[检测与模型](docs/vision-detection-models.md)、[轨迹融合](docs/player-ball-tracking.md)和[身份、姿态与动作](docs/identity-pose-events.md)。 |
+| 编排、上行与恢复 | `run-match` 处理已有录像或启动采集，可分别提交场景及原片。`stream-match` 跟随正在采集的媒体段。见[离线运行](docs/run-match.md)、[连续处理](docs/stream-match.md)和[场景归档](docs/scene-archive.md)。 |
+| 复核与留存 | `scene-evidence` 取原帧和关节证据，`match-info` 取运行版本，`export-scenes` 过滤导出，`compare-scenes` 比对复算结果，`evaluate-match` 计量独立真值，`retention` 预览到期清理。见[真值评估](docs/ground-truth-evaluation.md)和[场景归档](docs/scene-archive.md)。 |
 
-比赛配置默认使用系统 Vision 检测人体、估计姿态和识别号码。用 `detector.modelManifest` 接入 Core ML 人球模型后，每个选中帧只跑一次全图检测，人框供姿态、队色和号码复用。可开启 `detector.ballSearch`，在全图漏球时回到该机位的原图裁片查找小球。已有足球专用模型继续用 `detector.model`，受控录像可用 `detector.ballHSV` 按颜色找球。`detector.teamColors` 将球队 ID 映射到样衣 sRGB 三元组（0–255），色差大或两队难以区分时保留球队未知。[准备 YOLO11n 权重、配置比赛与复核观测](vision.md)
+比赛配置默认使用系统 Vision 检测人体、估计姿态和识别号码。用 `detector.modelManifest` 接入 Core ML 人球模型后，每个选中帧只跑一次全图检测，人框供姿态、队色和号码复用。可开启 `detector.ballSearch`，在全图漏球时回到该机位的原图裁片查找小球。已有足球专用模型继续用 `detector.model`，受控录像可用 `detector.ballHSV` 按颜色找球。`detector.teamColors` 将球队 ID 映射到样衣 sRGB 三元组（0–255），色差大或两队难以区分时保留球队未知。[准备 YOLO11n 权重、配置比赛与复核观测](docs/vision-detection-models.md)
 
 整套回归从仓库根目录执行。Node 集成用例复用 Live 网关的 v2 校验器，首次运行需安装其锁定依赖。部分用例会在本机回环地址启动临时网关。
 

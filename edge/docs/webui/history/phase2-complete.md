@@ -271,9 +271,9 @@ OK
 | `WebUICommand.swift` | ✅ 修改 | 添加 StatusCache、后台任务、getCurrentStatus() |
 | `SystemMonitor.swift` | ✅ 保留 | 418 行 actor，完整实现 |
 | `index.html` | ✅ 保留 | 阶段 1 前端（15KB 单文件） |
-| `WebUI-Phase1-2-Summary.md` | ✅ 存档 | 阶段 1-2 过程记录 |
-| `WebUI-Final-Report.md` | ✅ 存档 | 阶段 1 交付报告 |
-| `WebUI-Phase2-Complete.md` | ✅ 新建 | 本文件 |
+| `phase1-2-summary.md` | ✅ 存档 | 阶段 1-2 过程记录 |
+| `final-report.md` | ✅ 存档 | 阶段 1 交付报告 |
+| `phase2-complete.md` | ✅ 新建 | 本文件 |
 
 ## 总结
 

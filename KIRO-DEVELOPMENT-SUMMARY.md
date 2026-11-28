@@ -37,9 +37,9 @@
 - ✅ Swift 6 并发安全（Actor + Task + Sendable）
 
 **相关文档**：
-- `edge/WebUI-FINAL.md` - 最终交付报告
-- `edge/WebUI-Summary.md` - 技术总览
-- `edge/WebUI-Phase*.md` - 各阶段详细记录
+- `edge/final-delivery.md` - 最终交付报告
+- `edge/summary-three-phases.md` - 技术总览
+- `edge/docs/webui/history/phase*.md` - 各阶段详细记录
 
 ---
 
@@ -239,7 +239,7 @@ Kiro 专属代理：**edge-dev**
 - `edge/Sources/PitchTraceEdge/WebUI/SystemMonitor.swift`（数据采集，418 行）
 - `edge/Sources/PitchTraceEdge/WebUI/WebSocketConnectionManager.swift`（连接管理，142 行）
 - `edge/Sources/PitchTraceEdge/WebUI/Resources/index.html`（前端，15KB）
-- `edge/WebUI-Summary.md`（完整技术文档）
+- `edge/summary-three-phases.md`（完整技术文档）
 
 **API 端点**：
 - `GET /` → 单文件 HTML 监控页面
@@ -574,7 +574,7 @@ node --test edge/Tests/Integration/{calibration,intrinsics,match-pipeline,media-
 | Edge README | `edge/README.md` | Edge 子项目说明与使用指南 |
 | Live Web README | `live/web/README.md` | 前端说明与开发指南 |
 | Live Server README | `live/server/README.md` | 网关说明与 API 文档 |
-| Edge Web UI 总结 | `edge/WebUI-Summary.md` | Web UI 完整技术总结（三阶段实施）|
+| Edge Web UI 总结 | `edge/summary-three-phases.md` | Web UI 完整技术总结（三阶段实施）|
 
 ### 5.2 专题文档（edge/）
 
@@ -583,10 +583,10 @@ node --test edge/Tests/Integration/{calibration,intrinsics,match-pipeline,media-
 | `capture.md` | 采集与健康状态 |
 | `run-match.md` | 离线运行 |
 | `stream-match.md` | 连续处理 |
-| `vision.md` | 检测与模型 |
-| `tracking.md` | 轨迹融合 |
-| `analysis.md` | 身份、姿态与动作 |
-| `evaluation.md` | 真值评估 |
+| `vision-detection-models.md` | 检测与模型 |
+| `player-ball-tracking.md` | 轨迹融合 |
+| `identity-pose-events.md` | 身份、姿态与动作 |
+| `ground-truth-evaluation.md` | 真值评估 |
 | `calibration-audit.md` | 标定巡检 |
 | `match-config.md` | 比赛配置 |
 | `scene-archive.md` | 场景归档 |
@@ -627,7 +627,7 @@ node --test edge/Tests/Integration/{calibration,intrinsics,match-pipeline,media-
   - Phase 3 (2h)：WebSocket 推送
   - Phase 3.5 (1h)：前端 WebSocket 集成与自动重连
   - 38/38 测试通过，零警告编译
-  - 技术文档完整（`WebUI-FINAL.md`，~35 页）
+  - 技术文档完整（`final-delivery.md`，~35 页）
   - Git 提交记录：5 个连续提交（2026-11-27）
 
 - **专属代理分工明确**：

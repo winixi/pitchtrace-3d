@@ -47,7 +47,7 @@ if release=$(gh release view "$tag" --json isDraft,isPrerelease,assets 2>&1); th
   fi
 elif [[ "$release" == 'release not found' ]]; then
   gh release create "$tag" --verify-tag --draft --prerelease --latest=false \
-    --title "PitchTrace Edge ${tag#edge-} · 离线 CLI 预览版" --notes-file "$GITHUB_WORKSPACE/edge/preview.md"
+    --title "PitchTrace Edge ${tag#edge-} · 离线 CLI 预览版" --notes-file "$GITHUB_WORKSPACE/edge/docs/preview-release-readme.md"
 else
   printf '%s\n' "$release" >&2
   exit 1

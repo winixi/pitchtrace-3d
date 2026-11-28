@@ -58,10 +58,10 @@ edge/Sources/PitchTraceEdge/PitchTraceEdge.swift  web-ui 命令注册
 **文档** (已入库):
 ```
 docs/08-edge-web-ui-design.md           技术设计（11 章，完整）
-edge/WebUI-Phase1-Complete.md           阶段 1 完成报告
-edge/WebUI-Phase1-2-Summary.md          阶段 1+2 技术总结
-edge/WebUI-Final-Report.md              本文件
-edge/WebUI-Implementation-Checklist.md  实施检查清单
+edge/phase1-complete.md           阶段 1 完成报告
+edge/phase1-2-summary.md          阶段 1+2 技术总结
+edge/final-report.md              本文件
+edge/implementation-checklist.md  实施检查清单
 ```
 
 ### 3. 测试覆盖
@@ -301,12 +301,12 @@ server["/api/status"] = { request in
 
 ### 文档（已入库）
 - [x] `docs/08-edge-web-ui-design.md` - 技术设计
-- [x] `edge/WebUI-Phase1-Complete.md` - 阶段 1 完成报告
-- [x] `edge/WebUI-Phase1-Status.md` - 问题跟踪记录
-- [x] `edge/WebUI-Phase1-2-Summary.md` - 阶段 1+2 技术总结
-- [x] `edge/WebUI-Final-Report.md` - 本报告
-- [x] `edge/WebUI-Implementation-Checklist.md` - 实施清单
-- [x] `edge/WebUI-Quick-Start.md` - 快速开始
+- [x] `edge/phase1-complete.md` - 阶段 1 完成报告
+- [x] `edge/phase1-status.md` - 问题跟踪记录
+- [x] `edge/phase1-2-summary.md` - 阶段 1+2 技术总结
+- [x] `edge/final-report.md` - 本报告
+- [x] `edge/implementation-checklist.md` - 实施清单
+- [x] `edge/quick-start.md` - 快速开始
 
 ### 测试结果
 - [x] 所有测试通过（38/38）
@@ -405,8 +405,8 @@ server["/api/status"] = { request in
 
 **相关文档**:
 - 技术设计: `docs/08-edge-web-ui-design.md`
-- 快速开始: `edge/WebUI-Quick-Start.md`
-- 阶段总结: `edge/WebUI-Phase1-2-Summary.md`
+- 快速开始: `edge/quick-start.md`
+- 阶段总结: `edge/phase1-2-summary.md`
 
 **测试命令**:
 ```bash

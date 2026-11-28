@@ -1,6 +1,6 @@
 # Edge Web UI 实施检查清单
 
-基于 [docs/08-edge-web-ui-design.md](../docs/08-edge-web-ui-design.md) 的分阶段实施计划。
+基于 [docs/08-edge-web-ui-design.md](../../../../docs/08-edge-web-ui-design.md) 的分阶段实施计划。
 
 ## 阶段 1：基础框架（W3，2 天）
 

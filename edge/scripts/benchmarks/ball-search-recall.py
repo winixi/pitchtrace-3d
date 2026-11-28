@@ -23,7 +23,7 @@ from threading import Lock
 
 import cv2
 
-EDGE = Path(__file__).resolve().parents[1]
+EDGE = Path(__file__).resolve().parents[2]
 GEOMETRY = EDGE / "Sources/PitchTraceEdge/Geometry"
 sys.path.insert(0, str(GEOMETRY))
 from ball_search import BallSearch

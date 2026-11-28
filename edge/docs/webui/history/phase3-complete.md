@@ -349,8 +349,8 @@ $ curl http://127.0.0.1:8765/api/status | jq '.matchId'
    - Python/Node.js WebSocket 客户端
    - 用于手动测试（需安装依赖）
 
-3. **WebUI-Phase3-Plan.md** (实施计划)
-4. **WebUI-Phase3-Complete.md** (本文件)
+3. **phase3-plan.md** (实施计划)
+4. **phase3-complete.md** (本文件)
 
 ### 修改文件
 
@@ -517,8 +517,8 @@ ws://127.0.0.1:8765/api/matches/{matchId}/live
 | `WebUICommand.swift` | ✅ 修改 | +40 | 添加 WebSocket 路由与任务 |
 | `SystemMonitor.swift` | ✅ 保留 | 418 | 阶段 2 实现（未修改） |
 | `index.html` | ⏳ 待更新 | 15KB | 需添加 WebSocket 客户端逻辑 |
-| `WebUI-Phase3-Plan.md` | ✅ 新建 | - | 实施计划 |
-| `WebUI-Phase3-Complete.md` | ✅ 新建 | - | 本文件 |
+| `phase3-plan.md` | ✅ 新建 | - | 实施计划 |
+| `phase3-complete.md` | ✅ 新建 | - | 本文件 |
 | `test-websocket.py` | ✅ 新建 | 65 | Python 测试客户端 |
 | `test-websocket.mjs` | ✅ 新建 | 50 | Node.js 测试客户端 |
 

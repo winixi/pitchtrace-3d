@@ -12,3 +12,5 @@ node_modules/
 # 海康 MVS SDK 文档与示例为厂商资料，只在本地参考，不入库
 /docs/sdk/
 /edge/.venv-model-compare/
+__pycache__/
+*.pyc

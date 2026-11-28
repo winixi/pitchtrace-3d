@@ -39,14 +39,14 @@ flowchart LR
 
 | 实现单元 | 首版技术选择 | 输入、处理和输出 |
 | --- | --- | --- |
-| 采集与视频 | Swift、厂商 SDK 或 AVFoundation、FFmpeg 的 libavformat、Apple VideoToolbox；嵌入式 Web UI（Vapor + WebSocket）用于监控 | 工业相机通过厂商 SDK 读取帧和硬件时钟；macOS 可识别的摄像头可用 AVFoundation；网络机型用 libavformat 接入 RTSP。能取得曝光时间且满足同步门槛的通道才参与精确三维融合。对 H.264 兼容输入直接重新封装，其他输入按需解码并编码为 H.264。输出可独立寻址的 fMP4 初始化文件、关键帧对齐的媒体段及曝光时间索引。Web UI 实时显示各机位帧率、曝光偏差、队列深度和告警。[Apple 视频采集](https://developer.apple.com/documentation/avfoundation/avcapturevideodataoutput) · [FFmpeg 封装格式](https://ffmpeg.org/ffmpeg-formats.html) · [Web UI 设计](../../docs/08-edge-web-ui-design.md) |
+| 采集与视频 | Swift、厂商 SDK 或 AVFoundation、FFmpeg 的 libavformat、Apple VideoToolbox；嵌入式 Web UI（Vapor + WebSocket）用于监控 | 工业相机通过厂商 SDK 读取帧和硬件时钟；macOS 可识别的摄像头可用 AVFoundation；网络机型用 libavformat 接入 RTSP。能取得曝光时间且满足同步门槛的通道才参与精确三维融合。对 H.264 兼容输入直接重新封装，其他输入按需解码并编码为 H.264。输出可独立寻址的 fMP4 初始化文件、关键帧对齐的媒体段及曝光时间索引。Web UI 实时显示各机位帧率、曝光偏差、队列深度和告警。[Apple 视频采集](https://developer.apple.com/documentation/avfoundation/avcapturevideodataoutput) · [FFmpeg 封装格式](https://ffmpeg.org/ffmpeg-formats.html) · [Web UI 设计](08-edge-web-ui-design.md) |
 | 检测与推理 | Swift 调用 Core ML 和 Vision；Python/OpenCV 用于离线标注检查、模型对照与误差评估 | 人、球检测先跑轻量 Core ML 模型；在球员裁切上用 Vision 建立姿态和背号 OCR 基线。按时刻、相机、局部轨迹记录观测。Python 产出的基准样例与线上重复输入比较。 |
 | 标定与融合 | C++/OpenCV `calib3d`，通过窄 C 接口供 Swift 调用 | 保存内外参及版本，先按同一曝光窗口组帧，再做跨视角分配、三角化、重投影检查和时序滤波。输出场地坐标、来源机位和质量；局部骨骼重定向后再进入场景快照。 |
 | 调度与持久化 | Swift Concurrency、有界队列、SQLite、文件系统、URLSession | 每路采集独立排队。录像与推理分开消费；记录队列中最老帧的年龄。视频先落盘，场景帧与待上传条目持久化后发送。直播端宕机时保留采集，重连先发当前快照，再按带宽补历史。 |
 
 离线几何标定通过 Swift 命令调用 Python/OpenCV。`calibrate-intrinsics` 从同一机位不同姿态的棋盘格照片拟合镜头内参与五个畸变系数，按 `intrinsicsId` 标识该机位的镜头参数。`calibrate` 可直接使用内联参数，也可读取报告并核对机位、版本、分辨率和数据来源。它用静态场地点逐机位求解世界到相机的外参，以 `calibrationId` 标识整组参数，并用独立检查点分别核验地面和高点的三维误差。离线和连续处理共用按曝光切换标定、跨机位关联和三角化实现。Swift Vision 工作进程负责图像观测，当前几何后端为 Python/OpenCV。[离线标定格式](../edge/README.md#离线几何标定)
 
-**运行与归档。** Edge 用 `capture` 分机位保存封口媒体及曝光来源，`stream-match` 持久化选入直播的原帧顺序；同一套重建模块也可由 `process-match` 或 `reconstruct-match` 离线驱动。场景与证据在本机 SQLite 同事务提交。媒体分别保存字节与曝光索引，恢复时用场景主键、原片周期及服务器回执重复提交。边缘测量、标定巡检、评估报告保存在 Edge，网关继续使用既有 v2 场景与媒体契约。[配置与组帧](../edge/match-config.md) · [测量与动作](../edge/analysis.md) · [场景归档](../edge/scene-archive.md)
+**运行与归档。** Edge 用 `capture` 分机位保存封口媒体及曝光来源，`stream-match` 持久化选入直播的原帧顺序；同一套重建模块也可由 `process-match` 或 `reconstruct-match` 离线驱动。场景与证据在本机 SQLite 同事务提交。媒体分别保存字节与曝光索引，恢复时用场景主键、原片周期及服务器回执重复提交。边缘测量、标定巡检、评估报告保存在 Edge，网关继续使用既有 v2 场景与媒体契约。[配置与组帧](../edge/docs/match-config.md) · [测量与动作](../edge/docs/identity-pose-events.md) · [场景归档](../edge/docs/scene-archive.md)
 
 边缘侧拥有设备配置、时钟映射、标定和测量结果。模型、校正参数或推理频率改变时记录对应版本。动作候选随轨迹生成；操作者在直播端的人工修订另存，归档重算时保留修订历史。现场设备型号及检测器权重在 G1 实测后锁定。
 
@@ -96,7 +96,7 @@ flowchart LR
 | --- | --- |
 | 取景与帧率 | 原厂标注 2448 × 2048 全幅最高 24.2 fps，开启相机图像压缩后最高 35.6 fps。项目首测目标为 1920 × 1080 ROI、Bayer RG 8、30 fps。在 MVS 中读取实际裁切尺寸与偏移，按该视场标定，并记录双路持续帧率和掉帧数。 |
 | 触发与对时 | 规格书未列明 PTP 对时或按指定时刻触发曝光。双机接入同一台普通千兆交换机，分别核对目标固件的 PTP 锁定状态和定时触发能力。若两项均可用，在图像传输期间以共同闪光复核，计算每对帧曝光中心时刻差的绝对值，验收目标为 P95 ≤ 5 ms，同时报告最大值和未配对次数。若固件缺少定时触发，可另测 Line 0 共用外触发源，并记录该次测试的触发方式。 |
-| 逐帧索引与录像 | Edge 计划通过 MVS SDK 读取图像、设备帧号和时间戳。先确认时间戳对应的曝光事件。如果记录的是曝光起点，加上该帧曝光时长的一半即可得到曝光中心。将其映射为 UTC 后，与 fMP4 展示帧的 PTS 一同写入现有索引。相机端图像压缩可用于节省采集带宽，规格书未列出 H.264 或 RTSP 输出。H.264 录像由 Mac 上的 VideoToolbox 编码，MVS 直采与硬件编码链路待实机联调。[Edge 曝光映射](../edge/capture.md#逐帧关联设备曝光) |
+| 逐帧索引与录像 | Edge 计划通过 MVS SDK 读取图像、设备帧号和时间戳。先确认时间戳对应的曝光事件。如果记录的是曝光起点，加上该帧曝光时长的一半即可得到曝光中心。将其映射为 UTC 后，与 fMP4 展示帧的 PTS 一同写入现有索引。相机端图像压缩可用于节省采集带宽，规格书未列出 H.264 或 RTSP 输出。H.264 录像由 Mac 上的 VideoToolbox 编码，MVS 直采与硬件编码链路待实机联调。[Edge 曝光映射](../edge/docs/capture.md#逐帧关联设备曝光) |
 
 **容量估算。** 按上述 Bayer RG 8 模式，两路 1080p30 的未压缩图像净带宽约为 0.995 Gbit/s，四路约 1.99 Gbit/s，八路约 3.98 Gbit/s，另计封包和重传。两路首测用 2.5G 上联连接 Mac。若八路仍共用该上联，须在实际球场画面下测量相机端图像压缩后的峰值带宽和丢帧。Edge 编码后，若每路 H.264 为 8 Mbit/s，四路录像合计 32 Mbit/s，约 14.4 GB/小时，90 分钟约 21.6 GB，均未计索引、副本与封装开销。
 

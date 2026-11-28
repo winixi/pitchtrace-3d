@@ -137,10 +137,10 @@ docs/
 └── 08-edge-web-ui-design.md     技术设计（11 章）
 
 edge/
-├── WebUI-Phase1-Complete.md     阶段 1 完成报告
-├── WebUI-Phase1-Status.md       问题跟踪与解决记录
-├── WebUI-Phase1-2-Summary.md    本文件
-└── WebUI-Implementation-Checklist.md  实施检查清单
+├── phase1-complete.md     阶段 1 完成报告
+├── phase1-status.md       问题跟踪与解决记录
+├── phase1-2-summary.md    本文件
+└── implementation-checklist.md  实施检查清单
 ```
 
 ### 修改文件
@@ -252,6 +252,6 @@ edge/Sources/PitchTraceEdge/PitchTraceEdge.swift  注册 web-ui 命令
 
 **相关文档**:
 - 技术设计：`docs/08-edge-web-ui-design.md`
-- 阶段 1 报告：`edge/WebUI-Phase1-Complete.md`
-- 实施检查清单：`edge/WebUI-Implementation-Checklist.md`
-- 本总结：`edge/WebUI-Phase1-2-Summary.md`
+- 阶段 1 报告：`edge/phase1-complete.md`
+- 实施检查清单：`edge/implementation-checklist.md`
+- 本总结：`edge/phase1-2-summary.md`

@@ -9,7 +9,7 @@ match_dir=/path/to/match
 python3 edge/models/prepare-yolo11n.py "$match_dir/models"
 ```
 
-命令校验固定版本 ZIP 的 SHA-256，然后将 `yolo11n.mlpackage` 和 `yolo11n.json` 放入指定的新目录。现场无网时可先取得同一 ZIP，再加 `--archive /path/to/yolo11n.mlpackage.zip`。此基线是上游提供的 384×640（宽×高）、INT8 权重、带非极大值抑制（NMS）的 COCO 检测器，许可见模型清单。[上游权重发布页](https://github.com/ultralytics/yolo-ios-app/releases/tag/v8.3.0) · [随附清单](models/yolo11n.json)
+命令校验固定版本 ZIP 的 SHA-256，然后将 `yolo11n.mlpackage` 和 `yolo11n.json` 放入指定的新目录。现场无网时可先取得同一 ZIP，再加 `--archive /path/to/yolo11n.mlpackage.zip`。此基线是上游提供的 384×640（宽×高）、INT8 权重、带非极大值抑制（NMS）的 COCO 检测器，许可见模型清单。[上游权重发布页](https://github.com/ultralytics/yolo-ios-app/releases/tag/v8.3.0) · [随附清单](../models/yolo11n.json)
 
 在比赛配置中填写以下 `detector` 对象，然后照常执行 `run-match`、`stream-match` 或 `process-match`。
 
@@ -59,11 +59,11 @@ python3 edge/models/prepare-yolo11n.py "$match_dir/models"
 
 人框中仅检出一个人体时记录可见关节 `joints`，用 `leftShoulder`、`rightAnkle` 等名称索引原图像素。脚踝可见且接近画面内的人框下沿时，`foot` 估计鞋底位置。躯干裁片中识别出唯一的一到两位数字时记录 `number`，`shirtRGB` 为同一区域的 sRGB 三通道采样。后续融合结合标定与多视角观测估计三维位置，进行时序号码确认和球队关联。
 
-运行 `match-info` 可以读取本周期的 `modelManifest`、清单原始字节摘要 `modelManifestSha256` 和权重 `modelSha256`。模型包按包内相对路径记录各文件摘要。同一场景周期恢复时会核对这些信息。更换模型复算需选用新的 `streamEpoch`。实拍精度按比赛独立标注评估。[评估输入与指标](evaluation.md)
+运行 `match-info` 可以读取本周期的 `modelManifest`、清单原始字节摘要 `modelManifestSha256` 和权重 `modelSha256`。模型包按包内相对路径记录各文件摘要。同一场景周期恢复时会核对这些信息。更换模型复算需选用新的 `streamEpoch`。实拍精度按比赛独立标注评估。[评估输入与指标](ground-truth-evaluation.md)
 
 构建 Edge 后，在仓库根目录执行 `node --test edge/Tests/Integration/vision-worker.mjs` 可离线复验。用例将已知人框、球框的微型 Core ML 检测器送入实际工作进程，校验宽屏与竖屏坐标、置信度过滤、空场和裁片命中后还原的原图球框。
 
-ISSIA 实拍基准用四个同步机位的录像对比精搜开关，并在 M1 Pro 上按原速投放四路推理任务。报告记录无历史球心时的命中、错位、三个视觉阶段耗时和正式四进程的积压。[冷启动精搜与四路复测](benchmarks/2026-11-27-issia-coldsearch.md) · [仅历史精搜的旧版基线](benchmarks/2026-11-27-issia.md)
+ISSIA 实拍基准用四个同步机位的录像对比精搜开关，并在 M1 Pro 上按原速投放四路推理任务。报告记录无历史球心时的命中、错位、三个视觉阶段耗时和正式四进程的积压。[冷启动精搜与四路复测](../benchmarks/2026-11-27-issia-coldsearch.md) · [仅历史精搜的旧版基线](../benchmarks/2026-11-27-issia.md)
 
 ## 直接调用视觉工作进程
 
@@ -77,10 +77,10 @@ ISSIA 实拍基准用四个同步机位的录像对比精搜开关，并在 M1 P
 python3.12 -m venv edge/.venv-model-compare
 edge/.venv-model-compare/bin/python -m pip install 'ultralytics==8.4.220' 'coremltools==9.0' 'numpy>=2,<2.4'
 edge/.venv-model-compare/bin/python -c 'from ultralytics import YOLO; YOLO("/path/to/yolo11n.pt").export(format="coreml", imgsz=640, quantize=16, nms=True)'
-edge/.venv-model-compare/bin/python edge/benchmarks/compare-models.py \
+edge/.venv-model-compare/bin/python edge/scripts/benchmarks/compare-models.py \
   /path/to/dataset.json /path/to/yolo11n.pt /path/to/yolo11n.mlpackage /path/to/report.json
 ```
 
-数据集采用 [球精搜基准](benchmarks/ball-search-recall.py) 的 `clips` 与 `labels` 格式，也可用 [ISSIA 标注转换工具](benchmarks/prepare-issia-recall.py) 生成。报告新建 JSON，保存数据集、标签和模型摘要、参数、每帧两侧的人球框及同类别 IoU 贪心配对。相同画面依次推理，原始权重使用 CPU，Core ML 使用 Ultralytics 默认计算单元（CPU 与神经网络引擎，加载失败时回退 CPU）；默认 10 Hz、640 像素方形输入、置信度 0.35；与导出时的尺寸保持一致。需要更改采样、阈值或球心容差时查看 `--help`。Core ML 导出内置的 NMS 阈值也会影响结果，须和导出配置一起记录；对照的是 Ultralytics 推理通路，不能替代 Edge Vision 工作进程的实机评估。
+数据集采用 [球精搜基准](../scripts/benchmarks/ball-search-recall.py) 的 `clips` 与 `labels` 格式，也可用 [ISSIA 标注转换工具](../scripts/benchmarks/prepare-issia-recall.py) 生成。报告新建 JSON，保存数据集、标签和模型摘要、参数、每帧两侧的人球框及同类别 IoU 贪心配对。相同画面依次推理，原始权重使用 CPU，Core ML 使用 Ultralytics 默认计算单元（CPU 与神经网络引擎，加载失败时回退 CPU）；默认 10 Hz、640 像素方形输入、置信度 0.35；与导出时的尺寸保持一致。需要更改采样、阈值或球心容差时查看 `--help`。Core ML 导出内置的 NMS 阈值也会影响结果，须和导出配置一起记录；对照的是 Ultralytics 推理通路，不能替代 Edge Vision 工作进程的实机评估。
 
 球评分沿用精搜基准：只检查最高置信度球框，框标注按检测球心是否落入真值框评分，球心标注按距离容差评分。远端与远端小球分别统计，后者要求 `far=1` 且标注框长边不超过 16 像素；未标注、`ignore` 及没有远近信息的样本不会被当作负例。`absent` 表示确认无球，可统计误报；错位单独计数，召回分母包含所有可见球样本。人框目前只做两模型之间的配对比较，不表示相对人工真值的精度。报告中的逐帧结果用于复核，实拍样本不足时不能据此宣称精度达标。

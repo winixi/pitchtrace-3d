@@ -32,10 +32,10 @@
 
 ## 复测
 
-从仓库根目录执行，数据集的原片、标签及模型副本需保留在上述本机运行目录。安装环境和导出方法见[模型转换前后对照](../vision.md#模型转换前后对照)。输出须使用新的路径。
+从仓库根目录执行，数据集的原片、标签及模型副本需保留在上述本机运行目录。安装环境和导出方法见[模型转换前后对照](../docs/vision-detection-models.md#模型转换前后对照)。输出须使用新的路径。
 
 ```sh
-edge/.venv-model-compare/bin/python -B edge/benchmarks/compare-models.py \
+edge/.venv-model-compare/bin/python -B edge/scripts/benchmarks/compare-models.py \
   edge/benchmarks/runs/2026-11-27-issia-inputs/issia-recall/dataset.json \
   edge/benchmarks/runs/2026-11-28-model-conversion/yolo11n.pt \
   edge/benchmarks/runs/2026-11-28-model-conversion/yolo11n.mlpackage \

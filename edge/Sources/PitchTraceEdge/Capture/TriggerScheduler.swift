@@ -135,6 +135,6 @@ func runTriggerScheduler(_ options: TriggerSchedulerOptions, stop: StopFlag) thr
 }
 #else
 func runTriggerScheduler(_ options: TriggerSchedulerOptions, stop: StopFlag) throws {
-    throw RecordingError("此 Edge 构建未包含海康 MVS SDK。安装 MvCameraControl.framework 后按 edge/capture.md 重新构建")
+    throw RecordingError("此 Edge 构建未包含海康 MVS SDK。安装 MvCameraControl.framework 后按 edge/docs/capture.md 重新构建")
 }
 #endif

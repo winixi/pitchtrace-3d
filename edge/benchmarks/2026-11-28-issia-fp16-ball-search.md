@@ -36,12 +36,12 @@
 ```sh
 inputs=edge/benchmarks/runs/2026-11-27-issia-inputs/issia-recall/dataset.json
 model=edge/benchmarks/runs/2026-11-28-model-conversion/yolo11n.json
-python3 -B edge/benchmarks/ball-search-recall.py "$inputs" /path/to/new-recall \
+python3 -B edge/scripts/benchmarks/ball-search-recall.py "$inputs" /path/to/new-recall \
   --model "$model" --parallel-clips 2 --radius-px 8
-edge/.venv-model-compare/bin/python -B edge/benchmarks/oracle-ball-scale.py \
+edge/.venv-model-compare/bin/python -B edge/scripts/benchmarks/oracle-ball-scale.py \
   "$inputs" edge/benchmarks/runs/2026-11-28-model-conversion/yolo11n.mlpackage \
   /path/to/new-oracle-180.json --side 180
-edge/.venv-model-compare/bin/python -B edge/benchmarks/oracle-ball-scale.py \
+edge/.venv-model-compare/bin/python -B edge/scripts/benchmarks/oracle-ball-scale.py \
   "$inputs" edge/benchmarks/runs/2026-11-28-model-conversion/yolo11n.mlpackage \
   /path/to/new-oracle-360.json --side 360
 ```

@@ -12,7 +12,7 @@ echo ""
 # 1. 编译测试
 echo "📦 步骤 1/5: 编译测试"
 echo "────────────────────────────────────────"
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 swift build 2>&1 | grep -E "(Building|Build complete)" || true
 if [ $? -eq 0 ]; then
     echo "✅ 编译成功"

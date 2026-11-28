@@ -102,7 +102,7 @@
 **实际耗时**: 1.5 小时
 
 **阶段 1 → 阶段 2**:
-详见 `edge/WebUI-Phase1-Complete.md`
+详见 `edge/phase1-complete.md`
 
 ## 📝 技术债记录
 
@@ -114,6 +114,6 @@
 ## 相关文件
 
 - 技术设计: `docs/08-edge-web-ui-design.md`
-- 实施检查清单: `edge/WebUI-Implementation-Checklist.md`
-- 快速开始: `edge/WebUI-Quick-Start.md`
-- 本状态文档: `edge/WebUI-Phase1-Status.md`
+- 实施检查清单: `edge/implementation-checklist.md`
+- 快速开始: `edge/quick-start.md`
+- 本状态文档: `edge/phase1-status.md`

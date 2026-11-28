@@ -10,7 +10,7 @@ echo "  Phase 1-3.5: 完整的实时监控系统"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 
 # 1. 编译测试
 echo "📦 步骤 1/8: 编译测试"
@@ -258,6 +258,6 @@ echo "🌐 访问地址："
 echo "  http://127.0.0.1:8765"
 echo ""
 echo "📖 文档："
-echo "  edge/WebUI-Summary.md           # 三阶段总览"
-echo "  edge/WebUI-Phase3.5-Complete.md # Phase 3.5 详情"
+echo "  edge/docs/webui/history/summary-three-phases.md # 三阶段总览"
+echo "  edge/docs/webui/history/phase3.5-complete.md # Phase 3.5 详情"
 echo ""
