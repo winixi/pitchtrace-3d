@@ -463,6 +463,47 @@ def record_camera(root, match, name, camera, segment_seconds, stop, progress):
                 return state
 
 
+def recover_periods(root):
+    """启动时找回上次异常退出遗留的周期：状态仍为 recording、且没有进程持有其 .active 锁。
+
+    未提交的临时文件移入周期内的 .incomplete/ 以便核查，状态改为 interrupted 并按已封口片段计数。
+    直采的 PTP 周期照常尝试登记；曝光清单与片段不一致时只记录 attachError。
+    """
+    recovered = []
+    for status_file in sorted(root.glob("raw/*/*/status.json")):
+        period = status_file.parent
+        try:
+            state = read_json(status_file)
+        except (OSError, ValueError):
+            continue
+        if state.get("status") != "recording":
+            continue
+        try:
+            with lock(period / ".active"):
+                leftovers = sorted(p for p in period.iterdir()
+                                   if p.is_file() and (p.name.endswith(".tmp") or ".tmp-" in p.name))
+                if leftovers:
+                    (period / ".incomplete").mkdir(exist_ok=True)
+                    for item in leftovers:
+                        item.rename(period / ".incomplete" / item.name)
+                state.update(status="interrupted", segments=sum(1 for _ in period.glob("*.m4s")),
+                             error="采集进程异常退出，保留已封口片段", recoveredUnix=time.time(),
+                             incompleteFiles=[item.name for item in leftovers])
+        except ValueError:
+            # 上次的采集子进程仍在写这个周期。
+            continue
+        # attach 会重新获取 .active 锁，须在释放后调用。
+        job = period / "camera.json"
+        if job.exists():
+            try:
+                attach_native(root, period.parent.name, period.name, read_json(job)["camera"], state)
+            except (OSError, ValueError, KeyError) as error:
+                state["attachError"] = str(error)
+        write_json(status_file, state)
+        recovered.append(f"{period.parent.name}/{period.name}")
+    return recovered
+
+
 def capture(config_path, root):
     config = load_config(config_path)
     root.mkdir(parents=True, exist_ok=True)
@@ -477,6 +518,7 @@ def capture(config_path, root):
             write_json(identity, {"matchId": match})
         if (root / "STOP").exists():
             raise ValueError("目录有停止标记 STOP，请在下一次启动前移走该文件")
+        recovered = recover_periods(root)
         supervisor = os.getppid()
         old = {sig: signal.signal(sig, lambda *_: stop.set()) for sig in (signal.SIGTERM, signal.SIGINT)}
         states = {}
@@ -506,6 +548,8 @@ def capture(config_path, root):
                         rates = [channel.get("bytesPerVideoSecond") for channel in channels.values()]
                         health = {"matchId": match, "freeBytes": free, "lowDisk": low_disk,
                                   "active": channels, "finished": states, "updatedUnix": time.time()}
+                        if recovered:
+                            health["recoveredPeriods"] = recovered
                         if rates and all(rates):
                             usable = max(0, free - config.get("minFreeBytes", 0))
                             health["remainingRecordingSeconds"] = int(usable / sum(rates))

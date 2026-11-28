@@ -33,7 +33,7 @@ swift run --package-path edge pitchtrace-edge capture "$trial_dir/cameras.json" 
 
 采集中可用支持 HLS 的播放器打开 `session/raw/<机位>/<周期>/preview.m3u8`。每个完成段由 FFmpeg 原子封口，其他机位的掉线、编解码失败和重连互相隔离。RTSP 遇到 5 秒网络超时会退出该路。实时输入意外结束时默认再尝试 3 次，每次使用独立新周期。可用 `reconnectAttempts` 调整。文件读至末尾即结束。Ctrl-C 或向采集进程组发送 SIGTERM 可通知各路封口、停止。也可以在另一个终端执行 `touch "$trial_dir/session/STOP"` 请求有序停止。下一次启动前移走这个标记；重新启动时使用新周期，已完成周期仍可复核。
 
-`health.json` 给出正在录制的机位和累计段数、完成或失败的机位、磁盘空闲字节和更新时间。各活动机位均有已封口片段时，用最近一段实测码率估算剩余录像秒数 `remainingRecordingSeconds`。可用空间降到 `minFreeBytes` 时各路停止并以失败状态结束本次运行。每周期的 `status.json` 保留机位、开始／结束时刻、完成段数及失败原因。进程被强制终止时应以原片目录中已封口的 `.m4s` 为准，`.tmp` 是未提交的段。
+`health.json` 给出正在录制的机位和累计段数、完成或失败的机位、磁盘空闲字节和更新时间。各活动机位均有已封口片段时，用最近一段实测码率估算剩余录像秒数 `remainingRecordingSeconds`。可用空间降到 `minFreeBytes` 时各路停止并以失败状态结束本次运行。每周期的 `status.json` 保留机位、开始／结束时刻、完成段数及失败原因。进程被强制终止时应以原片目录中已封口的 `.m4s` 为准，`.tmp` 是未提交的段。下一次在同一目录启动 `capture` 时，状态仍为 `recording` 且无进程持有的周期会被找回：临时文件移入该周期的 `.incomplete/`，`status.json` 改为 `interrupted` 并按已封口片段计数，直采 PTP 周期照常尝试登记，结果写入 `attached` 或 `attachError`。找回的周期列在 `health.json` 的 `recoveredPeriods` 中；仍有旧子进程在写的周期保持不动。
 
 ## 逐帧关联设备曝光
 

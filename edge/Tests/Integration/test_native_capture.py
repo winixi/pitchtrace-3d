@@ -89,6 +89,39 @@ class NativeCaptureTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("1 至 8 个机位", result.stderr)
 
+    def test_restart_recovers_periods_left_by_a_crashed_capture(self):
+        import fcntl
+        import shutil
+
+        self.capture({"A": {**simulated(frames=45), "mediaEpoch": "crashed"},
+                      "B": {**simulated(frames=30), "mediaEpoch": "busy"}})
+        # 模拟进程被强杀：状态停在 recording，留下未提交的段，尚未登记到 recordings/。
+        for epoch in ("crashed", "busy"):
+            name = "A" if epoch == "crashed" else "B"
+            period = self.period(name, epoch)
+            status = json.loads((period / "status.json").read_text())
+            (period / "status.json").write_text(json.dumps(dict(status, status="recording")))
+            (period / "2.m4s.tmp").write_bytes(b"partial")
+            shutil.rmtree(self.root / "recordings" / name / "epochs" / epoch)
+        with (self.period("B", "busy") / ".active").open("a+b") as busy:
+            # 仍被旧子进程持有的周期不动。
+            fcntl.flock(busy, fcntl.LOCK_EX)
+            camera = {**simulated(frames=15), "mediaEpoch": "next"}
+            camera["simulate"]["startUtcUs"] = START_US + 60_000_000
+            self.capture({"A": camera})
+        health = json.loads((self.root / "health.json").read_text())
+        self.assertEqual(health["recoveredPeriods"], ["A/crashed"])
+        state = json.loads((self.period("A", "crashed") / "status.json").read_text())
+        self.assertEqual(state["status"], "interrupted")
+        self.assertEqual(state["incompleteFiles"], ["2.m4s.tmp"])
+        self.assertEqual(state["segments"], 2)
+        self.assertTrue(state["attached"], state)
+        self.assertTrue((self.period("A", "crashed") / ".incomplete/2.m4s.tmp").exists())
+        self.assertFalse((self.period("A", "crashed") / "2.m4s.tmp").exists())
+        busy_state = json.loads((self.period("B", "busy") / "status.json").read_text())
+        self.assertEqual(busy_state["status"], "recording")
+        self.assertTrue((self.period("B", "busy") / "2.m4s.tmp").exists())
+
     def test_host_fit_warms_up_and_stays_out_of_recordings(self):
         camera = {**simulated(frames=45), "clock": {"mode": "host-fit"}, "mediaEpoch": "low"}
         state = self.capture({"A": camera})["A"]

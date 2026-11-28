@@ -12,6 +12,7 @@ swift run --package-path edge pitchtrace-edge stream-match match.json ./capture-
 | `streamWaitSeconds` | 有路缺段时等待其曝光映射的秒数，默认 2 秒。超窗后先处理已到视角，迟到原片仍可提交网关。 |
 | `gateway` | 可选的 HTTP(S) 网关基址。省略时执行本地归档，随后可填入地址并重跑完成补传。 |
 | `backfillBytesPerSecond` | 历史场景补传速率，默认 0 表示不限速。媒体交付由独立线程完成。 |
+| `mediaBytesPerSecond` | 原片上传速率（字节/秒），计入 init、片段和索引三件，默认 0 表示不限速。按令牌桶在每次请求前等待，单次突发不超过一个请求的大小。与场景补传各自限速，合计带宽需分别留出。 |
 
 ## 启动、积压和恢复
 
@@ -56,4 +57,6 @@ swift run --package-path edge pitchtrace-edge stream-match match.json ./capture-
 
 三个门槛须递增，可省略任一级；省略的级别与下一级同时触发。积压降到当前级别门槛的一半以下才回退一级，避免在门槛附近反复切换。降级组的复核证据记录 `degraded`（级别、积压秒数、被跳过的机位），原片照常录制和上行，赛后可用 `process-match` 以新的 `streamEpoch` 完整复算。降级状态目前只写入本地证据和 `stream-state.json`，场景快照契约未增加字段。
 
-运行 `swift build --package-path edge` 后，验证命令为 `python3 -B edge/Tests/Integration/test_stream_match.py`。回归在两个机位分段到达时先让网关返回 503，检查原片和场景仍然落盘，再恢复真实本地网关，核对历史快照、按曝光 UTC 定位的原片，以及第三次运行的幂等回执。
+原片待办按段登记的先后发送，各机位交替推进。同一网关、机位和媒体周期的 `init.mp4` 获 202 后记入本地回执，后续片段不再重传；重启后沿用回执。网关归档被清空时，请换用新的网关地址或新的运行目录重新登记。
+
+运行 `swift build --package-path edge` 后，验证命令为 `python3 -B edge/Tests/Integration/test_stream_match.py`；原片顺序、init 去重与限速另见 `test_media_queue.py`。回归在两个机位分段到达时先让网关返回 503，检查原片和场景仍然落盘，再恢复真实本地网关，核对历史快照、按曝光 UTC 定位的原片，以及第三次运行的幂等回执。

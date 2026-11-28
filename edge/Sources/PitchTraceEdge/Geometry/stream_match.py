@@ -107,10 +107,16 @@ class JournalReader:
 
 
 class MediaQueue:
-    """索引原子落盘后登记段；三件均获 202 才删除该目标的待办。"""
+    """索引原子落盘后登记段；三件均获 202 才删除该目标的待办。
 
-    def __init__(self, db):
+    待办按登记先后发送，各机位交替推进。同一网关、机位和周期的 init.mp4 确认一次后不再重传。
+    bytes_per_second 大于零时按令牌桶限速，计入全部上传字节。
+    """
+
+    def __init__(self, db, bytes_per_second=0):
         self.db = db
+        self.rate = bytes_per_second
+        self.ready_at = time.monotonic()
         db.executescript("""
             CREATE TABLE IF NOT EXISTS stream_media(
                 path TEXT PRIMARY KEY, index_sha TEXT NOT NULL
@@ -118,6 +124,13 @@ class MediaQueue:
             CREATE TABLE IF NOT EXISTS stream_gateways(gateway TEXT PRIMARY KEY) WITHOUT ROWID;
             CREATE TABLE IF NOT EXISTS stream_pending(
                 gateway TEXT NOT NULL, path TEXT NOT NULL, PRIMARY KEY(gateway,path)
+            ) WITHOUT ROWID;
+            CREATE TABLE IF NOT EXISTS stream_media_order(
+                path TEXT PRIMARY KEY, seq INTEGER NOT NULL UNIQUE
+            ) WITHOUT ROWID;
+            CREATE TABLE IF NOT EXISTS stream_init_receipts(
+                gateway TEXT NOT NULL, camera TEXT NOT NULL, epoch TEXT NOT NULL, sha TEXT NOT NULL,
+                PRIMARY KEY(gateway,camera,epoch)
             ) WITHOUT ROWID;
         """)
 
@@ -131,12 +144,27 @@ class MediaQueue:
         with self.db:
             if self.db.execute("INSERT OR IGNORE INTO stream_media VALUES(?,?)", (key, sha)).rowcount:
                 self.db.execute("INSERT INTO stream_pending SELECT gateway,? FROM stream_gateways", (key,))
+                self.db.execute("""INSERT INTO stream_media_order
+                                   SELECT ?, COALESCE(MAX(seq), 0) + 1 FROM stream_media_order""", (key,))
             elif self.db.execute("SELECT index_sha FROM stream_media WHERE path=?", (key,)).fetchone()[0] != sha:
                 raise ValueError(f"直播段索引与已登记版本冲突：{key}")
 
+    def pace(self, size):
+        """按目标速率推迟下一次请求；单次突发不超过一个请求的字节数。"""
+        if not self.rate:
+            return
+        now = time.monotonic()
+        if self.ready_at > now:
+            time.sleep(self.ready_at - now)
+            now = self.ready_at
+        self.ready_at = now + size / self.rate
+
     def send_one(self, gateway, match, media):
+        # 旧运行目录中先登记、未记顺序的段排在最前。
         row = self.db.execute("""SELECT p.path,m.index_sha FROM stream_pending p JOIN stream_media m USING(path)
-                                  WHERE p.gateway=? ORDER BY p.path LIMIT 1""", (gateway,)).fetchone()
+                                  LEFT JOIN stream_media_order o USING(path)
+                                  WHERE p.gateway=? ORDER BY COALESCE(o.seq, 0), p.path LIMIT 1""",
+                              (gateway,)).fetchone()
         if not row:
             return 0
         relative, expected = row
@@ -147,17 +175,22 @@ class MediaQueue:
         number = Path(filename).stem
         meta = read_object(index)
         path = f"/v2/matches/{match}/cameras/{camera}/epochs/{epoch}"
+        receipt = self.db.execute("SELECT sha FROM stream_init_receipts WHERE gateway=? AND camera=? AND epoch=?",
+                                  (gateway, camera, epoch)).fetchone()
+        if receipt is not None and receipt[0] != meta["initSha256"]:
+            raise ValueError(f"{camera}/{epoch} 的 init.mp4 与已确认版本不同")
+        parts = [(index.with_suffix(".m4s"), f"/segments/{number}.m4s", meta["segmentSha256"]),
+                 (index, f"/segments/{number}/index", None)]
+        if receipt is None:
+            parts.insert(0, (index.parent.parent / "init.mp4", "/init.mp4", meta["initSha256"]))
         url = urlsplit(gateway)
         host_type = http.client.HTTPSConnection if url.scheme == "https" else http.client.HTTPConnection
         with closing(host_type(url.hostname, url.port, timeout=15)) as connection:
-            for local, endpoint, sha in (
-                (index.parent.parent / "init.mp4", "/init.mp4", meta["initSha256"]),
-                (index.with_suffix(".m4s"), f"/segments/{number}.m4s", meta["segmentSha256"]),
-                (index, f"/segments/{number}/index", None),
-            ):
+            for local, endpoint, sha in parts:
                 size = local.stat().st_size
                 if sha and (not 0 < size <= 128 * 1024 * 1024 or digest(local) != sha):
                     raise ValueError(f"原片与曝光索引不一致：{local}")
+                self.pace(size)
                 headers = {"Content-Length": str(size), "Content-Type": "application/json"}
                 if sha:
                     headers.update({"X-Content-SHA256": sha, "Content-Type": "video/mp4"})
@@ -168,6 +201,11 @@ class MediaQueue:
                     if response.status != 202:
                         raise ScenePublishError(f"原片 {path}{endpoint} 返回 HTTP {response.status} {detail}",
                                                 status=response.status)
+                if endpoint == "/init.mp4":
+                    # 网关对同一周期的初始化文件幂等；确认后本地记住，不随每段重传。
+                    with self.db:
+                        self.db.execute("INSERT OR IGNORE INTO stream_init_receipts VALUES(?,?,?,?)",
+                                        (gateway, camera, epoch, sha))
         with self.db:
             self.db.execute("DELETE FROM stream_pending WHERE gateway=? AND path=?", (gateway, relative))
         return 1
@@ -223,6 +261,9 @@ def stream_match(path, capture, run, executable):
     rate = settings.get("backfillBytesPerSecond", 0)
     if type(rate) is not int or rate < 0:
         raise ValueError("backfillBytesPerSecond 必须为非负整数")
+    media_rate = settings.get("mediaBytesPerSecond", 0)
+    if type(media_rate) is not int or media_rate < 0:
+        raise ValueError("mediaBytesPerSecond 必须为非负整数")
     wait = settings.get("streamWaitSeconds", 2)
     if type(wait) not in (int, float) or not math.isfinite(wait) or wait < 0:
         raise ValueError("streamWaitSeconds 必须为非负秒数")
@@ -240,7 +281,7 @@ def stream_match(path, capture, run, executable):
             if any(p.name != ".stream-match.lock" for p in run.iterdir()):
                 raise ValueError("首次直播运行需要新的或空的输出目录")
             write_json(marker, identity)
-        processing = {k: v for k, v in settings.items() if k not in ("gateway", "backfillBytesPerSecond")}
+        processing = {k: v for k, v in settings.items() if k not in ("gateway", "backfillBytesPerSecond", "mediaBytesPerSecond")}
         versions, model = inference_inputs(processing, path.parent, Path(executable))
         from observations import Degradation
         from vision_model import validate_degradation
@@ -275,7 +316,7 @@ def stream_match(path, capture, run, executable):
                         def send():
                             return local.publish(gateway, config.match_id, config.stream_epoch, rate, max_frames=16)
                     else:
-                        queue = MediaQueue(local.db)
+                        queue = MediaQueue(local.db, media_rate)
                         def send():
                             return queue.send_one(gateway, config.match_id, media)
                     upload_loop(which, send, finished)
