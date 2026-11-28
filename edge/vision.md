@@ -68,3 +68,19 @@ ISSIA 实拍基准用四个同步机位的录像对比精搜开关，并在 M1 P
 ## 直接调用视觉工作进程
 
 `pitchtrace-edge vision-worker [模型路径 [--person-and-ball] [--ball-search]] [--individual-ocr] [--ocr-hints] [--frame-control] [--compute-units 计算单元]` 通过标准输入接收原尺寸、编码方向朝上的 JPEG。默认每帧由 4 字节大端无符号长度和 JPEG 数据组成。启用 `--ball-search` 后，每帧在长度之前增加 4 个大端 UInt32，表示原图搜索框 `[左, 上, 宽, 高]`，全零表示本帧只搜全图。启用 `--ocr-hints` 后，在搜索框之后、长度之前增加 1 个大端 UInt32 的区域数 N（0–64），再接 N 组 `[左, 上, 宽, 高]`，宽高须大于零。启用 `--frame-control` 后，在免读号区域之后、长度之前再加 4 个大端 UInt32 `[标志, 球心 x, 球心 y, 半径]`：标志第 0 位停读号，第 1 位只为人框中心距球心不超过半径的人估计姿态，其余位须为零。这是 `stream-match` 过载降级使用的逐帧控制，见 [过载降级](stream-match.md#过载降级)。`--compute-units` 需要模型路径。比赛编排负责生成搜索框和运动候选。每次发送一帧，读回一行 UTF-8 JSON，再发送下一帧。最后在帧边界关闭标准输入。单个 JPEG 上限为 32 MiB、48 百万像素。解码失败、包截断、裁片越界、模型错误和 Vision 执行失败均通过标准错误报告并退出。
+
+## 模型转换前后对照
+
+在 macOS 上使用 Python 3.12 创建独立环境并安装依赖。准备同一份原始 `.pt` 权重及其固定 640×640、FP16、带 NMS 的 Core ML 导出；使用自己的权重时须遵守相应许可。转换示例：
+
+```sh
+python3.12 -m venv edge/.venv-model-compare
+edge/.venv-model-compare/bin/python -m pip install 'ultralytics==8.4.220' 'coremltools==9.0' 'numpy>=2,<2.4'
+edge/.venv-model-compare/bin/python -c 'from ultralytics import YOLO; YOLO("/path/to/yolo11n.pt").export(format="coreml", imgsz=640, quantize=16, nms=True)'
+edge/.venv-model-compare/bin/python edge/benchmarks/compare-models.py \
+  /path/to/dataset.json /path/to/yolo11n.pt /path/to/yolo11n.mlpackage /path/to/report.json
+```
+
+数据集采用 [球精搜基准](benchmarks/ball-search-recall.py) 的 `clips` 与 `labels` 格式，也可用 [ISSIA 标注转换工具](benchmarks/prepare-issia-recall.py) 生成。报告新建 JSON，保存数据集、标签和模型摘要、参数、每帧两侧的人球框及同类别 IoU 贪心配对。相同画面依次推理，原始权重使用 CPU，Core ML 使用 Ultralytics 默认计算单元（CPU 与神经网络引擎，加载失败时回退 CPU）；默认 10 Hz、640 像素方形输入、置信度 0.35；与导出时的尺寸保持一致。需要更改采样、阈值或球心容差时查看 `--help`。Core ML 导出内置的 NMS 阈值也会影响结果，须和导出配置一起记录；对照的是 Ultralytics 推理通路，不能替代 Edge Vision 工作进程的实机评估。
+
+球评分沿用精搜基准：只检查最高置信度球框，框标注按检测球心是否落入真值框评分，球心标注按距离容差评分。远端与远端小球分别统计，后者要求 `far=1` 且标注框长边不超过 16 像素；未标注、`ignore` 及没有远近信息的样本不会被当作负例。`absent` 表示确认无球，可统计误报；错位单独计数，召回分母包含所有可见球样本。人框目前只做两模型之间的配对比较，不表示相对人工真值的精度。报告中的逐帧结果用于复核，实拍样本不足时不能据此宣称精度达标。
